@@ -1,0 +1,101 @@
+
+Build a production-ready Next.js 14 (App Router) web + PWA for GlobeSIM, a tourist-first eSIM platform offering instant mobile data for UK inbound tourists, EU multi-country bundles, and Africa (Nigeria-anchored) regional plans.
+
+Core Features
+	•	Landing page with GlobeSIM branding and value proposition
+	•	Destination selector (UK, EU, Africa)
+	•	Plan cards (3, 7, 14, 30-day data-only plans)
+	•	Stripe checkout (test mode wired, prod-ready)
+	•	eSIM issuance orchestration (mock provider adapter first; clean interface to swap in real aggregator later)
+	•	QR code + deep link install flow (iOS/Android instructions)
+	•	Activation status tracker (step-by-step lifecycle: CREATED → ISSUED → INSTALLED → ACTIVE)
+	•	User dashboard: data usage (mocked initially), expiry countdown, re-purchase CTA
+	•	Admin console: profiles table, lifecycle state, retry issuance, manual refund trigger
+	•	Webhooks: Stripe payment confirmation; carrier provisioning callbacks (mocked)
+	•	Error handling, idempotency keys, retry logic, basic observability logging
+	•	GDPR-compliant consent banner and privacy/terms placeholders
+
+Tech Stack
+	•	Frontend: Next.js App Router + Tailwind CSS
+	•	Backend: Next.js API routes (Node.js)
+	•	Database: PostgreSQL (Neon or Supabase compatible) via Prisma ORM
+	•	Auth: Optional lightweight email magic link for tourists (can be feature-flagged off)
+	•	Payments: Stripe
+	•	QR generation: server-side QR code utility
+	•	State management: lightweight client store
+	•	Env management: .env with secrets
+
+API Endpoints (implement stubs + contracts)
+	•	POST /api/esim/issue
+	•	POST /api/esim/activate
+	•	POST /api/esim/retry
+	•	POST /api/esim/refund
+	•	GET  /api/esim/status/[profileId]
+	•	GET  /api/plans?region=UK|EU|AFRICA
+	•	POST /api/checkout/stripe
+	•	POST /api/webhooks/stripe
+	•	POST /api/webhooks/carrier
+
+Data Models (Prisma)
+	•	User (id, type: TOURIST|RESIDENT, email?)
+	•	Device (id, imei, esimCapable, os)
+	•	Plan (id, region, validityDays, dataAllowanceMb, price)
+	•	eSIMProfile (id, userId, deviceId, carrierId, planId, state, qrUrl, expiresAt, lastErrorCode)
+
+Repo Structure (enforce this)
+
+/app
+/page.tsx                    // GlobeSIM landing
+/plans/page.tsx              // Destination + plans
+/checkout/page.tsx           // Stripe checkout
+/install/page.tsx            // QR + deep link installer
+/activate/page.tsx           // Activation tracker
+/dashboard/page.tsx          // Usage + expiry
+/admin/page.tsx              // Admin console
+/api
+/esim/issue/route.ts
+/esim/activate/route.ts
+/esim/retry/route.ts
+/esim/refund/route.ts
+/esim/status/[profileId]/route.ts
+/plans/route.ts
+/checkout/stripe/route.ts
+/webhooks/stripe/route.ts
+/webhooks/carrier/route.ts
+
+/components
+PlanCard.tsx
+DestinationPicker.tsx
+QRInstaller.tsx
+ActivationStepper.tsx
+UsageMeter.tsx
+ExpiryCountdown.tsx
+ErrorState.tsx
+
+/lib
+db.ts                        // Prisma client
+stripe.ts
+esimProvider.ts              // Provider interface + mock adapter
+logger.ts
+
+/prisma
+schema.prisma
+seed.ts
+
+/public
+/brand/globesim-logo.svg
+
+UX & Copy
+	•	Use GlobeSIM brand name across UI
+	•	Hero headline: “Instant mobile data. Anywhere you land.”
+	•	CTA: “Get connected in minutes”
+	•	Include clear install instructions for iOS/Android
+
+Quality Bar
+	•	Clean, modular code
+	•	TypeScript everywhere
+	•	Idempotent API calls
+	•	Basic unit tests for lifecycle state transitions
+	•	README with setup instructions and env vars
+
+Generate the full project with working pages, API stubs, mock provider integration, Prisma schema, seed data for UK/EU/Africa plans, and a minimal admin UI. Ensure the app runs end-to-end in Replit with mocked eSIM provisioning.
