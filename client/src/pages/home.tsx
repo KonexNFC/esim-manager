@@ -4,7 +4,10 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Globe, Zap, Shield, Smartphone, ChevronRight, Wifi } from "lucide-react";
+import {
+  ArrowRight, Globe, Zap, Shield, Smartphone,
+  ChevronRight, Wifi, MapPin, Users, Star
+} from "lucide-react";
 import type { Destination } from "@shared/schema";
 
 function HeroSection() {
@@ -16,22 +19,23 @@ function HeroSection() {
           alt=""
           className="w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/55 to-black/80" />
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 py-24 sm:py-32 lg:py-40">
+      <div className="relative max-w-7xl mx-auto px-4 py-24 sm:py-32 lg:py-44">
         <div className="max-w-2xl">
           <Badge variant="secondary" className="mb-6 bg-white/15 text-white border-white/20">
-            Stay Connected Worldwide
+            <Wifi className="w-3 h-3 mr-1.5" />
+            eSIM Technology
           </Badge>
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white tracking-tight leading-tight" data-testid="text-hero-title">
-            Travel with
-            <span className="block text-cyan-400">
-              Instant Data
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white tracking-tight leading-[1.1]" data-testid="text-hero-title">
+            One Card. Tap.
+            <span className="block text-cyan-400 mt-1">
+              Connect.
             </span>
           </h1>
-          <p className="mt-5 text-lg text-white/80 max-w-lg leading-relaxed" data-testid="text-hero-subtitle">
-            Get connected in 200+ destinations worldwide. Buy, install, and activate your eSIM in minutes. No physical SIM needed.
+          <p className="mt-5 text-lg sm:text-xl text-white/80 max-w-lg leading-relaxed" data-testid="text-hero-subtitle">
+            Instant eSIM data in 60 seconds. No roaming fees. No plastic SIMs.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link href="/destinations">
@@ -46,64 +50,49 @@ function HeroSection() {
               </Button>
             </Link>
           </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function StatsBar() {
-  const stats = [
-    { value: "200+", label: "Destinations" },
-    { value: "5M+", label: "eSIMs Sold" },
-    { value: "4.8", label: "App Rating" },
-    { value: "24/7", label: "Support" },
-  ];
-
-  return (
-    <section className="border-b bg-card">
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-          {stats.map((stat) => (
-            <div key={stat.label} className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-foreground" data-testid={`text-stat-${stat.label.toLowerCase().replace(/[^a-z]/g, '')}`}>
-                {stat.value}
-              </p>
-              <p className="text-sm text-muted-foreground mt-1">{stat.label}</p>
+          <div className="mt-8 flex items-center gap-4 text-white/60 text-sm">
+            <div className="flex items-center gap-1.5">
+              <Users className="w-4 h-4" />
+              <span>Used by frequent travelers</span>
             </div>
-          ))}
+            <span className="hidden sm:inline">|</span>
+            <div className="hidden sm:flex items-center gap-1.5">
+              <Globe className="w-4 h-4" />
+              <span>30+ countries</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
   );
 }
 
-function FeaturesSection() {
-  const features = [
+function ValueBlocks() {
+  const blocks = [
     {
       icon: Zap,
       title: "Instant Activation",
-      description: "Scan the QR code and get connected in seconds. No store visits needed.",
+      description: "Buy before you land. Scan. You're online.",
     },
     {
       icon: Globe,
       title: "Global Coverage",
-      description: "Stay connected in 200+ countries and regions across 6 continents.",
+      description: "EU, UK, Africa, Middle East.",
     },
     {
       icon: Shield,
-      title: "Secure & Reliable",
-      description: "Enterprise-grade security with reliable 4G/5G network connections.",
+      title: "Transparent Pricing",
+      description: "No bill shock. Top up anytime.",
     },
     {
       icon: Smartphone,
-      title: "Easy to Use",
-      description: "Compatible with all eSIM-enabled devices. Simple setup process.",
+      title: "Device Ready",
+      description: "Works with iPhone, Samsung, Pixel.",
     },
   ];
 
   return (
-    <section className="py-16 sm:py-20">
+    <section className="py-16 sm:py-20 border-b">
       <div className="max-w-7xl mx-auto px-4">
         <div className="text-center mb-12">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-features-title">
@@ -114,16 +103,16 @@ function FeaturesSection() {
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {features.map((feature) => (
-            <Card key={feature.title} className="p-5">
-              <div className="flex items-center justify-center w-10 h-10 rounded-md bg-primary/10 mb-4">
-                <feature.icon className="w-5 h-5 text-primary" />
+          {blocks.map((block) => (
+            <Card key={block.title} className="p-5 text-center">
+              <div className="flex items-center justify-center w-11 h-11 rounded-md bg-primary/10 mx-auto mb-4">
+                <block.icon className="w-5 h-5 text-primary" />
               </div>
-              <h3 className="font-semibold mb-2" data-testid={`text-feature-${feature.title.toLowerCase().replace(/\s/g, '-')}`}>
-                {feature.title}
+              <h3 className="font-semibold mb-1.5" data-testid={`text-feature-${block.title.toLowerCase().replace(/\s/g, '-')}`}>
+                {block.title}
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {feature.description}
+                {block.description}
               </p>
             </Card>
           ))}
@@ -144,15 +133,15 @@ function PopularDestinations() {
   });
 
   return (
-    <section className="py-16 sm:py-20 bg-card border-y">
+    <section className="py-16 sm:py-20 bg-card border-b">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-end justify-between gap-4 mb-8">
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
           <div>
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-popular-title">
               Popular Destinations
             </h2>
             <p className="mt-2 text-muted-foreground">
-              Top picks from millions of travelers
+              Choose your destination. Pick a plan. Connect instantly.
             </p>
           </div>
           <Link href="/destinations">
@@ -166,7 +155,7 @@ function PopularDestinations() {
           {isLoading
             ? Array.from({ length: 8 }).map((_, i) => (
                 <Card key={i} className="overflow-visible">
-                  <Skeleton className="aspect-[16/10] rounded-md" />
+                  <Skeleton className="aspect-[16/10] rounded-t-md" />
                   <div className="p-3">
                     <Skeleton className="h-5 w-24 mb-2" />
                     <Skeleton className="h-4 w-16" />
@@ -190,7 +179,10 @@ function PopularDestinations() {
                           {dest.name}
                         </h3>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">{dest.region}</p>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <MapPin className="w-3 h-3 text-muted-foreground" />
+                        <p className="text-xs text-muted-foreground">{dest.region}</p>
+                      </div>
                     </div>
                   </Card>
                 </Link>
@@ -219,10 +211,13 @@ function HowItWorks() {
             Get online in three simple steps
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          {steps.map((item) => (
-            <div key={item.step} className="text-center">
-              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary text-primary-foreground font-bold text-lg mx-auto mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+          {steps.map((item, idx) => (
+            <div key={item.step} className="text-center relative">
+              {idx < steps.length - 1 && (
+                <div className="hidden sm:block absolute top-6 left-[60%] w-[80%] border-t-2 border-dashed border-border" />
+              )}
+              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary text-primary-foreground font-bold text-lg mx-auto mb-4 relative">
                 {item.step}
               </div>
               <h3 className="font-semibold mb-2" data-testid={`text-step-${item.step}`}>{item.title}</h3>
@@ -237,9 +232,26 @@ function HowItWorks() {
   );
 }
 
+function TrustSection() {
+  return (
+    <section className="py-12 border-t bg-card">
+      <div className="max-w-7xl mx-auto px-4 text-center">
+        <div className="flex items-center justify-center gap-1 mb-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Star key={i} className="w-5 h-5 fill-yellow-500 text-yellow-500" />
+          ))}
+        </div>
+        <p className="text-muted-foreground max-w-lg mx-auto" data-testid="text-trust">
+          Used by frequent travelers and remote teams across 30+ countries.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function Footer() {
   return (
-    <footer className="border-t bg-card py-10">
+    <footer className="border-t py-10">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
@@ -261,10 +273,10 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       <HeroSection />
-      <StatsBar />
       <PopularDestinations />
-      <FeaturesSection />
+      <ValueBlocks />
       <HowItWorks />
+      <TrustSection />
       <Footer />
     </div>
   );
