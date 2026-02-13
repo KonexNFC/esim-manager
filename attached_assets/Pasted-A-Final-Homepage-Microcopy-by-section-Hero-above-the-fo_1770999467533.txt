@@ -1,0 +1,83 @@
+A) Final Homepage Microcopy (by section)
+
+Hero (above the fold)
+	•	Headline: One Card. Tap. Connect.
+	•	Subhead: Instant eSIM data in 60 seconds. No roaming fees. No plastic SIMs.
+	•	Primary CTA: Get Connected
+	•	Secondary CTA: View Plans
+
+Corridor Selector
+	•	Title: Popular Routes
+	•	Tabs: UK ↔ EU | UK ↔ Nigeria | UK ↔ UAE | Global
+	•	Helper text: Optimised plans for high-traffic travel corridors.
+
+Value Proposition
+	•	Block 1: Instant Activation
+Copy: Buy before you land. Scan the QR. You’re online.
+	•	Block 2: Transparent Pricing
+Copy: Fixed pricing. No roaming shock. Top up anytime.
+	•	Block 3: Global Coverage
+Copy: Reliable data across EU, Africa, and the Middle East.
+	•	Block 4: Device Ready
+Copy: Works with iPhone, Samsung, and Pixel eSIM devices.
+
+How It Works
+	1.	Choose Destination – Select your country or region.
+	2.	Pick a Plan – Day pass, travel pack, or regional bundle.
+	3.	Scan & Connect – Install instantly via QR code.
+
+Social Proof / Trust
+	•	Headline: Trusted by frequent travellers and remote teams
+	•	Microcopy: Secure payments. GDPR compliant. 99.9% uptime.
+
+FAQ (condensed)
+	•	Q: Do I need to change my SIM?
+A: No. Your physical SIM stays active.
+	•	Q: When does my data start?
+A: On first connection in destination.
+	•	Q: Can I top up?
+A: Yes. Top up anytime from your dashboard.
+
+Footer CTAs
+	•	Primary: Get Started
+	•	Secondary: Business & API
+
+⸻
+
+B) Admin Dashboard Microcopy (labels, statuses, buttons)
+
+Navigation
+	•	Dashboard
+	•	Plans
+	•	Orders
+	•	eSIM Inventory
+	•	Margins
+	•	Analytics
+	•	Settings
+
+Buttons
+	•	Create Plan
+	•	Update Pricing
+	•	Activate Plan
+	•	Pause Plan
+	•	Issue eSIM
+	•	Resend QR
+	•	Refund Order
+	•	Adjust Margin
+	•	Export CSV
+
+Statuses (enums for UI)
+	•	Order Status: Pending | Paid | Fulfilled | Refunded
+	•	eSIM Status: Issued | Installed | Active | Expired
+	•	Plan Status: Draft | Live | Paused
+
+Tooltips
+	•	Wholesale Cost: Partner data cost per GB.
+	•	Retail Price: Customer-facing price.
+	•	Margin: Auto-calculated gross margin.
+	•	Corridor: Primary travel route this plan is optimised for.
+
+Alerts
+	•	Low Inventory: eSIM stock below threshold.
+	•	High Refund Rate: Corridor refund rate exceeds baseline.
+	•	Margin Compression: Wholesale cost change detected.

@@ -11,6 +11,7 @@ export const destinations = pgTable("destinations", {
   imageUrl: text("image_url").notNull(),
   flagEmoji: text("flag_emoji").notNull(),
   popular: boolean("popular").default(false),
+  corridor: text("corridor"),
 });
 
 export const plans = pgTable("plans", {
@@ -27,6 +28,8 @@ export const plans = pgTable("plans", {
   coverage: text("coverage").notNull(),
   features: text("features").array().notNull().default(sql`'{}'::text[]`),
   popular: boolean("popular").default(false),
+  planStatus: text("plan_status").notNull().default("live"),
+  wholesaleCost: doublePrecision("wholesale_cost").default(0),
 });
 
 export const orders = pgTable("orders", {
@@ -40,6 +43,7 @@ export const orders = pgTable("orders", {
   qrCode: text("qr_code"),
   iccid: text("iccid"),
   activationDate: timestamp("activation_date"),
+  esimStatus: text("esim_status").notNull().default("issued"),
 });
 
 export const insertDestinationSchema = createInsertSchema(destinations).omit({ id: true });

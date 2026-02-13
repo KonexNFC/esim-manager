@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertOrderSchema } from "@shared/schema";
+import { insertOrderSchema, insertPlanSchema } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -32,9 +32,12 @@ export async function registerRoutes(
   app.get("/api/plans", async (req, res) => {
     try {
       const destinationId = req.query.destinationId as string;
-      if (!destinationId) return res.status(400).json({ message: "destinationId required" });
-      const result = await storage.getPlans(destinationId);
-      res.json(result);
+      if (destinationId) {
+        const result = await storage.getPlans(destinationId);
+        return res.json(result);
+      }
+      const all = await storage.getAllPlans();
+      res.json(all);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch plans" });
     }
@@ -50,12 +53,38 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/plans", async (req, res) => {
+    try {
+      const parsed = insertPlanSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid plan data", errors: parsed.error.flatten() });
+      }
+      const plan = await storage.createPlan(parsed.data);
+      res.status(201).json(plan);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create plan" });
+    }
+  });
+
+  app.patch("/api/plans/:id", async (req, res) => {
+    try {
+      const updated = await storage.updatePlan(req.params.id, req.body);
+      if (!updated) return res.status(404).json({ message: "Plan not found" });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update plan" });
+    }
+  });
+
   app.get("/api/orders", async (req, res) => {
     try {
       const email = req.query.email as string;
-      if (!email) return res.status(400).json({ message: "email required" });
-      const result = await storage.getOrdersByEmail(email);
-      res.json(result);
+      if (email) {
+        const result = await storage.getOrdersByEmail(email);
+        return res.json(result);
+      }
+      const all = await storage.getAllOrders();
+      res.json(all);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch orders" });
     }
@@ -85,6 +114,49 @@ export async function registerRoutes(
       res.status(201).json(order);
     } catch (error) {
       res.status(500).json({ message: "Failed to create order" });
+    }
+  });
+
+  app.patch("/api/orders/:id", async (req, res) => {
+    try {
+      const updated = await storage.updateOrder(req.params.id, req.body);
+      if (!updated) return res.status(404).json({ message: "Order not found" });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update order" });
+    }
+  });
+
+  app.get("/api/admin/stats", async (req, res) => {
+    try {
+      const [allOrders, allPlans, allDestinations] = await Promise.all([
+        storage.getAllOrders(),
+        storage.getAllPlans(),
+        storage.getDestinations(),
+      ]);
+
+      const totalRevenue = allOrders.reduce((sum, o) => sum + o.totalPrice, 0);
+      const totalOrders = allOrders.length;
+      const livePlans = allPlans.filter(p => p.planStatus === "live").length;
+      const totalDestinations = allDestinations.length;
+
+      const avgMargin = allPlans.reduce((sum, p) => {
+        if (p.wholesaleCost && p.price > 0) {
+          return sum + ((p.price - p.wholesaleCost) / p.price) * 100;
+        }
+        return sum;
+      }, 0) / (allPlans.length || 1);
+
+      res.json({
+        totalRevenue,
+        totalOrders,
+        livePlans,
+        totalDestinations,
+        avgMargin: Math.round(avgMargin),
+        activeEsims: allOrders.filter(o => o.esimStatus === "active" || o.esimStatus === "installed" || o.esimStatus === "issued").length,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch stats" });
     }
   });
 
