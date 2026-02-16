@@ -40,10 +40,12 @@ GlobeSIM is an eSIM marketplace where users can browse destinations, view data p
 
 ## Provider System
 - `server/providers/types.ts` - EsimProvider interface (getPlans, purchaseEsim, getEsimStatus)
+- `server/providers/esimgo.ts` - eSIMGo provider (LIVE, uses ESIMGO_API_KEY) - catalogue, ordering, eSIM status
 - `server/providers/esimAccess.ts` - eSIM Access provider (scaffold, needs ESIM_ACCESS_API_KEY)
 - `server/providers/zendit.ts` - Zendit provider (scaffold, needs ZENDIT_API_KEY)
 - `server/providers/index.ts` - Multi-provider router: fetchProviderPlans, getBestPlan, purchaseFromProvider
-- Currently uses seed/manual plans; providers activate when API keys are added
+- eSIMGo is connected and returning live plans; other providers activate when API keys are added
+- Order creation attempts provider fulfillment when plan.provider !== "manual", falls back to manual QR generation
 
 ## Key Features
 - Landing page with hero, corridor selector (UK↔EU, UK↔Nigeria, UK↔UAE, Global), value blocks, how-it-works, FAQ

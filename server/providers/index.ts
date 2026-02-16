@@ -1,8 +1,9 @@
 import { esimAccess } from "./esimAccess";
 import { zendit } from "./zendit";
+import { esimgo } from "./esimgo";
 import type { EsimProvider, ProviderPlan, ProviderOrderResult } from "./types";
 
-const providers: EsimProvider[] = [esimAccess, zendit];
+const providers: EsimProvider[] = [esimAccess, zendit, esimgo];
 
 function getConfiguredProviders(): EsimProvider[] {
   return providers.filter((p) => {

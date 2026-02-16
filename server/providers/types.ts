@@ -1,5 +1,6 @@
 export interface ProviderPlan {
   provider: string;
+  providerRef?: string;
   countryCode: string;
   dataAmountGb: number;
   validityDays: number;
