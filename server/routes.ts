@@ -2,7 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertOrderSchema, insertPlanSchema } from "@shared/schema";
-import { fetchProviderPlans, getBestPlan, purchaseFromProvider } from "./providers";
+import { fetchProviderPlans, getBestPlan } from "./providers";
+import { purchaseEsim as providerPurchase, getAvailableProviders } from "./providers/providerManager";
 import { z } from "zod";
 
 const bestPlanSchema = z.object({
@@ -123,11 +124,7 @@ export async function registerRoutes(
 
       if (plan.provider && plan.provider !== "manual") {
         try {
-          const result = await purchaseFromProvider(plan.provider, {
-            countryCode: plan.coverage,
-            dataAmountGb: plan.dataAmountGb,
-            validityDays: plan.validityDays,
-          });
+          const result = await providerPurchase(plan.id, plan.provider);
           providerResult = { iccid: result.iccid, qrCodeUrl: result.qrCodeUrl };
         } catch (err) {
           console.log(`[orders] Provider ${plan.provider} purchase failed, falling back to manual:`, err);
@@ -211,6 +208,14 @@ export async function registerRoutes(
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
+
+  app.get("/api/providers/available", async (_req, res) => {
+    try {
+      res.json({ providers: getAvailableProviders() });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch providers" });
     }
   });
 

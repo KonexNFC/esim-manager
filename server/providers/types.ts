@@ -23,6 +23,6 @@ export interface ProviderOrderResult {
 export interface EsimProvider {
   name: string;
   getPlans(countryCode: string): Promise<ProviderPlan[]>;
-  purchaseEsim(planDetails: { countryCode: string; dataAmountGb: number; validityDays: number }): Promise<ProviderOrderResult>;
+  purchaseEsim(planDetails: { countryCode: string; dataAmountGb: number; validityDays: number; providerRef?: string }): Promise<ProviderOrderResult>;
   getEsimStatus(iccid: string): Promise<string>;
 }

@@ -75,3 +75,4 @@ export async function checkEsimStatus(
 }
 
 export { providers, type ProviderPlan, type ProviderOrderResult };
+export { purchaseEsim, getAvailableProviders } from "./providerManager";
