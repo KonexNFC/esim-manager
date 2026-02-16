@@ -308,7 +308,6 @@ function OrdersTab() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                {order.flagEmoji && <span>{order.flagEmoji}</span>}
                 <h3 className="font-semibold text-sm">{order.destinationName || "Unknown"} - {order.planName || "Plan"}</h3>
                 {getOrderStatusBadge(order.status)}
                 {getEsimStatusBadge(order.esimStatus)}

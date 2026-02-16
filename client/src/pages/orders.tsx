@@ -24,7 +24,6 @@ function OrderCard({ order }: { order: Order & { planName?: string; destinationN
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                {order.flagEmoji && <span>{order.flagEmoji}</span>}
                 <h3 className="font-semibold text-sm truncate" data-testid={`text-order-destination-${order.id}`}>
                   {order.destinationName || "eSIM Plan"}
                 </h3>

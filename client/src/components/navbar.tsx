@@ -1,13 +1,10 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
-import { Wifi, ShoppingCart, Package, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { Wifi, Package, Search } from "lucide-react";
 
 export function Navbar() {
   const [location] = useLocation();
-  const [searchOpen, setSearchOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">

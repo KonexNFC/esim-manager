@@ -207,8 +207,8 @@ export default function Checkout() {
 
             {destination && (
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-lg">{destination.flagEmoji}</span>
-                <span className="text-sm font-medium">{destination.name}</span>
+                <Globe className="w-4 h-4 text-primary flex-shrink-0" />
+                <span className="text-sm font-medium" data-testid="text-checkout-destination">{destination.name}</span>
               </div>
             )}
 

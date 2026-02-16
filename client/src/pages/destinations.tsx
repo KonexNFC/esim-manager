@@ -90,24 +90,24 @@ export default function Destinations() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filtered.map((dest) => (
             <Link key={dest.id} href={`/destinations/${dest.id}`}>
-              <Card className="overflow-visible hover-elevate cursor-pointer group" data-testid={`card-destination-${dest.id}`}>
+              <Card className="overflow-visible hover-elevate cursor-pointer" data-testid={`card-destination-${dest.id}`}>
                 <div className="aspect-[16/10] overflow-hidden rounded-t-md">
                   <img
                     src={dest.imageUrl}
                     alt={dest.name}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    className="w-full h-full object-cover"
                   />
                 </div>
                 <div className="p-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">{dest.flagEmoji}</span>
+                    <Globe className="w-4 h-4 text-primary flex-shrink-0" />
                     <h3 className="font-semibold text-sm" data-testid={`text-destination-name-${dest.id}`}>
                       {dest.name}
                     </h3>
                   </div>
                   <div className="flex items-center gap-1.5 mt-1.5">
                     <MapPin className="w-3 h-3 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground">{dest.region}</p>
+                    <p className="text-xs text-muted-foreground" data-testid={`text-destination-region-${dest.id}`}>{dest.region}</p>
                   </div>
                 </div>
               </Card>
