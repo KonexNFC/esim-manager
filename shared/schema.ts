@@ -30,6 +30,7 @@ export const plans = pgTable("plans", {
   popular: boolean("popular").default(false),
   planStatus: text("plan_status").notNull().default("live"),
   wholesaleCost: doublePrecision("wholesale_cost").default(0),
+  provider: text("provider").notNull().default("manual"),
 });
 
 export const orders = pgTable("orders", {
