@@ -36,9 +36,9 @@ function HeroSection() {
             eSIM Technology
           </Badge>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white tracking-tight leading-[1.1]" data-testid="text-hero-title">
-            One Card. Tap.
+            Global Data.
             <span className="block text-cyan-400 mt-1">
-              Connect.
+              Instantly.
             </span>
           </h1>
           <p className="mt-5 text-lg sm:text-xl text-white/80 max-w-lg leading-relaxed" data-testid="text-hero-subtitle">
