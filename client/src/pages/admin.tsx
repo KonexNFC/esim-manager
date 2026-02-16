@@ -150,6 +150,9 @@ function PlansTab() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-semibold text-sm">{plan.name}</h3>
                   {getStatusBadge(plan.planStatus)}
+                  <Badge variant="outline" className="text-[10px] font-mono" data-testid={`badge-provider-${plan.id}`}>
+                    {plan.provider || "manual"}
+                  </Badge>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5 flex-wrap">
                   <span>{plan.dataAmount}</span>
@@ -467,7 +470,12 @@ function MarginsTab() {
           <Card key={plan.id} className="p-4" data-testid={`card-margin-${plan.id}`}>
             <div className="grid grid-cols-3 gap-4 items-center">
               <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{plan.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-medium truncate">{plan.name}</p>
+                  <Badge variant="outline" className="text-[10px] font-mono flex-shrink-0">
+                    {plan.provider || "manual"}
+                  </Badge>
+                </div>
                 <p className="text-xs text-muted-foreground">{plan.dataAmount} | {plan.validity}</p>
               </div>
               <div className="text-center text-sm">

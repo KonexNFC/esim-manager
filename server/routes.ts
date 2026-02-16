@@ -2,6 +2,14 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertOrderSchema, insertPlanSchema } from "@shared/schema";
+import { fetchProviderPlans, getBestPlan, purchaseFromProvider } from "./providers";
+import { z } from "zod";
+
+const bestPlanSchema = z.object({
+  countryCode: z.string().min(2).max(3),
+  dataAmountGb: z.number().positive(),
+  validityDays: z.number().int().positive(),
+});
 
 export async function registerRoutes(
   httpServer: Server,
@@ -110,7 +118,23 @@ export async function registerRoutes(
       if (!plan) {
         return res.status(400).json({ message: "Invalid plan ID" });
       }
-      const order = await storage.createOrder(parsed.data);
+
+      let providerResult: { iccid?: string; qrCodeUrl?: string } = {};
+
+      if (plan.provider && plan.provider !== "manual") {
+        try {
+          const result = await purchaseFromProvider(plan.provider, {
+            countryCode: plan.coverage,
+            dataAmountGb: plan.dataAmountGb,
+            validityDays: plan.validityDays,
+          });
+          providerResult = { iccid: result.iccid, qrCodeUrl: result.qrCodeUrl };
+        } catch (err) {
+          console.log(`[orders] Provider ${plan.provider} purchase failed, falling back to manual:`, err);
+        }
+      }
+
+      const order = await storage.createOrder(parsed.data, providerResult.iccid, providerResult.qrCodeUrl);
       res.status(201).json(order);
     } catch (error) {
       res.status(500).json({ message: "Failed to create order" });
@@ -124,6 +148,36 @@ export async function registerRoutes(
       res.json(updated);
     } catch (error) {
       res.status(500).json({ message: "Failed to update order" });
+    }
+  });
+
+  app.get("/api/providers/plans", async (req, res) => {
+    try {
+      const countryCode = req.query.countryCode as string;
+      if (!countryCode) {
+        return res.status(400).json({ message: "countryCode query param required" });
+      }
+      const plans = await fetchProviderPlans(countryCode);
+      res.json(plans);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch provider plans" });
+    }
+  });
+
+  app.post("/api/providers/best-plan", async (req, res) => {
+    try {
+      const parsed = bestPlanSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid request", errors: parsed.error.flatten() });
+      }
+      const { countryCode, dataAmountGb, validityDays } = parsed.data;
+      const best = await getBestPlan(countryCode, dataAmountGb, validityDays);
+      if (!best) {
+        return res.json({ bestPlan: null, message: "No provider plans available — using manual plans" });
+      }
+      res.json({ bestPlan: best });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to find best plan" });
     }
   });
 

@@ -29,7 +29,7 @@ export interface IStorage {
   getAllOrders(): Promise<(Order & { planName?: string; destinationName?: string; flagEmoji?: string; dataAmount?: string; validity?: string })[]>;
   getOrdersByEmail(email: string): Promise<(Order & { planName?: string; destinationName?: string; flagEmoji?: string; dataAmount?: string; validity?: string })[]>;
   getOrder(id: string): Promise<Order | undefined>;
-  createOrder(order: InsertOrder): Promise<Order>;
+  createOrder(order: InsertOrder, providerIccid?: string, providerQrCode?: string): Promise<Order>;
   updateOrder(id: string, updates: Partial<{ status: string; esimStatus: string }>): Promise<Order | undefined>;
 }
 
@@ -149,9 +149,9 @@ export class DatabaseStorage implements IStorage {
     return order;
   }
 
-  async createOrder(order: InsertOrder): Promise<Order> {
-    const iccid = `89${Array.from({ length: 17 }, () => Math.floor(Math.random() * 10)).join("")}`;
-    const qrCode = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=LPA:1$esim.globesim.com$${iccid}`;
+  async createOrder(order: InsertOrder, providerIccid?: string, providerQrCode?: string): Promise<Order> {
+    const iccid = providerIccid || `89${Array.from({ length: 17 }, () => Math.floor(Math.random() * 10)).join("")}`;
+    const qrCode = providerQrCode || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=LPA:1$esim.globesim.com$${iccid}`;
 
     const [created] = await db.insert(orders).values({
       ...order,
