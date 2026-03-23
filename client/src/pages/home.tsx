@@ -13,10 +13,36 @@ import {
 import {
   ArrowRight, Globe, Zap, Shield, Smartphone,
   ChevronRight, Wifi, MapPin, Star, Lock, CheckCircle2,
-  Signal, CreditCard, Quote
+  Signal, CreditCard, Quote, Users, Radio
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import type { Destination } from "@shared/schema";
+
+const flagStrip = [
+  { code: "GB", label: "UK",       flag: "🇬🇧" },
+  { code: "US", label: "USA",      flag: "🇺🇸" },
+  { code: "AE", label: "UAE",      flag: "🇦🇪" },
+  { code: "NG", label: "Nigeria",  flag: "🇳🇬" },
+  { code: "FR", label: "France",   flag: "🇫🇷" },
+  { code: "DE", label: "Germany",  flag: "🇩🇪" },
+  { code: "JP", label: "Japan",    flag: "🇯🇵" },
+  { code: "SG", label: "Singapore",flag: "🇸🇬" },
+  { code: "ES", label: "Spain",    flag: "🇪🇸" },
+  { code: "IT", label: "Italy",    flag: "🇮🇹" },
+  { code: "TH", label: "Thailand", flag: "🇹🇭" },
+  { code: "AU", label: "Australia",flag: "🇦🇺" },
+];
+
+const carriers = [
+  "Vodafone",
+  "T-Mobile",
+  "Orange",
+  "Airtel",
+  "Etisalat",
+  "SingTel",
+  "NTT Docomo",
+  "Telstra",
+];
 
 function HeroSection() {
   return (
@@ -27,50 +53,98 @@ function HeroSection() {
           alt=""
           className="w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/50 to-black/75" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/55 to-black/80" />
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 py-28 sm:py-36 lg:py-48">
-        <div className="max-w-2xl">
+      <div className="relative max-w-7xl mx-auto px-4 pt-24 pb-0 sm:pt-32 lg:pt-44">
+        <div className="max-w-2xl pb-12 sm:pb-16 lg:pb-20">
           <Badge variant="secondary" className="mb-6 bg-white/15 text-white border-white/20">
             <Wifi className="w-3 h-3 mr-1.5" />
             Instant eSIM Technology
           </Badge>
+
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white tracking-tight leading-[1.1]" data-testid="text-hero-title">
-            Global Data.
+            Global Data in Seconds —
             <span className="block text-white/90 mt-1">
-              Instantly.
+              No Roaming, No Contracts
             </span>
           </h1>
+
           <p className="mt-6 text-lg sm:text-xl text-white/80 max-w-lg leading-relaxed" data-testid="text-hero-subtitle">
-            Buy an eSIM, scan the QR code, and connect in under 60 seconds. No roaming fees. No plastic SIMs.
+            Stay connected in 190+ countries with instant eSIM activation. No SIM cards. No delays.
           </p>
-          <div className="mt-10 flex flex-wrap items-center gap-3">
+
+          <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link href="/destinations">
               <Button size="lg" data-testid="button-get-connected">
-                Get Started
+                Get Connected Now
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
             </Link>
             <Link href="/destinations">
               <Button size="lg" variant="outline" className="bg-white/10 backdrop-blur-sm text-white border-white/20" data-testid="button-view-plans">
-                View All Destinations
+                View Plans
               </Button>
             </Link>
           </div>
-          <div className="mt-10 flex items-center gap-6 text-white/60 text-sm flex-wrap">
+
+          <div className="mt-8 flex flex-wrap items-center gap-5 text-white/70 text-sm">
+            <div className="flex items-center gap-1.5" data-testid="text-hero-stat-travellers">
+              <Users className="w-4 h-4" />
+              <span>Trusted by <strong className="text-white">5,000+</strong> travellers</span>
+            </div>
             <div className="flex items-center gap-1.5" data-testid="text-hero-stat-countries">
               <Globe className="w-4 h-4" />
-              <span>30+ countries</span>
+              <span>190+ countries</span>
             </div>
             <div className="flex items-center gap-1.5" data-testid="text-hero-stat-speed">
               <Signal className="w-4 h-4" />
-              <span>4G/5G speeds</span>
+              <span>4G / 5G speeds</span>
             </div>
             <div className="flex items-center gap-1.5" data-testid="text-hero-stat-secure">
               <Shield className="w-4 h-4" />
               <span>Secure checkout</span>
             </div>
+          </div>
+        </div>
+
+        <div className="border-t border-white/10 py-4">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+            <span className="text-white/40 text-xs uppercase tracking-widest font-medium flex-shrink-0">
+              Popular destinations
+            </span>
+            {flagStrip.map((item) => (
+              <div
+                key={item.code}
+                className="flex items-center gap-1.5"
+                data-testid={`flag-strip-${item.code.toLowerCase()}`}
+              >
+                <span className="text-base leading-none" role="img" aria-label={item.label}>
+                  {item.flag}
+                </span>
+                <span className="text-white/60 text-xs">{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="relative border-t border-white/10 bg-black/30 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="flex items-center gap-1.5 text-white/40 flex-shrink-0">
+              <Radio className="w-3.5 h-3.5" />
+              <span className="text-xs uppercase tracking-widest font-medium">Powered by Tier 1 global carriers</span>
+            </div>
+            {carriers.map((c) => (
+              <span
+                key={c}
+                className="text-xs text-white/50 font-medium"
+                data-testid={`carrier-${c.toLowerCase().replace(/\s/g, "-")}`}
+              >
+                {c}
+              </span>
+            ))}
           </div>
         </div>
       </div>
