@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
-import { Wifi, Package, Search } from "lucide-react";
+import { Wifi, Package, Search, Smartphone } from "lucide-react";
 
 export function Navbar() {
   const [location] = useLocation();
@@ -28,6 +28,15 @@ export function Navbar() {
             >
               <Search className="w-4 h-4 mr-1.5" />
               <span className="hidden sm:inline">Browse</span>
+            </Button>
+          </Link>
+          <Link href="/compatibility">
+            <Button
+              variant={location.startsWith("/compatibility") ? "secondary" : "ghost"}
+              data-testid="link-compatibility"
+            >
+              <Smartphone className="w-4 h-4 mr-1.5" />
+              <span className="hidden sm:inline">Check Device</span>
             </Button>
           </Link>
           <Link href="/orders">

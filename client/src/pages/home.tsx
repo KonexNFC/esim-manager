@@ -12,8 +12,8 @@ import {
 } from "@/components/ui/accordion";
 import {
   ArrowRight, Globe, Zap, Shield, Smartphone,
-  ChevronRight, Wifi, MapPin, Users, Star, Lock, CheckCircle2,
-  Signal, CreditCard
+  ChevronRight, Wifi, MapPin, Star, Lock, CheckCircle2,
+  Signal, CreditCard, Quote
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import type { Destination } from "@shared/schema";
@@ -300,6 +300,73 @@ function TrustSection() {
   );
 }
 
+function TestimonialsSection() {
+  const testimonials = [
+    {
+      name: "Sarah K.",
+      location: "London, UK",
+      trip: "Portugal, Spain & France",
+      quote: "Bought the plan at Heathrow, scanned the QR on the plane, and had a working SIM by the time we landed in Lisbon. No faff at all — genuinely the easiest part of the whole trip.",
+      rating: 5,
+      initials: "SK",
+    },
+    {
+      name: "James O.",
+      location: "Manchester, UK",
+      trip: "Lagos, Nigeria",
+      quote: "I travel back to Nigeria four times a year and roaming fees were eating into my budget. Switched to GlobeSIM last year — the savings alone paid for two extra trips.",
+      rating: 5,
+      initials: "JO",
+    },
+    {
+      name: "Priya M.",
+      location: "Birmingham, UK",
+      trip: "Dubai & Abu Dhabi",
+      quote: "The installation guide is clear, the QR code worked first time, and the data was fast. Recommended it to my whole team for the Dubai conference and everyone was happy.",
+      rating: 5,
+      initials: "PM",
+    },
+  ];
+
+  return (
+    <section className="py-16 sm:py-20 border-t bg-card">
+      <div className="max-w-7xl mx-auto px-4">
+        <div className="text-center mb-12">
+          <div className="flex items-center justify-center gap-1 mb-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Star key={i} className="w-4 h-4 fill-yellow-500 text-yellow-500" />
+            ))}
+            <span className="ml-2 text-sm text-muted-foreground font-medium">4.9 / 5 from verified customers</span>
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-testimonials-title">
+            Trusted by travellers from the UK and beyond
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          {testimonials.map((t, idx) => (
+            <Card key={idx} className="p-6 flex flex-col" data-testid={`card-testimonial-${idx}`}>
+              <Quote className="w-6 h-6 text-primary/40 mb-4 flex-shrink-0" />
+              <p className="text-sm leading-relaxed flex-1 mb-5" data-testid={`text-testimonial-quote-${idx}`}>
+                "{t.quote}"
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center w-9 h-9 rounded-full bg-primary/10 text-primary font-semibold text-sm flex-shrink-0" data-testid={`text-testimonial-avatar-${idx}`}>
+                  {t.initials}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold" data-testid={`text-testimonial-name-${idx}`}>{t.name}</p>
+                  <p className="text-xs text-muted-foreground" data-testid={`text-testimonial-trip-${idx}`}>{t.trip}</p>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function FAQSection() {
   const faqs = [
     {
@@ -423,6 +490,7 @@ export default function Home() {
       <ValueBlocks />
       <HowItWorks />
       <TrustSection />
+      <TestimonialsSection />
       <FAQSection />
       <CTABanner />
       <Footer />

@@ -1,8 +1,8 @@
 import { useRoute, Link, useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -10,7 +10,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormField, FormItem, FormLabel, FormMessage, FormControl } from "@/components/ui/form";
-import { ArrowLeft, Wifi, Clock, Globe, Shield, CreditCard, Lock } from "lucide-react";
+import {
+  ArrowLeft, Wifi, Clock, Globe, Shield, CreditCard, Lock,
+  QrCode, Smartphone, CheckCircle2, RotateCcw
+} from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Plan, Destination } from "@shared/schema";
@@ -24,6 +27,29 @@ const checkoutSchema = z.object({
 });
 
 type CheckoutFormData = z.infer<typeof checkoutSchema>;
+
+const nextSteps = [
+  {
+    icon: CreditCard,
+    title: "Order confirmed",
+    description: "Your purchase is processed instantly.",
+  },
+  {
+    icon: QrCode,
+    title: "QR code delivered",
+    description: "Emailed to you within seconds.",
+  },
+  {
+    icon: Smartphone,
+    title: "Scan & install",
+    description: "Settings > Mobile Data > Add eSIM.",
+  },
+  {
+    icon: Wifi,
+    title: "You're online",
+    description: "Data activates on arrival at your destination.",
+  },
+];
 
 export default function Checkout() {
   const [, params] = useRoute("/checkout/:planId");
@@ -131,10 +157,11 @@ export default function Checkout() {
         </Button>
       </Link>
 
-      <h1 className="text-2xl font-bold mb-6" data-testid="text-checkout-title">Checkout</h1>
+      <h1 className="text-2xl font-bold mb-2" data-testid="text-checkout-title">Checkout</h1>
+      <p className="text-sm text-muted-foreground mb-6">Your QR code will be sent to your email instantly after purchase.</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-3 space-y-4">
           <Card className="p-6">
             <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-primary" />
@@ -182,7 +209,7 @@ export default function Checkout() {
 
                 <Separator className="my-4" />
 
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Lock className="w-3.5 h-3.5" />
                   <span>Your information is secure and encrypted</span>
                 </div>
@@ -199,9 +226,24 @@ export default function Checkout() {
               </form>
             </Form>
           </Card>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="flex flex-col items-center gap-1.5 p-3 rounded-md border bg-card text-center" data-testid="badge-secure-checkout">
+              <Lock className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">Secure checkout</span>
+            </div>
+            <div className="flex flex-col items-center gap-1.5 p-3 rounded-md border bg-card text-center" data-testid="badge-instant-delivery">
+              <QrCode className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">Instant delivery</span>
+            </div>
+            <div className="flex flex-col items-center gap-1.5 p-3 rounded-md border bg-card text-center" data-testid="badge-money-back">
+              <RotateCcw className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">Money-back guarantee</span>
+            </div>
+          </div>
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-4">
           <Card className="p-5 sticky top-20">
             <h3 className="font-semibold mb-4">Order Summary</h3>
 
@@ -229,11 +271,28 @@ export default function Checkout() {
 
             <Separator className="my-4" />
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-5">
               <span className="font-medium">Total</span>
               <span className="text-xl font-bold" data-testid="text-total-price">
                 ${plan.price.toFixed(2)}
               </span>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">What happens next</p>
+              <div className="space-y-3">
+                {nextSteps.map((step, idx) => (
+                  <div key={idx} className="flex items-start gap-2.5" data-testid={`step-next-${idx}`}>
+                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 flex-shrink-0 mt-0.5">
+                      <step.icon className="w-3 h-3 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium">{step.title}</p>
+                      <p className="text-xs text-muted-foreground">{step.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </Card>
         </div>

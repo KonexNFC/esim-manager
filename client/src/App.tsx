@@ -12,6 +12,7 @@ import Checkout from "@/pages/checkout";
 import Orders from "@/pages/orders";
 import OrderDetail from "@/pages/order-detail";
 import Admin from "@/pages/admin";
+import Compatibility from "@/pages/compatibility";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/checkout/:planId" component={Checkout} />
       <Route path="/orders" component={Orders} />
       <Route path="/orders/:id" component={OrderDetail} />
+      <Route path="/compatibility" component={Compatibility} />
       <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
     </Switch>
