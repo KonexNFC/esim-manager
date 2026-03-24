@@ -334,30 +334,26 @@ function PlanFinder() {
     }
   };
 
-  const destName = destinations?.find(d => d.id === destId)?.name;
-  const showCard = destId && destId !== "any";
-
-  const planLabel = () => {
-    if (size === "Unlimited") return "Unlimited";
-    if (!size) return "5 GB";
-    return size;
-  };
+  const selectedDest = destinations?.find(d => d.id === destId);
+  const destName   = selectedDest?.name      ?? "Japan";
+  const destFlag   = selectedDest?.flagEmoji ?? "🇯🇵";
+  const planLabel  = size      || "5 GB";
+  const planDur    = duration  || "30 Days";
 
   const planPrice = () => {
-    if (size === "Unlimited") return "$29";
-    if (size === "10 GB") return "$22";
-    if (size === "5 GB") return "$14";
-    if (size === "3 GB") return "$11";
-    return "$9";
+    if (size === "Unlimited") return "£22.99";
+    if (size === "10 GB")     return "£16.99";
+    if (size === "5 GB")      return "£12.99";
+    if (size === "3 GB")      return "£8.99";
+    if (size === "1 GB")      return "£5.99";
+    return "£12.99"; // default (5 GB)
   };
 
-  const useCase = () => {
-    if (size === "1 GB") return "Light browsing, maps, messaging";
-    if (size === "3 GB") return "Social media, maps, daily use";
-    if (size === "5 GB") return "Streaming, social, working remotely";
-    if (size === "10 GB") return "Heavy use, hotspot, content creation";
-    if (size === "Unlimited") return "No limits — stream, work, share freely";
-    return "Maps, social media, browsing, and more";
+  const perfectFor = (): string[] => {
+    if (size === "1 GB")      return ["Maps & navigation", "WhatsApp calls", "Email & light browsing"];
+    if (size === "10 GB")     return ["Video streaming", "Hotspot sharing", "Working remotely"];
+    if (size === "Unlimited") return ["Unlimited streaming", "Remote work & hotspot", "No data restrictions"];
+    return ["Maps & navigation", "WhatsApp & social", "Daily browsing"];
   };
 
   return (
@@ -424,48 +420,59 @@ function PlanFinder() {
               </div>
             </div>
 
-            {/* Recommendation card */}
-            {showCard && (
-              <div className="mt-6 rounded-xl bg-primary/5 border border-primary/20 p-5" data-testid="plan-recommendation-card">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="secondary" className="text-xs font-semibold">
-                        <Star className="w-3 h-3 mr-1 fill-current" />
-                        Best match for {destName}
-                      </Badge>
-                    </div>
-                    <h4 className="font-bold text-lg mb-1">{planLabel()} · {duration || "30 Days"}</h4>
-                    <p className="text-sm text-muted-foreground mb-3">{useCase()}</p>
-                    <ul className="space-y-1.5">
-                      {["No roaming charges", "Instant QR code by email", "Works on arrival"].map((b) => (
-                        <li key={b} className="flex items-center gap-2 text-sm">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                          {b}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-2xl font-bold">{planPrice()}</p>
-                    <p className="text-xs text-muted-foreground">one-off</p>
+            {/* Recommendation card — always visible */}
+            <div className="mt-6 rounded-xl border bg-background" data-testid="plan-recommendation-card">
+              <div className="px-5 pt-4 pb-2 border-b">
+                <p className="text-xs font-bold uppercase tracking-widest text-primary">Recommended Plan</p>
+              </div>
+              <div className="p-5">
+                {/* Destination + plan */}
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-3xl leading-none" role="img" aria-label={destName}>{destFlag}</span>
+                  <div>
+                    <p className="font-bold text-lg leading-tight" data-testid="rec-dest-name">{destName}</p>
+                    <p className="text-sm text-muted-foreground" data-testid="rec-plan-label">{planLabel} · {planDur}</p>
                   </div>
                 </div>
+
+                {/* Perfect for */}
+                <div className="mb-5">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">Perfect for:</p>
+                  <ul className="space-y-2">
+                    {perfectFor().map((b) => (
+                      <li key={b} className="flex items-center gap-2.5 text-sm">
+                        <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
+                        {b}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Price + CTA */}
+                <div className="flex items-end justify-between gap-4 pt-4 border-t">
+                  <div>
+                    <p className="text-3xl font-bold tracking-tight" data-testid="rec-plan-price">{planPrice()}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">one-off · no subscription</p>
+                  </div>
+                  <Button
+                    size="lg"
+                    className="font-semibold flex-shrink-0"
+                    onClick={handleFind}
+                    data-testid="button-see-plans"
+                  >
+                    Continue to Checkout
+                    <ArrowRight className="ml-2 w-4 h-4" />
+                  </Button>
+                </div>
               </div>
-            )}
+            </div>
           </div>
 
-          <div className="px-6 sm:px-8 pb-6 sm:pb-8 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <Button size="lg" className="w-full sm:w-auto px-8 font-semibold text-base" onClick={handleFind} data-testid="button-see-plans">
-              {showCard ? "Continue to Checkout" : "See Available Plans"}
-              <ArrowRight className="ml-2 w-4 h-4" />
-            </Button>
-            <p className="text-sm text-muted-foreground">
-              From <strong className="text-foreground">$9</strong> · No subscription · No app required ·{" "}
-              <Link href="/destinations">
-                <span className="text-primary underline underline-offset-2 cursor-pointer" data-testid="link-browse-all-inline">Browse all</span>
-              </Link>
-            </p>
+          <div className="px-6 sm:px-8 pb-5 flex items-center gap-1.5 text-sm text-muted-foreground">
+            <span>No app required · From £5.99 ·</span>
+            <Link href="/destinations">
+              <span className="text-primary underline underline-offset-2 cursor-pointer" data-testid="link-browse-all-inline">Browse all destinations</span>
+            </Link>
           </div>
         </div>
       </div>
