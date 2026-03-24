@@ -31,7 +31,53 @@ import {
   Package, TrendingUp, Timer
 } from "lucide-react";
 import { useState } from "react";
-import type { Destination } from "@shared/schema";
+import type { Destination, Plan } from "@shared/schema";
+
+// Find the cheapest plan that best matches size + duration selections
+async function goToCheckout(
+  navigate: (path: string) => void,
+  destId: string,
+  size: string,
+  duration: string,
+) {
+  try {
+    const res = await fetch(`/api/plans?destinationId=${destId}`);
+    const plans: Plan[] = await res.json();
+    const active = plans.filter((p) => p.planStatus !== "inactive");
+    if (!active.length) { navigate(`/destinations/${destId}`); return; }
+
+    let pool = [...active];
+
+    // Match data size
+    if (size && size !== "Unlimited") {
+      const targetGb = parseFloat(size);
+      const bySize = pool.filter((p) => {
+        const m = p.dataAmount.match(/(\d+(?:\.\d+)?)/);
+        return m && Math.abs(parseFloat(m[1]) - targetGb) < 0.5;
+      });
+      if (bySize.length) pool = bySize;
+    } else if (size === "Unlimited") {
+      const unl = pool.filter((p) => /unlimited/i.test(p.dataAmount));
+      if (unl.length) pool = unl;
+    }
+
+    // Match duration
+    if (duration) {
+      const targetDays = parseInt(duration);
+      const byDur = pool.filter((p) => {
+        const m = p.validity.match(/(\d+)/);
+        return m && Math.abs(parseInt(m[1]) - targetDays) <= 2;
+      });
+      if (byDur.length) pool = byDur;
+    }
+
+    // Pick cheapest match
+    const best = pool.reduce((a, b) => (b.price < a.price ? b : a), pool[0]);
+    navigate(`/checkout/${best.id}`);
+  } catch {
+    navigate(`/destinations/${destId}`);
+  }
+}
 
 const flagStrip = [
   { code: "GB", label: "UK",        flag: "🇬🇧" },
@@ -71,17 +117,20 @@ function HeroSection() {
   const [heroDestId, setHeroDestId] = useState<string>("");
   const [heroSize, setHeroSize] = useState<string>("");
   const [heroDuration, setHeroDuration] = useState<string>("");
+  const [heroLoading, setHeroLoading] = useState(false);
 
   const { data: destinations } = useQuery<Destination[]>({
     queryKey: ["/api/destinations"],
   });
 
-  const handleHeroFind = () => {
-    if (heroDestId && heroDestId !== "any") {
-      navigate(`/destinations/${heroDestId}`);
-    } else {
+  const handleHeroFind = async () => {
+    if (!heroDestId || heroDestId === "any") {
       navigate("/destinations");
+      return;
     }
+    setHeroLoading(true);
+    await goToCheckout(navigate, heroDestId, heroSize, heroDuration);
+    setHeroLoading(false);
   };
 
   return (
@@ -189,9 +238,10 @@ function HeroSection() {
               <Button
                 className="w-full font-semibold"
                 onClick={handleHeroFind}
+                disabled={heroLoading}
                 data-testid="button-hero-get-esim"
               >
-                Get eSIM
+                {heroLoading ? "Finding your plan…" : "Get eSIM"}
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
             </div>
@@ -326,12 +376,16 @@ function PlanFinder() {
     queryKey: ["/api/destinations"],
   });
 
-  const handleFind = () => {
-    if (destId && destId !== "any") {
-      navigate(`/destinations/${destId}`);
-    } else {
+  const [findLoading, setFindLoading] = useState(false);
+
+  const handleFind = async () => {
+    if (!destId || destId === "any") {
       navigate("/destinations");
+      return;
     }
+    setFindLoading(true);
+    await goToCheckout(navigate, destId, size, duration);
+    setFindLoading(false);
   };
 
   const selectedDest = destinations?.find(d => d.id === destId);
@@ -458,9 +512,10 @@ function PlanFinder() {
                     size="lg"
                     className="font-semibold flex-shrink-0"
                     onClick={handleFind}
+                    disabled={findLoading}
                     data-testid="button-see-plans"
                   >
-                    Continue to Checkout
+                    {findLoading ? "Finding your plan…" : "Continue to Checkout"}
                     <ArrowRight className="ml-2 w-4 h-4" />
                   </Button>
                 </div>
