@@ -136,8 +136,8 @@ function HeroSection() {
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0">
-        <img src="/images/hero-bg.png" alt="" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/65 to-black/80" />
+        <img src="/images/hero-bg.png" alt="" className="w-full h-full object-cover" style={{ filter: "brightness(0.55) blur(1px)", transform: "scale(1.02)" }} />
+        <div className="absolute inset-0 bg-gradient-to-br from-black/85 via-black/75 to-black/90" />
       </div>
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-24 pb-0 sm:pt-32 lg:pt-40">
@@ -146,7 +146,7 @@ function HeroSection() {
           {/* Left: Copy */}
           <div>
             <h1
-              className="text-5xl sm:text-6xl lg:text-[3.8rem] font-bold text-white tracking-tight leading-[1.05]"
+              className="text-5xl sm:text-6xl lg:text-7xl font-bold text-white tracking-tight leading-[1.05]"
               data-testid="text-hero-title"
             >
               Land Anywhere.
@@ -411,11 +411,11 @@ function PlanFinder() {
   };
 
   return (
-    <section id="plans" className="py-20 sm:py-24 border-t">
+    <section id="plans" className="py-24 sm:py-32 border-t">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-12">
           <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Plan Finder</p>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight" data-testid="text-plan-finder-title">
+          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-plan-finder-title">
             Find the Right eSIM in Seconds
           </h2>
           <p className="mt-4 text-muted-foreground max-w-md mx-auto leading-relaxed">
@@ -429,7 +429,7 @@ function PlanFinder() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">Where are you going?</p>
                 <Select onValueChange={setDestId} data-testid="select-destination">
-                  <SelectTrigger className="h-11" data-testid="trigger-destination">
+                  <SelectTrigger className="h-11 border-border bg-background shadow-sm" data-testid="trigger-destination">
                     <SelectValue placeholder="Select destination" />
                   </SelectTrigger>
                   <SelectContent>
@@ -445,7 +445,7 @@ function PlanFinder() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">How much data?</p>
                 <Select onValueChange={setSize} data-testid="select-data-size">
-                  <SelectTrigger className="h-11" data-testid="trigger-data-size">
+                  <SelectTrigger className="h-11 border-border bg-background shadow-sm" data-testid="trigger-data-size">
                     <SelectValue placeholder="Data allowance" />
                   </SelectTrigger>
                   <SelectContent>
@@ -460,7 +460,7 @@ function PlanFinder() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">How long?</p>
                 <Select onValueChange={setDuration} data-testid="select-duration">
-                  <SelectTrigger className="h-11" data-testid="trigger-duration">
+                  <SelectTrigger className="h-11 border-border bg-background shadow-sm" data-testid="trigger-duration">
                     <SelectValue placeholder="Trip length" />
                   </SelectTrigger>
                   <SelectContent>
@@ -573,11 +573,11 @@ function HowItWorks() {
   ];
 
   return (
-    <section id="how-it-works" className="py-20 sm:py-24 border-t bg-card">
+    <section id="how-it-works" className="py-24 sm:py-32 border-t bg-card">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-16">
           <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">How it works</p>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight" data-testid="text-how-it-works-title">
+          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-how-it-works-title">
             Get Connected in 60 Seconds
           </h2>
         </div>
@@ -644,11 +644,11 @@ function WhyGlobeSIM() {
   ];
 
   return (
-    <section className="py-20 sm:py-24 border-t">
+    <section className="py-24 sm:py-32 border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-14">
           <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Why GlobeSIM</p>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight" data-testid="text-benefits-title">
+          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-benefits-title">
             Built for how people actually travel
           </h2>
           <p className="mt-4 text-muted-foreground max-w-md mx-auto leading-relaxed">
@@ -714,11 +714,11 @@ const bundles = [
 
 function BundlesSection() {
   return (
-    <section className="py-20 sm:py-24 border-t bg-card">
+    <section className="py-24 sm:py-32 border-t bg-card">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-14">
           <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Travel Bundles</p>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight" data-testid="text-bundles-title">
+          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-bundles-title">
             Bundles built for your route
           </h2>
           <p className="mt-4 text-muted-foreground max-w-md mx-auto leading-relaxed">
@@ -779,12 +779,12 @@ function CompatibilitySection() {
   ];
 
   return (
-    <section className="py-20 sm:py-24 border-t">
+    <section className="py-24 sm:py-32 border-t">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Compatibility</p>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-5" data-testid="text-compat-title">
+            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-compat-title">
               Works with most modern devices
             </h2>
             <p className="text-muted-foreground mb-7 leading-relaxed">
@@ -839,12 +839,12 @@ function BuiltForTravellers() {
   ];
 
   return (
-    <section className="py-20 sm:py-24 border-t bg-card">
+    <section className="py-24 sm:py-32 border-t bg-card">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Built for real routes</p>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-5" data-testid="text-built-for-title">
+            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-built-for-title">
               Optimised for the world's most popular travel corridors
             </h2>
             <p className="text-muted-foreground leading-relaxed mb-8">
@@ -914,7 +914,7 @@ function TestimonialsSection() {
   ];
 
   return (
-    <section className="py-20 sm:py-24 border-t">
+    <section className="py-24 sm:py-32 border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-14">
           <div className="flex items-center justify-center gap-0.5 mb-4">
@@ -922,7 +922,7 @@ function TestimonialsSection() {
               <Star key={i} className="w-5 h-5 fill-yellow-500 text-yellow-500" />
             ))}
           </div>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight" data-testid="text-testimonials-title">
+          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-testimonials-title">
             Trusted by modern travellers
           </h2>
           <p className="mt-3 text-muted-foreground">4.9 / 5 · 5,000+ verified customers</p>
@@ -1015,11 +1015,11 @@ const coverageRegions = [
 
 function CoverageSection() {
   return (
-    <section id="coverage" className="py-20 sm:py-24 border-t bg-card">
+    <section id="coverage" className="py-24 sm:py-32 border-t bg-card">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-14">
           <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Coverage</p>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight" data-testid="text-coverage-title">
+          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-coverage-title">
             190+ countries covered
           </h2>
           <p className="mt-4 text-muted-foreground max-w-sm mx-auto">
@@ -1103,11 +1103,11 @@ function FAQSection() {
   ];
 
   return (
-    <section id="faq" className="py-20 sm:py-24 border-t">
+    <section id="faq" className="py-24 sm:py-32 border-t">
       <div className="max-w-2xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-12">
           <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">FAQ</p>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight" data-testid="text-faq-title">
+          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-faq-title">
             Frequently asked questions
           </h2>
           <p className="mt-4 text-muted-foreground">
@@ -1138,7 +1138,7 @@ function FAQSection() {
 // ─────────────────────────────────────────────
 function FinalCTA() {
   return (
-    <section className="py-20 sm:py-24 border-t bg-card">
+    <section className="py-24 sm:py-32 border-t bg-card">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
         <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-4">Get started today</p>
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-5 leading-tight" data-testid="text-final-cta-title">
