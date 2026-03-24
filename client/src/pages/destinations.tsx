@@ -1,11 +1,9 @@
 import { Link } from "wouter";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Globe, MapPin } from "lucide-react";
+import { Search, Globe } from "lucide-react";
 import { useState, useMemo } from "react";
 import type { Destination } from "@shared/schema";
 
@@ -69,13 +67,7 @@ export default function Destinations() {
       {isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <Card key={i} className="overflow-visible">
-              <Skeleton className="aspect-[16/10] rounded-t-md" />
-              <div className="p-3">
-                <Skeleton className="h-5 w-24 mb-2" />
-                <Skeleton className="h-4 w-16" />
-              </div>
-            </Card>
+            <Skeleton key={i} className="aspect-[3/4] rounded-2xl" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -89,28 +81,27 @@ export default function Destinations() {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filtered.map((dest) => (
-            <Link key={dest.id} href={`/destinations/${dest.id}`}>
-              <Card className="overflow-visible hover-elevate cursor-pointer" data-testid={`card-destination-${dest.id}`}>
-                <div className="aspect-[16/10] overflow-hidden rounded-t-md">
-                  <img
-                    src={dest.imageUrl}
-                    alt={dest.name}
-                    className="w-full h-full object-cover"
-                  />
+            <Link key={dest.id} href={`/destinations/${dest.id}`} data-testid={`card-destination-${dest.id}`}>
+              <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[3/4] bg-muted shadow-md">
+                <img
+                  src={dest.imageUrl}
+                  alt={dest.name}
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = "/images/hero-bg.png"; }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+                <div className="absolute top-3 left-3">
+                  <span className="text-2xl drop-shadow-lg">{dest.flagEmoji}</span>
                 </div>
-                <div className="p-3">
-                  <div className="flex items-center gap-2">
-                    <Globe className="w-4 h-4 text-primary flex-shrink-0" />
-                    <h3 className="font-semibold text-sm" data-testid={`text-destination-name-${dest.id}`}>
-                      {dest.name}
-                    </h3>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-1.5">
-                    <MapPin className="w-3 h-3 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground" data-testid={`text-destination-region-${dest.id}`}>{dest.region}</p>
-                  </div>
+                <div className="absolute bottom-0 left-0 right-0 p-4">
+                  <h3 className="font-bold text-white text-sm leading-tight" data-testid={`text-destination-name-${dest.id}`}>
+                    {dest.name}
+                  </h3>
+                  <p className="text-white/60 text-xs mt-0.5" data-testid={`text-destination-region-${dest.id}`}>
+                    {dest.region}
+                  </p>
                 </div>
-              </Card>
+              </div>
             </Link>
           ))}
         </div>

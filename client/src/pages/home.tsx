@@ -153,7 +153,7 @@ function HeroSection() {
               <br />
               Get Data in
               <br />
-              <span className="text-primary">60 Seconds.</span>
+              <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">60 Seconds.</span>
             </h1>
 
             <p
@@ -641,37 +641,116 @@ function HowItWorks() {
 }
 
 // ─────────────────────────────────────────────
-// 4. WHY GLOBESIM
+// 4. POPULAR DESTINATIONS
+// ─────────────────────────────────────────────
+const regionFromPrice: Record<string, string> = {
+  "Asia": "£7.99",
+  "Southeast Asia": "£7.99",
+  "Europe": "£9.99",
+  "Middle East": "£12.99",
+  "North America": "£14.99",
+};
+
+function PopularDestinations() {
+  const { data: destinations } = useQuery<Destination[]>({
+    queryKey: ["/api/destinations"],
+  });
+  const popular = destinations?.filter(d => d.popular).slice(0, 8) ?? [];
+
+  return (
+    <section className="py-24 sm:py-32 border-t bg-gradient-to-b from-card to-background">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Popular Destinations</p>
+            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight">
+              Where do you want to go?
+            </h2>
+          </div>
+          <Link href="/destinations">
+            <Button variant="outline" size="lg" data-testid="button-popular-browse-all">
+              Browse all destinations
+              <ArrowRight className="ml-2 w-4 h-4" />
+            </Button>
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          {popular.map((dest) => (
+            <Link key={dest.id} href={`/destinations/${dest.id}`} data-testid={`card-popular-dest-${dest.id}`}>
+              <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[3/4] bg-muted shadow-md">
+                <img
+                  src={dest.imageUrl}
+                  alt={dest.name}
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-4">
+                  <div className="flex items-end justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xl leading-none mb-1.5">{dest.flagEmoji}</p>
+                      <p className="font-bold text-white text-sm leading-tight truncate">{dest.name}</p>
+                      <p className="text-white/60 text-xs mt-0.5">{dest.region}</p>
+                    </div>
+                    <div className="flex-shrink-0 bg-white/15 backdrop-blur-sm border border-white/20 rounded-lg px-2.5 py-1.5 text-right">
+                      <p className="text-white/60 text-[9px] uppercase tracking-wide font-medium leading-none mb-0.5">from</p>
+                      <p className="text-white font-bold text-sm">{regionFromPrice[dest.region] ?? "£9.99"}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────
+// 5. WHY GLOBESIM
 // ─────────────────────────────────────────────
 function WhyGlobeSIM() {
   const benefits = [
     {
       icon: Banknote,
+      iconClass: "text-emerald-500",
+      bgClass: "bg-emerald-500/10",
       title: "No roaming fees — ever",
       description: "One fixed price. No per-minute charges, no bill shock when you land. What you pay at checkout is all you pay.",
     },
     {
       icon: Zap,
+      iconClass: "text-amber-500",
+      bgClass: "bg-amber-500/10",
       title: "Activated in under 60 seconds",
       description: "Your QR code arrives the instant you check out. Scan it from your phone settings and you're online in minutes.",
     },
     {
       icon: Signal,
+      iconClass: "text-blue-500",
+      bgClass: "bg-blue-500/10",
       title: "Keep your existing number",
       description: "Your regular SIM stays fully active. Calls, texts, and WhatsApp all work on your main number — your eSIM handles data.",
     },
     {
       icon: Globe,
+      iconClass: "text-primary",
+      bgClass: "bg-primary/10",
       title: "Regional and global plans",
       description: "One eSIM, multiple countries. Cover all of Europe, the Middle East, or Southeast Asia with a single purchase.",
     },
     {
       icon: Radio,
+      iconClass: "text-violet-500",
+      bgClass: "bg-violet-500/10",
       title: "Tier 1 global networks",
       description: "Routed through Vodafone, T-Mobile, Orange, and other Tier 1 carriers for strong, reliable signal wherever you go.",
     },
     {
       icon: Smartphone,
+      iconClass: "text-rose-500",
+      bgClass: "bg-rose-500/10",
       title: "100% digital — no plastic",
       description: "No SIM card. No post. No carrier store. Buy online, install digitally, travel. That's it.",
     },
@@ -694,11 +773,11 @@ function WhyGlobeSIM() {
           {benefits.map((b, i) => (
             <div
               key={b.title}
-              className="p-6 rounded-xl border bg-card border-l-2 border-l-primary"
+              className="p-6 rounded-xl border bg-card shadow-sm"
               data-testid={`card-benefit-${i}`}
             >
-              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 mb-4">
-                <b.icon className="w-5 h-5 text-primary" />
+              <div className={`flex items-center justify-center w-11 h-11 rounded-xl ${b.bgClass} mb-4`}>
+                <b.icon className={`w-5 h-5 ${b.iconClass}`} />
               </div>
               <h3 className="font-semibold mb-2 leading-snug">{b.title}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">{b.description}</p>
@@ -1344,6 +1423,7 @@ export default function Home() {
       <HeroSection />
       <PlanFinder />
       <HowItWorks />
+      <PopularDestinations />
       <WhyGlobeSIM />
       <BundlesSection />
       <CompatibilitySection />
