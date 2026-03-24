@@ -519,6 +519,21 @@ function PlanFinder() {
                     <ArrowRight className="ml-2 w-4 h-4" />
                   </Button>
                 </div>
+
+                {/* Urgency + risk reversal */}
+                <div className="mt-4 pt-4 border-t grid grid-cols-2 gap-x-4 gap-y-1.5" data-testid="risk-reversal-strip">
+                  {[
+                    { icon: Zap,          text: "Instant delivery · No waiting" },
+                    { icon: CheckCircle2, text: "Works immediately after activation" },
+                    { icon: ShieldCheck,  text: "No contracts. No hidden fees." },
+                    { icon: Globe,        text: "Used by travellers across 190+ countries" },
+                  ].map(({ icon: Icon, text }) => (
+                    <div key={text} className="flex items-start gap-1.5">
+                      <Icon className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
+                      <span className="text-xs text-muted-foreground leading-snug">{text}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -1145,10 +1160,15 @@ function FinalCTA() {
             </Button>
           </Link>
         </div>
-        <div className="flex flex-wrap justify-center gap-5 text-sm text-muted-foreground">
-          {["No app required", "Instant activation", "Works worldwide", "No contracts"].map((item) => (
+        <div className="flex flex-wrap justify-center gap-x-6 gap-y-2.5 text-sm text-muted-foreground">
+          {[
+            "Instant delivery · No waiting",
+            "Works immediately after activation",
+            "No contracts. No hidden fees.",
+            "Used by travellers across 190+ countries",
+          ].map((item) => (
             <div key={item} className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-primary" />
+              <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
               <span>{item}</span>
             </div>
           ))}
