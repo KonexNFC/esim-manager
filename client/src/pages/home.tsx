@@ -376,6 +376,18 @@ function PlanFinder() {
     queryKey: ["/api/destinations"],
   });
 
+  // Fetch real plans whenever a destination is selected
+  const { data: destPlans } = useQuery<Plan[]>({
+    queryKey: ["/api/plans", destId],
+    queryFn: async () => {
+      if (!destId || destId === "any") return [];
+      const res = await fetch(`/api/plans?destinationId=${destId}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!destId && destId !== "any",
+  });
+
   const [findLoading, setFindLoading] = useState(false);
 
   const handleFind = async () => {
@@ -394,13 +406,35 @@ function PlanFinder() {
   const planLabel  = size      || "5 GB";
   const planDur    = duration  || "30 Days";
 
+  // Map selector strings → numbers for plan matching
+  const sizeToGb: Record<string, number> = {
+    "1 GB": 1, "3 GB": 3, "5 GB": 5, "10 GB": 10, "Unlimited": 999,
+  };
+  const durToDays: Record<string, number> = {
+    "7 Days": 7, "14 Days": 14, "30 Days": 30,
+  };
+
+  // Find the best live plan that matches size + duration
+  const matchedPlan = (() => {
+    if (!destPlans?.length) return null;
+    const gb   = sizeToGb[size]     ?? 5;
+    const days = durToDays[duration] ?? 30;
+    const active = destPlans.filter(p => p.planStatus === "active");
+    const exact = active
+      .filter(p => Math.abs(p.dataAmountGb - gb) <= 0.5 && Math.abs(p.validityDays - days) <= 3)
+      .sort((a, b) => a.price - b.price)[0];
+    return exact ?? active.sort((a, b) => a.price - b.price)[0] ?? null;
+  })();
+
   const planPrice = () => {
+    if (matchedPlan) return `£${matchedPlan.price.toFixed(2)}`;
+    // Static fallback while no destination is selected
     if (size === "Unlimited") return "£22.99";
     if (size === "10 GB")     return "£16.99";
     if (size === "5 GB")      return "£12.99";
     if (size === "3 GB")      return "£8.99";
     if (size === "1 GB")      return "£5.99";
-    return "£12.99"; // default (5 GB)
+    return "£12.99";
   };
 
   const perfectFor = (): string[] => {
