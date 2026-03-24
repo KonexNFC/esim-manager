@@ -388,7 +388,7 @@ function PlanFinder() {
     setFindLoading(false);
   };
 
-  const selectedDest = destinations?.find(d => d.id === destId);
+  const selectedDest = destinations?.find(d => String(d.id) === destId);
   const destName   = selectedDest?.name      ?? "Japan";
   const destFlag   = selectedDest?.flagEmoji ?? "🇯🇵";
   const planLabel  = size      || "5 GB";
@@ -404,10 +404,10 @@ function PlanFinder() {
   };
 
   const perfectFor = (): string[] => {
-    if (size === "1 GB")      return ["Maps & navigation", "WhatsApp calls", "Email & light browsing"];
+    if (size === "1 GB")      return ["Maps & transport", "WhatsApp & calls", "Email & light browsing"];
     if (size === "10 GB")     return ["Video streaming", "Hotspot sharing", "Working remotely"];
     if (size === "Unlimited") return ["Unlimited streaming", "Remote work & hotspot", "No data restrictions"];
-    return ["Maps & navigation", "WhatsApp & social", "Daily browsing"];
+    return ["Maps & transport", "WhatsApp & calls", "Daily browsing"];
   };
 
   return (
@@ -477,7 +477,7 @@ function PlanFinder() {
             {/* Recommendation card — always visible */}
             <div className="mt-6 rounded-xl border bg-background" data-testid="plan-recommendation-card">
               <div className="px-5 pt-4 pb-2 border-b">
-                <p className="text-xs font-bold uppercase tracking-widest text-primary">Recommended Plan</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-primary">Recommended for your trip</p>
               </div>
               <div className="p-5">
                 {/* Destination + plan */}
@@ -485,7 +485,7 @@ function PlanFinder() {
                   <span className="text-3xl leading-none" role="img" aria-label={destName}>{destFlag}</span>
                   <div>
                     <p className="font-bold text-lg leading-tight" data-testid="rec-dest-name">{destName}</p>
-                    <p className="text-sm text-muted-foreground" data-testid="rec-plan-label">{planLabel} · {planDur}</p>
+                    <p className="text-sm text-muted-foreground" data-testid="rec-plan-label">{planLabel} • {planDur}</p>
                   </div>
                 </div>
 
