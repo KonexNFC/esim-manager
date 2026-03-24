@@ -27,7 +27,8 @@ import {
   ArrowRight, Globe, Zap, Smartphone,
   Wifi, Star, Lock, CheckCircle2,
   Signal, Quote, Users, Radio,
-  QrCode, MapPin, Banknote, ShieldCheck
+  QrCode, MapPin, Banknote, ShieldCheck,
+  Package, TrendingUp, Timer
 } from "lucide-react";
 import { useState } from "react";
 import type { Destination } from "@shared/schema";
@@ -59,15 +60,35 @@ const mockPlans = [
   { dest: "Nigeria",        flag: "🇳🇬", data: "5 GB",  days: 30, price: "$16" },
 ];
 
+const planSizes = ["1 GB", "3 GB", "5 GB", "10 GB", "Unlimited"];
+const planDurations = ["7 Days", "15 Days", "30 Days"];
+
 // ─────────────────────────────────────────────
 // 1. HERO
 // ─────────────────────────────────────────────
 function HeroSection() {
+  const [, navigate] = useLocation();
+  const [heroDestId, setHeroDestId] = useState<string>("");
+  const [heroSize, setHeroSize] = useState<string>("");
+  const [heroDuration, setHeroDuration] = useState<string>("");
+
+  const { data: destinations } = useQuery<Destination[]>({
+    queryKey: ["/api/destinations"],
+  });
+
+  const handleHeroFind = () => {
+    if (heroDestId && heroDestId !== "any") {
+      navigate(`/destinations/${heroDestId}`);
+    } else {
+      navigate("/destinations");
+    }
+  };
+
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0">
         <img src="/images/hero-bg.png" alt="" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-br from-black/75 via-black/60 to-black/80" />
+        <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/65 to-black/80" />
       </div>
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-24 pb-0 sm:pt-32 lg:pt-40">
@@ -75,40 +96,25 @@ function HeroSection() {
 
           {/* Left: Copy */}
           <div>
-            <div className="flex flex-wrap gap-2 mb-7">
-              {["Instant activation", "190+ countries", "iPhone & Android", "Keep your WhatsApp number"].map((b) => (
-                <span
-                  key={b}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-white/80 text-xs font-medium tracking-wide"
-                  data-testid={`badge-hero-${b.toLowerCase().replace(/\s/g, '-').replace(/[^a-z0-9-]/g, '')}`}
-                >
-                  <CheckCircle2 className="w-3 h-3 text-primary" />
-                  {b}
-                </span>
-              ))}
-            </div>
-
             <h1
-              className="text-5xl sm:text-6xl lg:text-[3.75rem] font-bold text-white tracking-tight leading-[1.05]"
+              className="text-5xl sm:text-6xl lg:text-[3.8rem] font-bold text-white tracking-tight leading-[1.05]"
               data-testid="text-hero-title"
             >
-              Global Data
+              Land Anywhere.
               <br />
-              in Seconds.
-              <span className="block text-white/70 font-semibold text-3xl sm:text-4xl lg:text-[2.5rem] mt-3 leading-snug">
-                No Roaming. No Contracts.
-              </span>
+              Get Data in
+              <br />
+              <span className="text-primary">60 Seconds.</span>
             </h1>
 
             <p
               className="mt-6 text-lg sm:text-xl text-white/65 max-w-lg leading-relaxed"
               data-testid="text-hero-subtitle"
             >
-              Stay connected in 190+ countries with instant eSIM activation.
-              No physical SIM. No queues. No surprise charges.
+              No roaming fees. No SIM cards. Instant global connectivity across 190+ countries.
             </p>
 
-            <div className="mt-9 flex flex-wrap items-center gap-3">
+            <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link href="/destinations">
                 <Button size="lg" className="px-7 text-base font-semibold shadow-lg" data-testid="button-get-connected">
                   Get Connected Now
@@ -127,20 +133,67 @@ function HeroSection() {
               </Link>
             </div>
 
-            {/* Social proof stats row */}
-            <div className="mt-9 flex items-center gap-0 text-white/55 text-sm divide-x divide-white/15">
-              <div className="flex items-center gap-1.5 pr-5" data-testid="text-hero-stat-travellers">
-                <Users className="w-3.5 h-3.5" />
-                <span><strong className="text-white font-semibold">5,000+</strong> travellers</span>
+            {/* Trust bullets */}
+            <ul className="mt-6 space-y-2" data-testid="trust-bullets">
+              {[
+                "Works instantly on arrival",
+                "Keep your number (WhatsApp, calls, texts)",
+                "Delivered to your email instantly",
+              ].map((b) => (
+                <li key={b} className="flex items-center gap-2 text-white/70 text-sm">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                  {b}
+                </li>
+              ))}
+            </ul>
+
+            {/* Inline plan selector */}
+            <div
+              className="mt-8 rounded-xl bg-white/8 backdrop-blur-md border border-white/15 p-4"
+              data-testid="hero-plan-selector"
+            >
+              <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-3">Quick plan finder</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                <Select onValueChange={setHeroDestId} data-testid="hero-select-destination">
+                  <SelectTrigger className="bg-white/10 border-white/20 text-white h-10 text-sm [&>span]:text-white/60" data-testid="hero-trigger-destination">
+                    <SelectValue placeholder="Destination" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Any destination</SelectItem>
+                    {destinations?.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select onValueChange={setHeroSize} data-testid="hero-select-data">
+                  <SelectTrigger className="bg-white/10 border-white/20 text-white h-10 text-sm [&>span]:text-white/60" data-testid="hero-trigger-data">
+                    <SelectValue placeholder="Data plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {planSizes.map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select onValueChange={setHeroDuration} data-testid="hero-select-duration">
+                  <SelectTrigger className="bg-white/10 border-white/20 text-white h-10 text-sm [&>span]:text-white/60" data-testid="hero-trigger-duration">
+                    <SelectValue placeholder="Duration" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {planDurations.map((d) => (
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="flex items-center gap-1.5 px-5" data-testid="text-hero-stat-countries">
-                <Globe className="w-3.5 h-3.5" />
-                <span>190+ countries</span>
-              </div>
-              <div className="flex items-center gap-1.5 pl-5" data-testid="text-hero-stat-speed">
-                <Signal className="w-3.5 h-3.5" />
-                <span>4G / 5G</span>
-              </div>
+              <Button
+                className="w-full font-semibold"
+                onClick={handleHeroFind}
+                data-testid="button-hero-get-esim"
+              >
+                Get eSIM
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
             </div>
           </div>
 
@@ -215,30 +268,44 @@ function HeroSection() {
               <span className="text-xs uppercase tracking-widest font-semibold">Tier 1 networks</span>
             </div>
             <div className="w-px h-3 bg-white/15 hidden sm:block" />
-            {carriers.map((c, i) => (
+            {carriers.map((c) => (
               <span key={c} className="text-xs text-white/40 font-medium" data-testid={`carrier-${c.toLowerCase().replace(/\s/g, '-')}`}>
-                {c}{i < carriers.length - 1 ? "" : ""}
+                {c}
               </span>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Trust bar */}
+      {/* Trust bar with payment icons */}
       <div className="relative bg-black/25">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex flex-wrap sm:flex-nowrap items-center justify-center sm:justify-start gap-6 sm:gap-0 sm:divide-x sm:divide-white/15">
-            {[
-              { icon: Lock,        label: "Secure checkout" },
-              { icon: Zap,         label: "Instant delivery" },
-              { icon: Globe,       label: "190+ countries" },
-              { icon: ShieldCheck, label: "Reliable networks" },
-            ].map(({ icon: Icon, label }) => (
-              <div key={label} className="flex items-center gap-2 sm:px-6 first:sm:pl-0 text-white/55" data-testid={`trust-bar-${label.toLowerCase().replace(/\s/g, '-')}`}>
-                <Icon className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">{label}</span>
-              </div>
-            ))}
+          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-0 justify-between">
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-6 sm:gap-0 sm:divide-x sm:divide-white/15">
+              {[
+                { icon: Lock,        label: "Secure checkout" },
+                { icon: Zap,         label: "Instant delivery" },
+                { icon: Users,       label: "5,000+ travellers" },
+                { icon: ShieldCheck, label: "24/7 support" },
+              ].map(({ icon: Icon, label }) => (
+                <div key={label} className="flex items-center gap-2 sm:px-5 first:sm:pl-0 text-white/55" data-testid={`trust-bar-${label.toLowerCase().replace(/[\s+]/g, '-').replace(/[^a-z0-9-]/g, '')}`}>
+                  <Icon className="w-3.5 h-3.5" />
+                  <span className="text-xs font-medium">{label}</span>
+                </div>
+              ))}
+            </div>
+            {/* Payment icons */}
+            <div className="flex items-center gap-2 flex-shrink-0" data-testid="payment-icons">
+              {["VISA", "MC", "Apple Pay", "Stripe"].map((m) => (
+                <span
+                  key={m}
+                  className="px-2 py-0.5 rounded border border-white/20 text-white/45 text-[10px] font-bold tracking-wide"
+                  data-testid={`payment-icon-${m.toLowerCase().replace(/\s/g, '-')}`}
+                >
+                  {m}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -249,14 +316,11 @@ function HeroSection() {
 // ─────────────────────────────────────────────
 // 2. PLAN FINDER
 // ─────────────────────────────────────────────
-const planSizes = ["1 GB", "3 GB", "5 GB", "10 GB", "Unlimited"];
-const planDurations = ["7 Days", "15 Days", "30 Days"];
-
 function PlanFinder() {
   const [, navigate] = useLocation();
   const [destId, setDestId] = useState<string>("");
-  const [, setSize] = useState<string>("");
-  const [, setDuration] = useState<string>("");
+  const [size, setSize] = useState<string>("");
+  const [duration, setDuration] = useState<string>("");
 
   const { data: destinations } = useQuery<Destination[]>({
     queryKey: ["/api/destinations"],
@@ -270,6 +334,32 @@ function PlanFinder() {
     }
   };
 
+  const destName = destinations?.find(d => d.id === destId)?.name;
+  const showCard = destId && destId !== "any";
+
+  const planLabel = () => {
+    if (size === "Unlimited") return "Unlimited";
+    if (!size) return "5 GB";
+    return size;
+  };
+
+  const planPrice = () => {
+    if (size === "Unlimited") return "$29";
+    if (size === "10 GB") return "$22";
+    if (size === "5 GB") return "$14";
+    if (size === "3 GB") return "$11";
+    return "$9";
+  };
+
+  const useCase = () => {
+    if (size === "1 GB") return "Light browsing, maps, messaging";
+    if (size === "3 GB") return "Social media, maps, daily use";
+    if (size === "5 GB") return "Streaming, social, working remotely";
+    if (size === "10 GB") return "Heavy use, hotspot, content creation";
+    if (size === "Unlimited") return "No limits — stream, work, share freely";
+    return "Maps, social media, browsing, and more";
+  };
+
   return (
     <section id="plans" className="py-20 sm:py-24 border-t">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -279,12 +369,11 @@ function PlanFinder() {
             Find the Right eSIM in Seconds
           </h2>
           <p className="mt-4 text-muted-foreground max-w-md mx-auto leading-relaxed">
-            Tell us where you're headed and how long you're going. We'll show you the best plan.
+            Tell us where you're headed and how long you're going. We'll match you to the best plan.
           </p>
         </div>
 
         <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
-          {/* Selector area */}
           <div className="p-6 sm:p-8">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               <div>
@@ -303,7 +392,6 @@ function PlanFinder() {
                   </SelectContent>
                 </Select>
               </div>
-
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">How much data?</p>
                 <Select onValueChange={setSize} data-testid="select-data-size">
@@ -319,7 +407,6 @@ function PlanFinder() {
                   </SelectContent>
                 </Select>
               </div>
-
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">How long?</p>
                 <Select onValueChange={setDuration} data-testid="select-duration">
@@ -336,18 +423,47 @@ function PlanFinder() {
                 </Select>
               </div>
             </div>
+
+            {/* Recommendation card */}
+            {showCard && (
+              <div className="mt-6 rounded-xl bg-primary/5 border border-primary/20 p-5" data-testid="plan-recommendation-card">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge variant="secondary" className="text-xs font-semibold">
+                        <Star className="w-3 h-3 mr-1 fill-current" />
+                        Best match for {destName}
+                      </Badge>
+                    </div>
+                    <h4 className="font-bold text-lg mb-1">{planLabel()} · {duration || "30 Days"}</h4>
+                    <p className="text-sm text-muted-foreground mb-3">{useCase()}</p>
+                    <ul className="space-y-1.5">
+                      {["No roaming charges", "Instant QR code by email", "Works on arrival"].map((b) => (
+                        <li key={b} className="flex items-center gap-2 text-sm">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                          {b}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-2xl font-bold">{planPrice()}</p>
+                    <p className="text-xs text-muted-foreground">one-off</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* CTA footer */}
           <div className="px-6 sm:px-8 pb-6 sm:pb-8 flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <Button size="lg" className="w-full sm:w-auto px-8 font-semibold text-base" onClick={handleFind} data-testid="button-see-plans">
-              See Available Plans
+              {showCard ? "Continue to Checkout" : "See Available Plans"}
               <ArrowRight className="ml-2 w-4 h-4" />
             </Button>
             <p className="text-sm text-muted-foreground">
-              Plans from <strong className="text-foreground">$9</strong> · No subscription · Cancel anytime ·{" "}
+              From <strong className="text-foreground">$9</strong> · No subscription · No app required ·{" "}
               <Link href="/destinations">
-                <span className="text-primary underline underline-offset-2 cursor-pointer" data-testid="link-browse-all-inline">Browse all destinations</span>
+                <span className="text-primary underline underline-offset-2 cursor-pointer" data-testid="link-browse-all-inline">Browse all</span>
               </Link>
             </p>
           </div>
@@ -363,19 +479,16 @@ function PlanFinder() {
 function HowItWorks() {
   const steps = [
     {
-      num: "01",
       icon: Globe,
       title: "Choose your destination",
       description: "Browse 190+ countries and regions. Pick the data size and validity that suits your trip — from a weekend break to a month abroad.",
     },
     {
-      num: "02",
       icon: QrCode,
       title: "Receive your eSIM instantly",
       description: "Pay securely online. Your QR code arrives by email within seconds — no waiting, no shipping, no SIM card.",
     },
     {
-      num: "03",
       icon: Wifi,
       title: "Scan, activate, go online",
       description: "Open your phone settings, scan the QR code, and you're connected. Data activates on arrival — often before you leave the airport.",
@@ -391,13 +504,13 @@ function HowItWorks() {
             Three steps. Under 60 seconds.
           </h2>
           <p className="mt-4 text-muted-foreground max-w-sm mx-auto">
-            No store visits. No SIM swaps. No waiting in roaming queues.
+            No store visits. No SIM swaps. No roaming queues.
           </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 lg:gap-10">
           {steps.map((step, idx) => (
-            <div key={step.num} className="relative" data-testid={`card-step-${idx + 1}`}>
+            <div key={idx} className="relative" data-testid={`card-step-${idx + 1}`}>
               {idx < steps.length - 1 && (
                 <div className="hidden sm:block absolute top-8 left-[58%] w-[42%] border-t border-dashed border-border" />
               )}
@@ -470,11 +583,11 @@ function WhyGlobeSIM() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {benefits.map((b) => (
+          {benefits.map((b, i) => (
             <div
               key={b.title}
               className="p-6 rounded-xl border bg-card border-l-2 border-l-primary"
-              data-testid={`card-benefit-${b.title.toLowerCase().split(' ')[0].replace(/[^a-z]/g, '')}`}
+              data-testid={`card-benefit-${i}`}
             >
               <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 mb-4">
                 <b.icon className="w-5 h-5 text-primary" />
@@ -490,7 +603,98 @@ function WhyGlobeSIM() {
 }
 
 // ─────────────────────────────────────────────
-// 5. COMPATIBILITY
+// 5. TRAVEL BUNDLES
+// ─────────────────────────────────────────────
+const bundles = [
+  {
+    id: "europe",
+    flag: "🇪🇺",
+    label: "Most Popular",
+    title: "Europe Pack",
+    subtitle: "28 countries · One eSIM",
+    description: "Full coverage across the EU, UK, and beyond. Maps, social, streaming — all without switching SIMs.",
+    features: ["28 European countries", "Up to 30-day validity", "4G/5G speeds"],
+    price: "From $14",
+  },
+  {
+    id: "nigeria",
+    flag: "🇳🇬🇬🇧",
+    label: "Best Value",
+    title: "UK ↔ Nigeria Pack",
+    subtitle: "Dual-country · Stay connected both ends",
+    description: "Built for the UK–Nigeria corridor. Stay connected on both ends without paying roaming rates on either.",
+    features: ["UK + Nigeria coverage", "5 GB data", "30-day validity"],
+    price: "From $16",
+  },
+  {
+    id: "global",
+    flag: "🌍",
+    label: "Premium",
+    title: "Global Traveller Pack",
+    subtitle: "190+ countries · No limits",
+    description: "One eSIM that works everywhere. Ideal for frequent travellers, business trips, or multi-stop tours.",
+    features: ["190+ countries covered", "Unlimited data option", "Multi-trip ready"],
+    price: "From $29",
+  },
+];
+
+function BundlesSection() {
+  return (
+    <section className="py-20 sm:py-24 border-t bg-card">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="text-center mb-14">
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Travel Bundles</p>
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight" data-testid="text-bundles-title">
+            Bundles built for your route
+          </h2>
+          <p className="mt-4 text-muted-foreground max-w-md mx-auto leading-relaxed">
+            Pre-configured for the most popular travel corridors — buy once, stay connected throughout.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          {bundles.map((bundle) => (
+            <div
+              key={bundle.id}
+              className="flex flex-col rounded-xl border bg-background p-6"
+              data-testid={`card-bundle-${bundle.id}`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-3xl leading-none" role="img" aria-label={bundle.title}>{bundle.flag}</span>
+                <Badge variant={bundle.label === "Most Popular" ? "default" : "secondary"} className="text-xs font-semibold">
+                  {bundle.label}
+                </Badge>
+              </div>
+              <h3 className="font-bold text-xl mb-0.5">{bundle.title}</h3>
+              <p className="text-xs text-muted-foreground mb-3 font-medium">{bundle.subtitle}</p>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-5 flex-1">{bundle.description}</p>
+              <ul className="space-y-2 mb-6">
+                {bundle.features.map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-sm">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex items-center justify-between pt-4 border-t">
+                <span className="font-bold text-lg">{bundle.price}</span>
+                <Link href="/destinations">
+                  <Button size="sm" data-testid={`button-bundle-${bundle.id}`}>
+                    View Bundle
+                    <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────
+// 6. COMPATIBILITY
 // ─────────────────────────────────────────────
 function CompatibilitySection() {
   const devices = [
@@ -501,7 +705,7 @@ function CompatibilitySection() {
   ];
 
   return (
-    <section className="py-20 sm:py-24 border-t bg-card">
+    <section className="py-20 sm:py-24 border-t">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           <div>
@@ -534,7 +738,7 @@ function CompatibilitySection() {
             <h3 className="text-2xl font-bold mb-3">Not sure if your phone is compatible?</h3>
             <p className="text-primary-foreground/70 leading-relaxed mb-8 flex-1">
               Our device checker covers 60+ models across Apple, Samsung, Google, and more.
-              Takes under 30 seconds to confirm eSIM support and dual SIM capability.
+              Takes under 30 seconds to confirm eSIM support.
             </p>
             <Link href="/compatibility">
               <Button variant="outline" size="lg" className="bg-white/10 border-white/20 text-white w-full sm:w-auto" data-testid="button-device-checker-cta">
@@ -550,26 +754,87 @@ function CompatibilitySection() {
 }
 
 // ─────────────────────────────────────────────
-// 6. TESTIMONIALS + TRUST
+// 7. BUILT FOR GLOBAL TRAVELLERS
+// ─────────────────────────────────────────────
+function BuiltForTravellers() {
+  const routes = [
+    { flag: "🇬🇧🇪🇺", label: "UK → Europe",          desc: "Single eSIM across 28 EU countries. No SIM swaps mid-trip." },
+    { flag: "🇬🇧🇳🇬", label: "UK ↔ Nigeria",         desc: "Stay connected in both directions without local SIM hassle." },
+    { flag: "🇬🇧🇦🇪", label: "UK → Dubai / UAE",    desc: "Fast 4G/5G coverage across the UAE. Activates before you land." },
+    { flag: "🌍",     label: "Multi-stop global",   desc: "One plan, every continent. Built for the modern nomad." },
+  ];
+
+  return (
+    <section className="py-20 sm:py-24 border-t bg-card">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Built for real routes</p>
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight mb-5" data-testid="text-built-for-title">
+              Optimised for the world's most popular travel corridors
+            </h2>
+            <p className="text-muted-foreground leading-relaxed mb-8">
+              GlobeSIM isn't a generic eSIM reseller. We've built pricing, coverage, and plans around the routes real travellers take — UK, Europe, Africa, and the Middle East.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {["No app required", "Works worldwide", "No contracts", "Instant activation"].map((item) => (
+                <span
+                  key={item}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-background text-sm font-medium"
+                  data-testid={`microcopy-${item.toLowerCase().replace(/\s/g, '-')}`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {routes.map((route) => (
+              <div
+                key={route.label}
+                className="flex items-start gap-4 p-4 rounded-xl border bg-background"
+                data-testid={`route-card-${route.label.toLowerCase().replace(/[\s→↔\/]/g, '-').replace(/-+/g, '-').replace(/[^a-z0-9-]/g, '')}`}
+              >
+                <span className="text-2xl leading-none mt-0.5" role="img" aria-label={route.label}>{route.flag}</span>
+                <div>
+                  <p className="font-semibold text-sm mb-0.5">{route.label}</p>
+                  <p className="text-sm text-muted-foreground leading-snug">{route.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────
+// 8. TESTIMONIALS + TRUST
 // ─────────────────────────────────────────────
 function TestimonialsSection() {
   const testimonials = [
     {
       name: "Sarah K.",
-      context: "London → Lisbon, Porto & Seville",
-      quote: "Activation was seamless. I landed, scanned the QR on the plane, and had working data before I'd collected my luggage. Much better than queuing at an airport kiosk.",
+      context: "London → Lisbon, Porto, Seville",
+      quote: "Activated before I even left the airport. Seamless.",
+      full: "I scanned the QR on the plane and had working data before I'd collected my luggage. Far better than queuing at an airport kiosk.",
       initials: "SK",
     },
     {
       name: "James O.",
       context: "Manchester → Lagos",
-      quote: "I travel back to Nigeria four times a year. Switching to GlobeSIM cut my connectivity costs in half — and the signal is just as reliable as any local SIM.",
+      quote: "Cut my connectivity costs in half.",
+      full: "I travel back to Nigeria four times a year. Switching to GlobeSIM saved me significantly — and the signal is just as reliable as any local SIM.",
       initials: "JO",
     },
     {
       name: "Priya M.",
-      context: "Birmingham → Dubai & Abu Dhabi",
-      quote: "Fast data, first-time QR install, and a clear setup guide. I recommended it to my whole team before our Dubai conference and everyone was happy.",
+      context: "Birmingham → Dubai, Abu Dhabi",
+      quote: "Fast data, first-time install, zero issues.",
+      full: "The QR worked first try and the setup guide was clear. Recommended it to my whole team before our Dubai conference — everyone was happy.",
       initials: "PM",
     },
   ];
@@ -586,15 +851,18 @@ function TestimonialsSection() {
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight" data-testid="text-testimonials-title">
             Trusted by modern travellers
           </h2>
-          <p className="mt-3 text-muted-foreground">4.9 / 5 · Verified customer reviews</p>
+          <p className="mt-3 text-muted-foreground">4.9 / 5 · 5,000+ verified customers</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-14">
           {testimonials.map((t, idx) => (
             <div key={idx} className="flex flex-col p-6 rounded-xl border bg-card" data-testid={`card-testimonial-${idx}`}>
-              <Quote className="w-7 h-7 text-primary/25 mb-5 flex-shrink-0" />
-              <p className="text-sm leading-relaxed flex-1 mb-6 text-foreground/90" data-testid={`text-testimonial-quote-${idx}`}>
+              <Quote className="w-6 h-6 text-primary/20 mb-4 flex-shrink-0" />
+              <p className="font-semibold text-base leading-snug mb-3 text-foreground" data-testid={`text-testimonial-headline-${idx}`}>
                 "{t.quote}"
+              </p>
+              <p className="text-sm text-muted-foreground leading-relaxed flex-1 mb-6">
+                {t.full}
               </p>
               <div className="flex items-center gap-3">
                 <div className="flex items-center justify-center w-9 h-9 rounded-full bg-primary/10 text-primary font-bold text-sm flex-shrink-0">
@@ -612,10 +880,10 @@ function TestimonialsSection() {
         {/* Trust badges strip */}
         <div className="flex flex-wrap sm:flex-nowrap items-stretch rounded-xl border bg-card divide-y sm:divide-y-0 sm:divide-x overflow-hidden">
           {[
-            { icon: Lock,         label: "Secure checkout",    sub: "SSL encrypted" },
-            { icon: Zap,          label: "Instant delivery",   sub: "QR code by email" },
-            { icon: Signal,       label: "Reliable coverage",  sub: "Tier 1 carriers" },
-            { icon: ShieldCheck,  label: "Support available",  sub: "Help when you need it" },
+            { icon: Lock,        label: "Secure checkout",   sub: "SSL encrypted payments" },
+            { icon: Zap,         label: "Instant delivery",  sub: "QR code by email" },
+            { icon: Signal,      label: "Reliable coverage", sub: "Tier 1 global carriers" },
+            { icon: ShieldCheck, label: "24/7 support",      sub: "Help when you need it" },
           ].map(({ icon: Icon, label, sub }) => (
             <div
               key={label}
@@ -636,7 +904,7 @@ function TestimonialsSection() {
 }
 
 // ─────────────────────────────────────────────
-// 7. COVERAGE
+// 9. COVERAGE
 // ─────────────────────────────────────────────
 const coverageRegions = [
   {
@@ -730,7 +998,7 @@ function CoverageSection() {
 }
 
 // ─────────────────────────────────────────────
-// 8. FAQ
+// 10. FAQ
 // ─────────────────────────────────────────────
 function FAQSection() {
   const faqs = [
@@ -792,7 +1060,7 @@ function FAQSection() {
 }
 
 // ─────────────────────────────────────────────
-// 9. FINAL CTA
+// 11. FINAL CTA
 // ─────────────────────────────────────────────
 function FinalCTA() {
   return (
@@ -800,16 +1068,15 @@ function FinalCTA() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
         <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-4">Get started today</p>
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-5 leading-tight" data-testid="text-final-cta-title">
-          Stay connected anywhere.<br />
-          <span className="text-muted-foreground font-semibold text-2xl sm:text-3xl lg:text-4xl">Without the roaming bill.</span>
+          Get Connected Before You Land.
         </h2>
         <p className="text-muted-foreground text-lg max-w-xl mx-auto mb-10 leading-relaxed" data-testid="text-final-cta-subtitle">
-          Join 5,000+ travellers using GlobeSIM for fast, flexible mobile data across 190+ countries — no contracts, no physical SIM, no surprises.
+          5,000+ travellers use GlobeSIM for fast, flexible data in 190+ countries. No contracts. No physical SIM. No surprises.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
           <Link href="/destinations">
             <Button size="lg" className="px-8 text-base font-semibold shadow-md" data-testid="button-final-get-started">
-              Get Started — From $9
+              Get Your eSIM Now
               <ArrowRight className="ml-2 w-4 h-4" />
             </Button>
           </Link>
@@ -820,8 +1087,8 @@ function FinalCTA() {
           </Link>
         </div>
         <div className="flex flex-wrap justify-center gap-5 text-sm text-muted-foreground">
-          {["No contracts", "Instant delivery", "190+ countries", "Tier 1 networks"].map((item) => (
-            <div key={item} className="flex items-center gap-1.5" data-testid={`text-final-point-${item.toLowerCase().replace(/\s/g, '-')}`}>
+          {["No app required", "Instant activation", "Works worldwide", "No contracts"].map((item) => (
+            <div key={item} className="flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-primary" />
               <span>{item}</span>
             </div>
@@ -833,7 +1100,7 @@ function FinalCTA() {
 }
 
 // ─────────────────────────────────────────────
-// 10. FOOTER
+// 12. FOOTER
 // ─────────────────────────────────────────────
 function Footer() {
   const scrollTo = (id: string) => {
@@ -861,9 +1128,9 @@ function Footer() {
             <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">Product</p>
             <ul className="space-y-3">
               {[
-                { label: "Plans",         action: () => scrollTo("plans"),        testid: "footer-link-plans" },
-                { label: "Coverage",      action: () => scrollTo("coverage"),     testid: "footer-link-coverage" },
-                { label: "How It Works",  action: () => scrollTo("how-it-works"), testid: "footer-link-how" },
+                { label: "Plans",        action: () => scrollTo("plans"),        testid: "footer-link-plans" },
+                { label: "Coverage",     action: () => scrollTo("coverage"),     testid: "footer-link-coverage" },
+                { label: "How It Works", action: () => scrollTo("how-it-works"), testid: "footer-link-how" },
               ].map((item) => (
                 <li key={item.label}>
                   <button onClick={item.action} className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid={item.testid}>
@@ -896,21 +1163,15 @@ function Footer() {
                   FAQ
                 </button>
               </li>
-              <li>
-                <span className="text-sm text-muted-foreground cursor-default" data-testid="footer-link-contact">Contact</span>
-              </li>
+              <li><span className="text-sm text-muted-foreground" data-testid="footer-link-contact">Contact</span></li>
             </ul>
           </div>
 
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">Legal</p>
             <ul className="space-y-3">
-              <li>
-                <span className="text-sm text-muted-foreground cursor-default" data-testid="text-footer-privacy">Privacy Policy</span>
-              </li>
-              <li>
-                <span className="text-sm text-muted-foreground cursor-default" data-testid="text-footer-terms">Terms of Service</span>
-              </li>
+              <li><span className="text-sm text-muted-foreground" data-testid="text-footer-privacy">Privacy Policy</span></li>
+              <li><span className="text-sm text-muted-foreground" data-testid="text-footer-terms">Terms of Service</span></li>
             </ul>
           </div>
         </div>
@@ -936,20 +1197,27 @@ function Footer() {
 }
 
 // ─────────────────────────────────────────────
-// 11. MOBILE STICKY CTA
+// 13. MOBILE STICKY CTA
 // ─────────────────────────────────────────────
 function MobileStickyCTA() {
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-40 sm:hidden bg-background/95 backdrop-blur-md border-t shadow-2xl px-4 py-3"
+      className="fixed bottom-0 left-0 right-0 z-40 sm:hidden bg-background/96 backdrop-blur-md border-t shadow-2xl px-3 py-2.5"
       data-testid="mobile-sticky-cta"
     >
-      <Link href="/destinations">
-        <Button className="w-full font-semibold" size="lg" data-testid="button-mobile-sticky-cta">
-          Browse Plans — From $9
-          <ArrowRight className="ml-2 w-4 h-4" />
-        </Button>
-      </Link>
+      <div className="flex gap-2">
+        <Link href="/destinations" className="flex-1">
+          <Button className="w-full font-semibold text-sm" size="default" data-testid="button-mobile-sticky-esim">
+            Get eSIM
+            <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
+          </Button>
+        </Link>
+        <Link href="/destinations" className="flex-1">
+          <Button variant="outline" className="w-full font-semibold text-sm" size="default" data-testid="button-mobile-sticky-plans">
+            View Plans
+          </Button>
+        </Link>
+      </div>
     </div>
   );
 }
@@ -964,7 +1232,9 @@ export default function Home() {
       <PlanFinder />
       <HowItWorks />
       <WhyGlobeSIM />
+      <BundlesSection />
       <CompatibilitySection />
+      <BuiltForTravellers />
       <TestimonialsSection />
       <CoverageSection />
       <FAQSection />

@@ -1,0 +1,281 @@
+Upgrade the existing GlobeSIM landing page into a fully conversion-optimised, revenue-driven product funnel with checkout capability, upsells, and mobile-first UX.
+
+DO NOT rebuild from scratch. Improve and extend the current implementation.
+
+PRIMARY OBJECTIVE
+Maximise conversions from visitor → plan selection → purchase.
+
+SECONDARY OBJECTIVES
+- Increase average order value (AOV)
+- Reduce friction
+- Build trust
+- Prepare for scale (modular + API-ready)
+
+-----------------------------------
+1. HERO SECTION (REPLACE + UPGRADE)
+-----------------------------------
+
+Update hero to:
+
+Headline:
+Land Anywhere. Get Data in 60 Seconds.
+
+Subheadline:
+No roaming fees. No SIM cards. Instant global connectivity across 190+ countries.
+
+Primary CTA:
+Get Connected Now
+
+Secondary CTA:
+View Plans
+
+Add trust bullets under CTA:
+- Works instantly on arrival
+- Keep your number (WhatsApp etc.)
+- Delivered instantly via email
+
+Add a compact inline PLAN SELECTOR inside hero:
+
+[ Destination ]
+[ Data Plan ]
+[ Duration ]
+→ Get eSIM
+
+Make this visually dominant and mobile-optimised.
+
+-----------------------------------
+2. STICKY MOBILE CONVERSION BAR
+-----------------------------------
+
+Add a fixed bottom bar (mobile only):
+
+Left:
+“Get eSIM”
+
+Right:
+“View Plans”
+
+Must always be visible and high contrast.
+
+-----------------------------------
+3. PLAN FINDER → REAL CONVERSION MODULE
+-----------------------------------
+
+Upgrade the existing plan selector into a structured decision engine:
+
+Inputs:
+- Destination (dropdown or pill selector)
+- Data (1GB / 3GB / 5GB / 10GB / Unlimited)
+- Duration (7 / 15 / 30 days)
+
+Output:
+Display dynamic plan card:
+
+Example:
+“Best for short trips”
+5GB • 30 Days
+Ideal for maps, WhatsApp, browsing
+
+CTA:
+Continue to Checkout
+
+Structure code so real pricing/API can be plugged in later.
+
+-----------------------------------
+4. PLAN CARDS (REFRAME FOR SALES)
+-----------------------------------
+
+Update all plan cards:
+
+Each must include:
+- Label: “Most Popular” / “Best Value”
+- Use-case line
+- Data + duration
+- Key benefits (3 max)
+- Price (placeholder ok)
+- CTA: Buy Now
+
+Example:
+
+Most Popular
+5GB • 30 Days
+Perfect for travel + daily use
+✔ Maps & navigation
+✔ Social & messaging
+✔ Reliable coverage
+
+→ Buy Now
+
+-----------------------------------
+5. CHECKOUT FLOW (SIMPLIFIED)
+-----------------------------------
+
+Create a lightweight checkout UI (frontend only, Stripe-ready):
+
+Step 1:
+Order summary (plan, destination, price)
+
+Step 2:
+Customer info:
+- Email
+- Name (optional)
+
+Step 3:
+Payment method section (Stripe-ready placeholder)
+
+Step 4:
+CTA:
+Complete Purchase
+
+After purchase (mock success state):
+- “Your eSIM has been delivered”
+- “Check your email to activate”
+
+Structure:
+Modular components so Stripe API can plug in easily.
+
+-----------------------------------
+6. UPSELL SYSTEM (AOV BOOST)
+-----------------------------------
+
+Before checkout completion, show upsell modal:
+
+“Add More Data?”
+
+Options:
++1GB
++3GB
++5GB
+
+Or:
+“Upgrade to Unlimited”
+
+UI:
+Simple toggle or add-on buttons
+
+-----------------------------------
+7. BUNDLES (NEW REVENUE LAYER)
+-----------------------------------
+
+Add a new section:
+
+Title:
+Travel Bundles
+
+Examples:
+- Europe Pack
+- UK ↔ Nigeria Pack
+- Global Traveller Pack
+
+Each with:
+- Multi-country coverage
+- Value positioning
+- CTA: View Bundle
+
+-----------------------------------
+8. TRUST LAYER (CRITICAL)
+-----------------------------------
+
+Directly under hero, add trust bar:
+
+- ⭐⭐⭐⭐⭐ “Worked instantly in 3 countries”
+- “5,000+ travellers connected”
+- Secure checkout
+- Instant delivery
+- 24/7 support
+
+Add payment icons:
+- Visa
+- Mastercard
+- Apple Pay
+- Stripe
+
+-----------------------------------
+9. SOCIAL PROOF (UPGRADE)
+-----------------------------------
+
+Improve testimonials:
+
+3–5 cards:
+- Name
+- Short review
+- Outcome-focused
+
+Example tone:
+“Activated before I even left the airport. Seamless.”
+
+-----------------------------------
+10. DIFFERENTIATION BLOCK
+-----------------------------------
+
+Add section:
+
+Title:
+Built for Global Travellers
+
+Subtext:
+Optimised for travel between the UK, Europe, Africa, and beyond.
+
+Position GlobeSIM as:
+- Fast
+- Reliable
+- Built for real travel routes
+
+-----------------------------------
+11. UX REFINEMENT
+-----------------------------------
+
+Improve:
+- Spacing (increase whitespace)
+- Typography hierarchy
+- Button prominence
+- Section rhythm
+
+Remove:
+- Any clutter
+- Generic filler text
+- Weak visual elements
+
+-----------------------------------
+12. PERFORMANCE + STRUCTURE
+-----------------------------------
+
+- Keep components modular
+- Ensure fast load
+- No heavy libraries
+- Clean Tailwind usage
+- Prepare for API integration
+
+-----------------------------------
+13. FINAL CTA (STRONG CLOSE)
+-----------------------------------
+
+Title:
+Get Connected Before You Land
+
+CTA:
+Get Your eSIM Now
+
+-----------------------------------
+14. MICROCOPY (IMPORTANT)
+-----------------------------------
+
+Throughout site, add friction-reducing lines:
+- “No app required”
+- “Instant activation”
+- “Works worldwide”
+- “No contracts”
+
+-----------------------------------
+15. DELIVERABLE
+-----------------------------------
+
+Return:
+- Fully updated landing page
+- Functional plan flow UI
+- Checkout UI (frontend-ready)
+- Upsell logic UI
+- Mobile-first optimisation
+
+The final result must feel like:
+A real telecom/fintech-grade product, not a startup demo.
