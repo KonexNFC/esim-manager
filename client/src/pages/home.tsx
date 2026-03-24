@@ -542,18 +542,18 @@ function HowItWorks() {
   const steps = [
     {
       icon: Globe,
-      title: "Choose your destination",
-      description: "Browse 190+ countries and regions. Pick the data size and validity that suits your trip — from a weekend break to a month abroad.",
+      title: "Choose your plan",
+      description: "Pick your destination, data size, and trip length. Done in seconds.",
     },
     {
       icon: QrCode,
       title: "Receive your eSIM instantly",
-      description: "Pay securely online. Your QR code arrives by email within seconds — no waiting, no shipping, no SIM card.",
+      description: "Your QR code lands in your inbox the moment you pay. No waiting.",
     },
     {
       icon: Wifi,
-      title: "Scan, activate, go online",
-      description: "Open your phone settings, scan the QR code, and you're connected. Data activates on arrival — often before you leave the airport.",
+      title: "Activate and go online",
+      description: "Scan the QR code in your phone settings. You're connected.",
     },
   ];
 
@@ -563,11 +563,8 @@ function HowItWorks() {
         <div className="text-center mb-16">
           <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">How it works</p>
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight" data-testid="text-how-it-works-title">
-            Three steps. Under 60 seconds.
+            Get Connected in 60 Seconds
           </h2>
-          <p className="mt-4 text-muted-foreground max-w-sm mx-auto">
-            No store visits. No SIM swaps. No roaming queues.
-          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 lg:gap-10">
