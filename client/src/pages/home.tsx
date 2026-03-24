@@ -159,9 +159,9 @@ function HeroSection() {
                     <SelectValue placeholder="Destination" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="any">Any destination</SelectItem>
+                    <SelectItem value="any">🌍 Any destination</SelectItem>
                     {destinations?.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                      <SelectItem key={d.id} value={d.id}>{d.flagEmoji} {d.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -379,10 +379,10 @@ function PlanFinder() {
                     <SelectValue placeholder="Select destination" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="any">Any destination</SelectItem>
+                    <SelectItem value="any">🌍 Any destination</SelectItem>
                     {destinations?.map((d) => (
                       <SelectItem key={d.id} value={d.id} data-testid={`option-dest-${d.id}`}>
-                        {d.name}
+                        {d.flagEmoji} {d.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
