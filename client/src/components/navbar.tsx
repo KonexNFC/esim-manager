@@ -1,10 +1,16 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
-import { Wifi, Package, Search, Smartphone } from "lucide-react";
+import { Wifi, Package, Search, Smartphone, ArrowRight } from "lucide-react";
 
 export function Navbar() {
   const [location] = useLocation();
+  const isHome = location === "/";
+
+  const scrollTo = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth" });
+  };
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
@@ -20,36 +26,76 @@ export function Navbar() {
           </div>
         </Link>
 
-        <nav className="flex items-center gap-1">
-          <Link href="/destinations">
-            <Button
-              variant={location.startsWith("/destinations") ? "secondary" : "ghost"}
-              data-testid="link-destinations"
+        {isHome ? (
+          <nav className="flex items-center gap-1">
+            <button
+              onClick={() => scrollTo("plans")}
+              className="hidden sm:flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground rounded-md hover:bg-accent hover:text-foreground transition-colors"
+              data-testid="nav-plans"
             >
-              <Search className="w-4 h-4 mr-1.5" />
-              <span className="hidden sm:inline">Browse</span>
-            </Button>
-          </Link>
-          <Link href="/compatibility">
-            <Button
-              variant={location.startsWith("/compatibility") ? "secondary" : "ghost"}
-              data-testid="link-compatibility"
+              Plans
+            </button>
+            <button
+              onClick={() => scrollTo("how-it-works")}
+              className="hidden sm:flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground rounded-md hover:bg-accent hover:text-foreground transition-colors"
+              data-testid="nav-how-it-works"
             >
-              <Smartphone className="w-4 h-4 mr-1.5" />
-              <span className="hidden sm:inline">Check Device</span>
-            </Button>
-          </Link>
-          <Link href="/orders">
-            <Button
-              variant={location.startsWith("/orders") ? "secondary" : "ghost"}
-              data-testid="link-orders"
+              How It Works
+            </button>
+            <button
+              onClick={() => scrollTo("coverage")}
+              className="hidden sm:flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground rounded-md hover:bg-accent hover:text-foreground transition-colors"
+              data-testid="nav-coverage"
             >
-              <Package className="w-4 h-4 mr-1.5" />
-              <span className="hidden sm:inline">My eSIMs</span>
-            </Button>
-          </Link>
-          <ThemeToggle />
-        </nav>
+              Coverage
+            </button>
+            <button
+              onClick={() => scrollTo("faq")}
+              className="hidden sm:flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground rounded-md hover:bg-accent hover:text-foreground transition-colors"
+              data-testid="nav-faq"
+            >
+              FAQ
+            </button>
+            <Link href="/destinations">
+              <Button size="sm" className="ml-2" data-testid="nav-get-connected">
+                Get Connected
+                <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+              </Button>
+            </Link>
+            <ThemeToggle />
+          </nav>
+        ) : (
+          <nav className="flex items-center gap-1">
+            <Link href="/destinations">
+              <Button
+                variant={location.startsWith("/destinations") ? "secondary" : "ghost"}
+                data-testid="link-destinations"
+              >
+                <Search className="w-4 h-4 mr-1.5" />
+                <span className="hidden sm:inline">Browse</span>
+              </Button>
+            </Link>
+            <Link href="/compatibility">
+              <Button
+                variant={location.startsWith("/compatibility") ? "secondary" : "ghost"}
+                data-testid="link-compatibility"
+              >
+                <Smartphone className="w-4 h-4 mr-1.5" />
+                <span className="hidden sm:inline">Check Device</span>
+              </Button>
+            </Link>
+            <Link href="/orders">
+              <Button
+                variant={location.startsWith("/orders") ? "secondary" : "ghost"}
+                data-testid="link-orders"
+              >
+                <Package className="w-4 h-4 mr-1.5" />
+                <span className="hidden sm:inline">My eSIMs</span>
+              </Button>
+            </Link>
+            <ThemeToggle />
+          </nav>
+        )}
       </div>
     </header>
   );

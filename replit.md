@@ -50,10 +50,12 @@ GlobeSIM is an eSIM marketplace where users can browse destinations, view data p
 - `GET /api/providers/available` - Lists currently configured providers
 
 ## Key Features
-- Landing page with hero, corridor selector (UK↔EU, UK↔Nigeria, UK↔UAE, Global), value blocks, how-it-works, FAQ
+- **Premium landing page** (11 sections): Hero (with flag strip, carrier bar, mock plan card, trust strip), Plan Finder (real API), How It Works, Why GlobeSIM (6 benefits), Compatibility, Testimonials + trust badges, Coverage (region tabs), FAQ, Final CTA, Footer, Mobile sticky CTA
+- **Context-aware navbar**: anchor links (Plans, How It Works, Coverage, FAQ) + "Get Connected" CTA on home page; Browse/Check Device/My eSIMs on other pages
+- Device Compatibility Checker page (/compatibility) — 60+ devices searchable by brand
 - Browse/search destinations by region
-- View plan details and pricing per destination
-- Checkout with email confirmation
+- Destination detail with Data Usage Estimator (light/moderate/heavy + trip days), enhanced plan cards (price-per-GB, hotspot/5G/top-up badges)
+- Checkout with trust badges (secure, instant delivery, money-back) and "What happens next" steps
 - Order detail with QR code and installation guide (iOS/Android)
 - Orders lookup by email
 - Admin dashboard (5 tabs): Dashboard stats, Plans management, Orders, eSIM Inventory, Margins
