@@ -107,7 +107,7 @@ const mockPlans = [
 ];
 
 const planSizes = ["1 GB", "3 GB", "5 GB", "10 GB", "Unlimited"];
-const planDurations = ["7 Days", "15 Days", "30 Days"];
+const planDurations = ["1 Day", "3 Days", "5 Days", "7 Days", "15 Days", "30 Days"];
 
 // ─────────────────────────────────────────────
 // 1. HERO
@@ -411,7 +411,7 @@ function PlanFinder() {
     "1 GB": 1, "3 GB": 3, "5 GB": 5, "10 GB": 10, "Unlimited": 999,
   };
   const durToDays: Record<string, number> = {
-    "7 Days": 7, "14 Days": 14, "30 Days": 30,
+    "1 Day": 1, "3 Days": 3, "5 Days": 5, "7 Days": 7, "15 Days": 15, "30 Days": 30,
   };
 
   // Find the best live plan that matches size + duration
