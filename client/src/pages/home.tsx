@@ -508,7 +508,8 @@ function PlanFinder() {
               </div>
             </div>
 
-            {/* Recommendation card — always visible */}
+            {/* Recommendation card — shown after destination is selected */}
+            {destId && destId !== "any" && (
             <div className="mt-6 rounded-xl border bg-background" data-testid="plan-recommendation-card">
               <div className="px-5 pt-4 pb-2 border-b">
                 <p className="text-xs font-bold uppercase tracking-widest text-primary">Recommended for your trip</p>
@@ -570,6 +571,7 @@ function PlanFinder() {
                 </div>
               </div>
             </div>
+            )}
           </div>
 
           <div className="px-6 sm:px-8 pb-5 flex items-center gap-1.5 text-sm text-muted-foreground">
