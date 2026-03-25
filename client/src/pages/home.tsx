@@ -1099,32 +1099,80 @@ const coverageRegions = [
   {
     id: "europe",
     label: "Europe",
-    countries: ["United Kingdom", "France", "Germany", "Spain", "Italy", "Portugal", "Netherlands", "Greece", "Poland", "Sweden", "Switzerland", "Austria"],
+    countries: [
+      { name: "United Kingdom", flag: "🇬🇧" },
+      { name: "France",         flag: "🇫🇷" },
+      { name: "Germany",        flag: "🇩🇪" },
+      { name: "Spain",          flag: "🇪🇸" },
+      { name: "Italy",          flag: "🇮🇹" },
+      { name: "Portugal",       flag: "🇵🇹" },
+      { name: "Netherlands",    flag: "🇳🇱" },
+      { name: "Greece",         flag: "🇬🇷" },
+      { name: "Poland",         flag: "🇵🇱" },
+      { name: "Sweden",         flag: "🇸🇪" },
+      { name: "Switzerland",    flag: "🇨🇭" },
+      { name: "Austria",        flag: "🇦🇹" },
+    ],
   },
   {
     id: "north-america",
     label: "North America",
-    countries: ["United States", "Canada", "Mexico"],
+    countries: [
+      { name: "United States", flag: "🇺🇸" },
+      { name: "Canada",        flag: "🇨🇦" },
+      { name: "Mexico",        flag: "🇲🇽" },
+    ],
   },
   {
     id: "africa",
     label: "Africa",
-    countries: ["Nigeria", "South Africa", "Kenya", "Ghana", "Egypt", "Ethiopia", "Tanzania", "Uganda"],
+    countries: [
+      { name: "Nigeria",      flag: "🇳🇬" },
+      { name: "South Africa", flag: "🇿🇦" },
+      { name: "Kenya",        flag: "🇰🇪" },
+      { name: "Ghana",        flag: "🇬🇭" },
+      { name: "Egypt",        flag: "🇪🇬" },
+      { name: "Ethiopia",     flag: "🇪🇹" },
+      { name: "Tanzania",     flag: "🇹🇿" },
+      { name: "Uganda",       flag: "🇺🇬" },
+    ],
   },
   {
     id: "middle-east",
     label: "Middle East",
-    countries: ["UAE", "Saudi Arabia", "Qatar", "Kuwait", "Bahrain", "Oman", "Jordan", "Lebanon"],
+    countries: [
+      { name: "UAE",          flag: "🇦🇪" },
+      { name: "Saudi Arabia", flag: "🇸🇦" },
+      { name: "Qatar",        flag: "🇶🇦" },
+      { name: "Kuwait",       flag: "🇰🇼" },
+      { name: "Bahrain",      flag: "🇧🇭" },
+      { name: "Oman",         flag: "🇴🇲" },
+      { name: "Jordan",       flag: "🇯🇴" },
+      { name: "Lebanon",      flag: "🇱🇧" },
+    ],
   },
   {
     id: "asia",
     label: "Asia",
-    countries: ["Japan", "Singapore", "Thailand", "South Korea", "Malaysia", "Indonesia", "India", "Philippines", "Vietnam", "Hong Kong"],
+    countries: [
+      { name: "Japan",       flag: "🇯🇵" },
+      { name: "Singapore",   flag: "🇸🇬" },
+      { name: "Thailand",    flag: "🇹🇭" },
+      { name: "South Korea", flag: "🇰🇷" },
+      { name: "Malaysia",    flag: "🇲🇾" },
+      { name: "Indonesia",   flag: "🇮🇩" },
+      { name: "India",       flag: "🇮🇳" },
+      { name: "Philippines", flag: "🇵🇭" },
+      { name: "Vietnam",     flag: "🇻🇳" },
+      { name: "Hong Kong",   flag: "🇭🇰" },
+    ],
   },
   {
     id: "global",
     label: "Global",
-    countries: ["Multi-country plans covering 190+ destinations worldwide with a single eSIM purchase"],
+    countries: [
+      { name: "190+ destinations covered worldwide with a single eSIM purchase", flag: "🌍" },
+    ],
   },
 ];
 
@@ -1162,12 +1210,12 @@ function CoverageSection() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 mb-7">
                   {r.countries.map((country) => (
                     <div
-                      key={country}
-                      className="flex items-center gap-2 py-2.5 px-3 rounded-lg border bg-card"
-                      data-testid={`coverage-country-${country.toLowerCase().replace(/\s/g, '-')}`}
+                      key={country.name}
+                      className="flex items-center gap-2.5 py-2.5 px-3 rounded-lg border bg-card"
+                      data-testid={`coverage-country-${country.name.toLowerCase().replace(/\s/g, '-')}`}
                     >
-                      <MapPin className="w-3 h-3 text-primary flex-shrink-0" />
-                      <span className="text-sm leading-tight">{country}</span>
+                      <span className="text-base leading-none flex-shrink-0">{country.flag}</span>
+                      <span className="text-sm leading-tight">{country.name}</span>
                     </div>
                   ))}
                 </div>
