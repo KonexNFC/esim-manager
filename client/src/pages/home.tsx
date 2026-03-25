@@ -31,6 +31,7 @@ import {
   Package, TrendingUp, Timer
 } from "lucide-react";
 import { useState } from "react";
+import { SiVisa, SiMastercard, SiApplepay, SiStripe } from "react-icons/si";
 import type { Destination, Plan } from "@shared/schema";
 
 // Find the cheapest plan that best matches size + duration selections
@@ -95,8 +96,14 @@ const flagStrip = [
 ];
 
 const carriers = [
-  "Vodafone", "T-Mobile", "Orange", "Airtel",
-  "Etisalat", "SingTel", "NTT Docomo", "Telstra",
+  { name: "Vodafone",   color: "#FF0000" },
+  { name: "T-Mobile",   color: "#E20074" },
+  { name: "Orange",     color: "#FF7900" },
+  { name: "Airtel",     color: "#FF0000" },
+  { name: "Etisalat",   color: "#00AF64" },
+  { name: "SingTel",    color: "#E30033" },
+  { name: "NTT Docomo", color: "#E40000" },
+  { name: "Telstra",    color: "#1F7FFF" },
 ];
 
 const mockPlans = [
@@ -319,8 +326,13 @@ function HeroSection() {
             </div>
             <div className="w-px h-3 bg-white/15 hidden sm:block" />
             {carriers.map((c) => (
-              <span key={c} className="text-xs text-white/40 font-medium" data-testid={`carrier-${c.toLowerCase().replace(/\s/g, '-')}`}>
-                {c}
+              <span
+                key={c.name}
+                className="text-xs font-semibold tracking-wide"
+                style={{ color: c.color + "99" }}
+                data-testid={`carrier-${c.name.toLowerCase().replace(/\s/g, '-')}`}
+              >
+                {c.name}
               </span>
             ))}
           </div>
@@ -345,16 +357,11 @@ function HeroSection() {
               ))}
             </div>
             {/* Payment icons */}
-            <div className="flex items-center gap-2 flex-shrink-0" data-testid="payment-icons">
-              {["VISA", "MC", "Apple Pay", "Stripe"].map((m) => (
-                <span
-                  key={m}
-                  className="px-2 py-0.5 rounded border border-white/20 text-white/45 text-[10px] font-bold tracking-wide"
-                  data-testid={`payment-icon-${m.toLowerCase().replace(/\s/g, '-')}`}
-                >
-                  {m}
-                </span>
-              ))}
+            <div className="flex items-center gap-3 flex-shrink-0" data-testid="payment-icons">
+              <SiVisa        className="h-5 w-auto text-white/50" data-testid="payment-icon-visa" />
+              <SiMastercard  className="h-5 w-auto text-white/50" data-testid="payment-icon-mc" />
+              <SiApplepay    className="h-5 w-auto text-white/50" data-testid="payment-icon-apple-pay" />
+              <SiStripe      className="h-5 w-auto text-white/50" data-testid="payment-icon-stripe" />
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { useRoute, Link, useLocation } from "wouter";
+import { SiVisa, SiMastercard, SiApplepay, SiStripe } from "react-icons/si";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -267,16 +268,11 @@ export default function Checkout() {
                     <div className="rounded-lg border bg-muted/30 p-4">
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-sm text-muted-foreground">Powered by Stripe</span>
-                        <div className="flex items-center gap-1.5">
-                          {["VISA", "MC", "Apple Pay", "Stripe"].map((m) => (
-                            <span
-                              key={m}
-                              className="px-1.5 py-0.5 rounded border text-[10px] font-bold text-muted-foreground bg-background"
-                              data-testid={`checkout-payment-icon-${m.toLowerCase().replace(/\s/g, '-')}`}
-                            >
-                              {m}
-                            </span>
-                          ))}
+                        <div className="flex items-center gap-2.5">
+                          <SiVisa       className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-visa" />
+                          <SiMastercard className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-mc" />
+                          <SiApplepay   className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-apple-pay" />
+                          <SiStripe     className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-stripe" />
                         </div>
                       </div>
                       <div className="rounded-md border bg-background px-3 py-2.5 text-sm text-muted-foreground flex items-center gap-2">
