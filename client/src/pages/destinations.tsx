@@ -7,7 +7,7 @@ import { Search, Globe } from "lucide-react";
 import { useState, useMemo } from "react";
 import type { Destination } from "@shared/schema";
 
-const regions = ["All", "Asia", "Europe", "Middle East", "North America", "Southeast Asia"];
+const regions = ["All", "Africa", "Asia", "Europe", "Middle East", "North America", "Southeast Asia"];
 
 export default function Destinations() {
   const [search, setSearch] = useState("");

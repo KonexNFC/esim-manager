@@ -1,40 +1,14 @@
 import { db } from "./storage";
 import { destinations, plans } from "@shared/schema";
 
-export async function seedDatabase() {
-  const existingDests = await db.select().from(destinations);
-  if (existingDests.length > 0) return;
+const planTemplates = [
+  { suffix: "Day Pass", dataAmount: "1 GB", dataAmountGb: 1, validity: "7 Days", validityDays: 7, priceBase: 4.99, speedInfo: "4G/LTE", features: ["Data only", "Instant activation", "No contract"] },
+  { suffix: "Travel Pack", dataAmount: "3 GB", dataAmountGb: 3, validity: "15 Days", validityDays: 15, priceBase: 9.99, speedInfo: "4G/LTE", features: ["Data only", "Instant activation", "No contract", "Hotspot enabled"], popular: true },
+  { suffix: "Regional Bundle", dataAmount: "5 GB", dataAmountGb: 5, validity: "30 Days", validityDays: 30, priceBase: 14.99, speedInfo: "4G/5G", features: ["Data only", "Instant activation", "No contract", "Hotspot enabled", "5G where available"] },
+  { suffix: "Unlimited", dataAmount: "Unlimited", dataAmountGb: 999, validity: "30 Days", validityDays: 30, priceBase: 24.99, speedInfo: "4G/5G", features: ["Unlimited data", "Instant activation", "No contract", "Hotspot enabled", "5G where available", "Fair usage: 1GB/day high speed"] },
+];
 
-  console.log("Seeding database...");
-
-  const destData = [
-    { name: "Japan", countryCode: "JP", region: "Asia", imageUrl: "/images/destinations/japan.png", flagEmoji: "\u{1F1EF}\u{1F1F5}", popular: true, corridor: null },
-    { name: "France", countryCode: "FR", region: "Europe", imageUrl: "/images/destinations/france.png", flagEmoji: "\u{1F1EB}\u{1F1F7}", popular: true, corridor: "UK \u2194 EU" },
-    { name: "United Arab Emirates", countryCode: "AE", region: "Middle East", imageUrl: "/images/destinations/uae.png", flagEmoji: "\u{1F1E6}\u{1F1EA}", popular: true, corridor: "UK \u2194 UAE" },
-    { name: "Indonesia", countryCode: "ID", region: "Southeast Asia", imageUrl: "/images/destinations/indonesia.png", flagEmoji: "\u{1F1EE}\u{1F1E9}", popular: true, corridor: null },
-    { name: "United States", countryCode: "US", region: "North America", imageUrl: "/images/destinations/usa.png", flagEmoji: "\u{1F1FA}\u{1F1F8}", popular: true, corridor: "Global" },
-    { name: "United Kingdom", countryCode: "GB", region: "Europe", imageUrl: "/images/destinations/uk.png", flagEmoji: "\u{1F1EC}\u{1F1E7}", popular: true, corridor: "UK \u2194 EU" },
-    { name: "Thailand", countryCode: "TH", region: "Southeast Asia", imageUrl: "/images/destinations/thailand.png", flagEmoji: "\u{1F1F9}\u{1F1ED}", popular: true, corridor: "Global" },
-    { name: "Turkey", countryCode: "TR", region: "Europe", imageUrl: "/images/destinations/turkey.png", flagEmoji: "\u{1F1F9}\u{1F1F7}", popular: true, corridor: "UK \u2194 EU" },
-  ];
-
-  const insertedDests = await db.insert(destinations).values(destData).returning();
-
-  const wholesaleCosts: Record<string, number> = {
-    JP: 2.50, FR: 1.80, AE: 2.80, ID: 1.50, US: 3.00, GB: 2.00, TH: 1.20, TR: 1.60,
-  };
-
-  const planTemplates = [
-    { suffix: "Day Pass", dataAmount: "1 GB", dataAmountGb: 1, validity: "7 Days", validityDays: 7, priceBase: 4.99, speedInfo: "4G/LTE", features: ["Data only", "Instant activation", "No contract"] },
-    { suffix: "Travel Pack", dataAmount: "3 GB", dataAmountGb: 3, validity: "15 Days", validityDays: 15, priceBase: 9.99, speedInfo: "4G/LTE", features: ["Data only", "Instant activation", "No contract", "Hotspot enabled"], popular: true },
-    { suffix: "Regional Bundle", dataAmount: "5 GB", dataAmountGb: 5, validity: "30 Days", validityDays: 30, priceBase: 14.99, speedInfo: "4G/5G", features: ["Data only", "Instant activation", "No contract", "Hotspot enabled", "5G where available"] },
-    { suffix: "Unlimited", dataAmount: "Unlimited", dataAmountGb: 999, validity: "30 Days", validityDays: 30, priceBase: 24.99, speedInfo: "4G/5G", features: ["Unlimited data", "Instant activation", "No contract", "Hotspot enabled", "5G where available", "Fair usage: 1GB/day high speed"] },
-  ];
-
-  const priceMultipliers: Record<string, number> = {
-    JP: 1.2, FR: 1.0, AE: 1.3, ID: 0.8, US: 1.4, GB: 1.1, TH: 0.7, TR: 0.9,
-  };
-
+async function seedPlansForDests(insertedDests: { id: number; countryCode: string; name: string }[], wholesaleCosts: Record<string, number>, priceMultipliers: Record<string, number>) {
   const allPlans = insertedDests.flatMap((dest) => {
     const mult = priceMultipliers[dest.countryCode] || 1;
     const wc = wholesaleCosts[dest.countryCode] || 2.0;
@@ -50,12 +24,72 @@ export async function seedDatabase() {
       speedInfo: tmpl.speedInfo,
       coverage: dest.name,
       features: tmpl.features,
-      popular: tmpl.popular || false,
+      popular: (tmpl as any).popular || false,
       planStatus: "live" as const,
       wholesaleCost: Math.round(wc * tmpl.dataAmountGb * 0.3 * 100) / 100,
     }));
   });
+  if (allPlans.length > 0) await db.insert(plans).values(allPlans);
+}
 
-  await db.insert(plans).values(allPlans);
-  console.log(`Seeded ${insertedDests.length} destinations and ${allPlans.length} plans`);
+export async function seedDatabase() {
+  const existingDests = await db.select().from(destinations);
+
+  if (existingDests.length === 0) {
+    console.log("Seeding database...");
+
+    const destData = [
+      { name: "Japan", countryCode: "JP", region: "Asia", imageUrl: "/images/destinations/japan.png", flagEmoji: "🇯🇵", popular: true, corridor: null },
+      { name: "France", countryCode: "FR", region: "Europe", imageUrl: "/images/destinations/france.png", flagEmoji: "🇫🇷", popular: true, corridor: "UK ↔ EU" },
+      { name: "United Arab Emirates", countryCode: "AE", region: "Middle East", imageUrl: "/images/destinations/uae.png", flagEmoji: "🇦🇪", popular: true, corridor: "UK ↔ UAE" },
+      { name: "Indonesia", countryCode: "ID", region: "Southeast Asia", imageUrl: "/images/destinations/indonesia.png", flagEmoji: "🇮🇩", popular: true, corridor: null },
+      { name: "United States", countryCode: "US", region: "North America", imageUrl: "/images/destinations/usa.png", flagEmoji: "🇺🇸", popular: true, corridor: "Global" },
+      { name: "United Kingdom", countryCode: "GB", region: "Europe", imageUrl: "/images/destinations/uk.png", flagEmoji: "🇬🇧", popular: true, corridor: "UK ↔ EU" },
+      { name: "Thailand", countryCode: "TH", region: "Southeast Asia", imageUrl: "/images/destinations/thailand.png", flagEmoji: "🇹🇭", popular: true, corridor: "Global" },
+      { name: "Turkey", countryCode: "TR", region: "Europe", imageUrl: "/images/destinations/turkey.png", flagEmoji: "🇹🇷", popular: true, corridor: "UK ↔ EU" },
+      { name: "Nigeria", countryCode: "NG", region: "Africa", imageUrl: "/images/destinations/nigeria.png", flagEmoji: "🇳🇬", popular: true, corridor: "UK ↔ Africa" },
+      { name: "Kenya", countryCode: "KE", region: "Africa", imageUrl: "/images/destinations/kenya.png", flagEmoji: "🇰🇪", popular: true, corridor: null },
+      { name: "South Africa", countryCode: "ZA", region: "Africa", imageUrl: "/images/destinations/south-africa.png", flagEmoji: "🇿🇦", popular: true, corridor: null },
+      { name: "Egypt", countryCode: "EG", region: "Africa", imageUrl: "/images/destinations/egypt.png", flagEmoji: "🇪🇬", popular: true, corridor: null },
+      { name: "Morocco", countryCode: "MA", region: "Africa", imageUrl: "/images/destinations/morocco.png", flagEmoji: "🇲🇦", popular: true, corridor: null },
+      { name: "Ghana", countryCode: "GH", region: "Africa", imageUrl: "/images/destinations/ghana.png", flagEmoji: "🇬🇭", popular: false, corridor: null },
+    ];
+
+    const insertedDests = await db.insert(destinations).values(destData).returning();
+
+    const wholesaleCosts: Record<string, number> = {
+      JP: 2.50, FR: 1.80, AE: 2.80, ID: 1.50, US: 3.00, GB: 2.00, TH: 1.20, TR: 1.60,
+      NG: 1.20, KE: 1.10, ZA: 1.40, EG: 1.30, MA: 1.25, GH: 1.10,
+    };
+    const priceMultipliers: Record<string, number> = {
+      JP: 1.2, FR: 1.0, AE: 1.3, ID: 0.8, US: 1.4, GB: 1.1, TH: 0.7, TR: 0.9,
+      NG: 0.85, KE: 0.80, ZA: 0.90, EG: 0.85, MA: 0.88, GH: 0.82,
+    };
+
+    await seedPlansForDests(insertedDests, wholesaleCosts, priceMultipliers);
+    console.log(`Seeded ${insertedDests.length} destinations and ${insertedDests.length * planTemplates.length} plans`);
+    return;
+  }
+
+  // Add Africa destinations if not yet present
+  const africaDestData = [
+    { name: "Nigeria", countryCode: "NG", region: "Africa", imageUrl: "/images/destinations/nigeria.png", flagEmoji: "🇳🇬", popular: true, corridor: "UK ↔ Africa" },
+    { name: "Kenya", countryCode: "KE", region: "Africa", imageUrl: "/images/destinations/kenya.png", flagEmoji: "🇰🇪", popular: true, corridor: null },
+    { name: "South Africa", countryCode: "ZA", region: "Africa", imageUrl: "/images/destinations/south-africa.png", flagEmoji: "🇿🇦", popular: true, corridor: null },
+    { name: "Egypt", countryCode: "EG", region: "Africa", imageUrl: "/images/destinations/egypt.png", flagEmoji: "🇪🇬", popular: true, corridor: null },
+    { name: "Morocco", countryCode: "MA", region: "Africa", imageUrl: "/images/destinations/morocco.png", flagEmoji: "🇲🇦", popular: true, corridor: null },
+    { name: "Ghana", countryCode: "GH", region: "Africa", imageUrl: "/images/destinations/ghana.png", flagEmoji: "🇬🇭", popular: false, corridor: null },
+  ];
+
+  const existingCodes = new Set(existingDests.map((d) => d.countryCode));
+  const toInsert = africaDestData.filter((d) => !existingCodes.has(d.countryCode));
+
+  if (toInsert.length > 0) {
+    console.log(`Seeding ${toInsert.length} Africa destinations...`);
+    const insertedDests = await db.insert(destinations).values(toInsert).returning();
+    const wholesaleCosts: Record<string, number> = { NG: 1.20, KE: 1.10, ZA: 1.40, EG: 1.30, MA: 1.25, GH: 1.10 };
+    const priceMultipliers: Record<string, number> = { NG: 0.85, KE: 0.80, ZA: 0.90, EG: 0.85, MA: 0.88, GH: 0.82 };
+    await seedPlansForDests(insertedDests, wholesaleCosts, priceMultipliers);
+    console.log(`Added ${insertedDests.length} Africa destinations with plans`);
+  }
 }
