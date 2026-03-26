@@ -3,6 +3,14 @@ import { pgTable, text, varchar, integer, boolean, timestamp, doublePrecision } 
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const destinations = pgTable("destinations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
@@ -36,6 +44,7 @@ export const plans = pgTable("plans", {
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   planId: varchar("plan_id").notNull().references(() => plans.id),
+  userId: varchar("user_id").references(() => users.id),
   email: text("email").notNull(),
   status: text("status").notNull().default("pending"),
   totalPrice: doublePrecision("total_price").notNull(),
@@ -47,10 +56,13 @@ export const orders = pgTable("orders", {
   esimStatus: text("esim_status").notNull().default("issued"),
 });
 
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertDestinationSchema = createInsertSchema(destinations).omit({ id: true });
 export const insertPlanSchema = createInsertSchema(plans).omit({ id: true });
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, qrCode: true, iccid: true, activationDate: true });
 
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
 export type InsertDestination = z.infer<typeof insertDestinationSchema>;
 export type Destination = typeof destinations.$inferSelect;
 export type InsertPlan = z.infer<typeof insertPlanSchema>;

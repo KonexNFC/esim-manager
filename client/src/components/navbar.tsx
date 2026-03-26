@@ -1,11 +1,13 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
-import { Wifi, Package, Search, Smartphone, ArrowRight } from "lucide-react";
+import { Wifi, Package, Search, Smartphone, ArrowRight, LayoutDashboard, LogIn, User } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 export function Navbar() {
   const [location] = useLocation();
   const isHome = location === "/";
+  const { user, isLoading } = useAuth();
 
   const scrollTo = (id: string) => {
     const el = document.getElementById(id);
@@ -56,8 +58,25 @@ export function Navbar() {
             >
               FAQ
             </button>
+            {!isLoading && (
+              user ? (
+                <Link href="/dashboard">
+                  <Button size="sm" variant="outline" className="ml-1" data-testid="nav-dashboard">
+                    <LayoutDashboard className="w-3.5 h-3.5 mr-1.5" />
+                    <span className="hidden sm:inline">Dashboard</span>
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/login">
+                  <Button size="sm" variant="ghost" className="ml-1" data-testid="nav-login">
+                    <LogIn className="w-3.5 h-3.5 mr-1.5" />
+                    Log In
+                  </Button>
+                </Link>
+              )
+            )}
             <Link href="/destinations">
-              <Button size="sm" className="ml-2" data-testid="nav-get-connected">
+              <Button size="sm" className="ml-1" data-testid="nav-get-connected">
                 Get Connected
                 <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
               </Button>
@@ -84,15 +103,29 @@ export function Navbar() {
                 <span className="hidden sm:inline">Check Device</span>
               </Button>
             </Link>
-            <Link href="/orders">
-              <Button
-                variant={location.startsWith("/orders") ? "secondary" : "ghost"}
-                data-testid="link-orders"
-              >
-                <Package className="w-4 h-4 mr-1.5" />
-                <span className="hidden sm:inline">My eSIMs</span>
-              </Button>
-            </Link>
+            {!isLoading && (
+              user ? (
+                <Link href="/dashboard">
+                  <Button
+                    variant={location.startsWith("/dashboard") ? "secondary" : "ghost"}
+                    data-testid="link-dashboard"
+                  >
+                    <LayoutDashboard className="w-4 h-4 mr-1.5" />
+                    <span className="hidden sm:inline">Dashboard</span>
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/login">
+                  <Button
+                    variant={location.startsWith("/login") || location.startsWith("/signup") ? "secondary" : "ghost"}
+                    data-testid="link-login"
+                  >
+                    <LogIn className="w-4 h-4 mr-1.5" />
+                    <span className="hidden sm:inline">Log In</span>
+                  </Button>
+                </Link>
+              )
+            )}
             <ThemeToggle />
           </nav>
         )}

@@ -2,7 +2,8 @@ import { eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import {
-  destinations, plans, orders,
+  users, destinations, plans, orders,
+  type User, type InsertUser,
   type Destination, type InsertDestination,
   type Plan, type InsertPlan,
   type Order, type InsertOrder,
@@ -15,6 +16,12 @@ const pool = new pg.Pool({
 export const db = drizzle(pool);
 
 export interface IStorage {
+  getUserByEmail(email: string): Promise<User | undefined>;
+  getUserById(id: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, updates: Partial<{ name: string; passwordHash: string }>): Promise<User | undefined>;
+  linkOrdersToUser(email: string, userId: string): Promise<void>;
+
   getDestinations(): Promise<Destination[]>;
   getPopularDestinations(): Promise<Destination[]>;
   getDestination(id: string): Promise<Destination | undefined>;
@@ -26,14 +33,74 @@ export interface IStorage {
   createPlan(plan: InsertPlan): Promise<Plan>;
   updatePlan(id: string, updates: Partial<InsertPlan & { planStatus: string }>): Promise<Plan | undefined>;
 
-  getAllOrders(): Promise<(Order & { planName?: string; destinationName?: string; flagEmoji?: string; dataAmount?: string; validity?: string })[]>;
-  getOrdersByEmail(email: string): Promise<(Order & { planName?: string; destinationName?: string; flagEmoji?: string; dataAmount?: string; validity?: string })[]>;
+  getAllOrders(): Promise<(Order & { planName?: string; destinationName?: string; flagEmoji?: string; dataAmount?: string; validity?: string; dataAmountGb?: number; validityDays?: number })[]>;
+  getOrdersByEmail(email: string): Promise<(Order & { planName?: string; destinationName?: string; flagEmoji?: string; dataAmount?: string; validity?: string; dataAmountGb?: number; validityDays?: number })[]>;
+  getOrdersByUserId(userId: string): Promise<(Order & { planName?: string; destinationName?: string; flagEmoji?: string; dataAmount?: string; validity?: string; dataAmountGb?: number; validityDays?: number })[]>;
   getOrder(id: string): Promise<Order | undefined>;
   createOrder(order: InsertOrder, providerIccid?: string, providerQrCode?: string): Promise<Order>;
-  updateOrder(id: string, updates: Partial<{ status: string; esimStatus: string }>): Promise<Order | undefined>;
+  updateOrder(id: string, updates: Partial<{ status: string; esimStatus: string; userId: string }>): Promise<Order | undefined>;
+}
+
+const orderSelectFields = (db: any) => ({
+  id: orders.id,
+  planId: orders.planId,
+  userId: orders.userId,
+  email: orders.email,
+  status: orders.status,
+  totalPrice: orders.totalPrice,
+  currency: orders.currency,
+  createdAt: orders.createdAt,
+  qrCode: orders.qrCode,
+  iccid: orders.iccid,
+  activationDate: orders.activationDate,
+  esimStatus: orders.esimStatus,
+  planName: plans.name,
+  dataAmount: plans.dataAmount,
+  dataAmountGb: plans.dataAmountGb,
+  validity: plans.validity,
+  validityDays: plans.validityDays,
+  destinationName: destinations.name,
+  flagEmoji: destinations.flagEmoji,
+});
+
+function mapOrderRow(r: any) {
+  return {
+    ...r,
+    planName: r.planName ?? undefined,
+    dataAmount: r.dataAmount ?? undefined,
+    dataAmountGb: r.dataAmountGb ?? undefined,
+    validity: r.validity ?? undefined,
+    validityDays: r.validityDays ?? undefined,
+    destinationName: r.destinationName ?? undefined,
+    flagEmoji: r.flagEmoji ?? undefined,
+  };
 }
 
 export class DatabaseStorage implements IStorage {
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async getUserById(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const [created] = await db.insert(users).values(user).returning();
+    return created;
+  }
+
+  async updateUser(id: string, updates: Partial<{ name: string; passwordHash: string }>): Promise<User | undefined> {
+    const [updated] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async linkOrdersToUser(email: string, userId: string): Promise<void> {
+    await db.update(orders).set({ userId }).where(and(eq(orders.email, email), eq(orders.userId, null as any)));
+  }
+
   async getDestinations(): Promise<Destination[]> {
     return db.select().from(destinations);
   }
@@ -77,71 +144,31 @@ export class DatabaseStorage implements IStorage {
 
   async getAllOrders() {
     const result = await db
-      .select({
-        id: orders.id,
-        planId: orders.planId,
-        email: orders.email,
-        status: orders.status,
-        totalPrice: orders.totalPrice,
-        currency: orders.currency,
-        createdAt: orders.createdAt,
-        qrCode: orders.qrCode,
-        iccid: orders.iccid,
-        activationDate: orders.activationDate,
-        esimStatus: orders.esimStatus,
-        planName: plans.name,
-        dataAmount: plans.dataAmount,
-        validity: plans.validity,
-        destinationName: destinations.name,
-        flagEmoji: destinations.flagEmoji,
-      })
+      .select(orderSelectFields(db))
       .from(orders)
       .leftJoin(plans, eq(orders.planId, plans.id))
       .leftJoin(destinations, eq(plans.destinationId, destinations.id));
-
-    return result.map(r => ({
-      ...r,
-      planName: r.planName ?? undefined,
-      dataAmount: r.dataAmount ?? undefined,
-      validity: r.validity ?? undefined,
-      destinationName: r.destinationName ?? undefined,
-      flagEmoji: r.flagEmoji ?? undefined,
-    }));
+    return result.map(mapOrderRow);
   }
 
   async getOrdersByEmail(email: string) {
     const result = await db
-      .select({
-        id: orders.id,
-        planId: orders.planId,
-        email: orders.email,
-        status: orders.status,
-        totalPrice: orders.totalPrice,
-        currency: orders.currency,
-        createdAt: orders.createdAt,
-        qrCode: orders.qrCode,
-        iccid: orders.iccid,
-        activationDate: orders.activationDate,
-        esimStatus: orders.esimStatus,
-        planName: plans.name,
-        dataAmount: plans.dataAmount,
-        validity: plans.validity,
-        destinationName: destinations.name,
-        flagEmoji: destinations.flagEmoji,
-      })
+      .select(orderSelectFields(db))
       .from(orders)
       .leftJoin(plans, eq(orders.planId, plans.id))
       .leftJoin(destinations, eq(plans.destinationId, destinations.id))
       .where(eq(orders.email, email));
+    return result.map(mapOrderRow);
+  }
 
-    return result.map(r => ({
-      ...r,
-      planName: r.planName ?? undefined,
-      dataAmount: r.dataAmount ?? undefined,
-      validity: r.validity ?? undefined,
-      destinationName: r.destinationName ?? undefined,
-      flagEmoji: r.flagEmoji ?? undefined,
-    }));
+  async getOrdersByUserId(userId: string) {
+    const result = await db
+      .select(orderSelectFields(db))
+      .from(orders)
+      .leftJoin(plans, eq(orders.planId, plans.id))
+      .leftJoin(destinations, eq(plans.destinationId, destinations.id))
+      .where(eq(orders.userId, userId));
+    return result.map(mapOrderRow);
   }
 
   async getOrder(id: string): Promise<Order | undefined> {
@@ -162,7 +189,7 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateOrder(id: string, updates: Partial<{ status: string; esimStatus: string }>): Promise<Order | undefined> {
+  async updateOrder(id: string, updates: Partial<{ status: string; esimStatus: string; userId: string }>): Promise<Order | undefined> {
     const [updated] = await db.update(orders).set(updates).where(eq(orders.id, id)).returning();
     return updated;
   }

@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import {
-  ArrowLeft, CheckCircle2, QrCode, Wifi, Clock,
+  ArrowLeft, ArrowRight, CheckCircle2, QrCode, Wifi, Clock,
   Globe, Smartphone, ChevronRight, Copy, Download
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -239,6 +239,21 @@ export default function OrderDetail() {
           Installation Guide
         </h2>
         <InstallGuide />
+      </Card>
+
+      <Card className="p-5 bg-primary/5 border-primary/20">
+        <div className="flex flex-col sm:flex-row items-center gap-4 justify-between">
+          <div>
+            <p className="font-semibold">Manage from your dashboard</p>
+            <p className="text-sm text-muted-foreground mt-0.5">Top up data, view QR codes, and track all your eSIMs in one place.</p>
+          </div>
+          <Link href="/dashboard">
+            <Button data-testid="button-go-dashboard">
+              Go to Dashboard
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </Link>
+        </div>
       </Card>
     </div>
   );

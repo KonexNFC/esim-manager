@@ -98,6 +98,7 @@ export default function Checkout() {
     },
     onSuccess: (order) => {
       queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/orders"] });
       navigate(`/orders/${order.id}`);
     },
     onError: () => {
