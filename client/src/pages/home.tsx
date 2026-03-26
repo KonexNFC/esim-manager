@@ -160,7 +160,7 @@ function HeroSection() {
               <br />
               Get Data in
               <br />
-              <span className="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">60 Seconds.</span>
+              <span className="bg-gradient-to-r from-violet-400 via-purple-400 to-blue-400 bg-clip-text text-transparent">60 Seconds.</span>
             </h1>
 
             <p
