@@ -28,7 +28,7 @@ import {
   Wifi, Star, Lock, CheckCircle2,
   Signal, Quote, Users, Radio,
   QrCode, MapPin, Banknote, ShieldCheck,
-  Package, TrendingUp, Timer
+  Package, TrendingUp, Timer, Gift, PhoneCall
 } from "lucide-react";
 import { useState } from "react";
 import { SiVisa, SiMastercard, SiApplepay, SiStripe } from "react-icons/si";
@@ -1008,7 +1008,310 @@ function BuiltForTravellers() {
 }
 
 // ─────────────────────────────────────────────
-// 8. TESTIMONIALS + TRUST
+// 8. UPCOMING FEATURES (Data Rollover, Gift, Voice)
+// ─────────────────────────────────────────────
+
+// ── Data Rollover ──
+function DataRolloverSection() {
+  const steps = [
+    { pct: 100, label: "Trip 1 — Japan",       used: "3.2 GB", total: "5 GB", leftover: "1.8 GB", flag: "🇯🇵" },
+    { pct: 64,  label: "Trip 2 — Thailand",    used: "2.2 GB", total: "5 GB + 1.8 GB carried", leftover: "4.6 GB", flag: "🇹🇭" },
+    { pct: 38,  label: "Trip 3 — Indonesia",   used: "2.6 GB", total: "5 GB + 4.6 GB carried", leftover: "7.0 GB", flag: "🇮🇩" },
+  ];
+
+  return (
+    <section className="py-24 sm:py-32 border-t" id="rollover" data-testid="section-rollover">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+
+          {/* Left — copy */}
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-widest mb-5">
+              <TrendingUp className="w-3.5 h-3.5" />
+              Coming Q3 2026
+            </div>
+            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-rollover-title">
+              Leftover data?<br />
+              <span className="text-gradient">It rolls over.</span>
+            </h2>
+            <p className="text-muted-foreground text-lg leading-relaxed mb-8">
+              Don't lose data you've paid for. Unused gigabytes carry forward automatically to your next trip — no expiry, no waste.
+            </p>
+            <ul className="space-y-3 mb-8">
+              {[
+                "Rollover applies to all future trips with GlobeSIM",
+                "No manual action required — it's automatic",
+                "Pooled balance visible in your dashboard",
+                "Works across any destination",
+              ].map(item => (
+                <li key={item} className="flex items-start gap-2.5 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                  <span className="text-muted-foreground">{item}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex items-center gap-3">
+              <Link href="/signup">
+                <Button size="lg" data-testid="button-rollover-notify">
+                  Get notified when it's live
+                  <ArrowRight className="ml-2 w-4 h-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+
+          {/* Right — animated rollover card stack */}
+          <div className="space-y-3" data-testid="rollover-demo">
+            {steps.map((step, i) => (
+              <div
+                key={i}
+                className={`rounded-2xl border p-5 transition-all ${i === 0 ? "opacity-50 bg-muted/30" : "bg-card"}`}
+                data-testid={`rollover-step-${i}`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-2xl leading-none">{step.flag}</span>
+                    <div>
+                      <p className="font-semibold text-sm">{step.label}</p>
+                      <p className="text-xs text-muted-foreground">{step.total}</p>
+                    </div>
+                  </div>
+                  {i > 0 && (
+                    <span className="text-xs font-semibold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
+                      +{steps[i - 1].leftover} carried
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>{step.used} used</span>
+                    <span className={`font-medium ${i > 0 ? "text-emerald-500" : ""}`}>{step.leftover} left</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full bg-gradient-to-r ${i === 0 ? "from-muted-foreground/50 to-muted-foreground/30" : i === 1 ? "from-primary to-blue-400" : "from-emerald-500 to-teal-400"}`}
+                      style={{ width: `${i === 0 ? 100 - (100 * parseFloat(step.leftover) / 5) : 100 - (step.pct)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+                <TrendingUp className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">7.0 GB balance carried forward</p>
+                <p className="text-xs text-muted-foreground">Ready for your next destination</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Gift an eSIM ──
+function GiftEsimSection() {
+  const [form, setForm] = useState({ recipientName: "", recipientEmail: "", message: "" });
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function handleGift(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.recipientEmail) return;
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 1000));
+    setSubmitted(true);
+    setLoading(false);
+  }
+
+  return (
+    <section className="py-24 sm:py-32 border-t bg-card" id="gift" data-testid="section-gift">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+
+          {/* Left — demo gift card UI */}
+          <div className="order-2 lg:order-1" data-testid="gift-demo">
+            <div className="relative max-w-sm mx-auto lg:mx-0">
+
+              {/* Gift envelope card */}
+              <div className="rounded-3xl border-2 border-primary/20 bg-gradient-to-br from-primary/20 via-violet-500/10 to-blue-500/10 p-8 text-center shadow-2xl shadow-primary/10">
+                <div className="w-16 h-16 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center mx-auto mb-5">
+                  <Gift className="w-8 h-8 text-primary" />
+                </div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-2">Gift eSIM</p>
+                <h3 className="text-xl font-bold mb-1">5 GB · 30 Days</h3>
+                <p className="text-sm text-muted-foreground mb-4">Thailand · Southeast Asia</p>
+                <div className="rounded-xl bg-background/60 border p-3 mb-5">
+                  <p className="text-xs text-muted-foreground mb-1">To: Aisha Patel</p>
+                  <p className="text-sm italic text-foreground/80">"Safe travels on your adventure! Stay connected 🌏"</p>
+                </div>
+                <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-semibold border border-primary/20">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Delivered to inbox
+                </div>
+              </div>
+
+              {/* Floating badge */}
+              <div className="absolute -top-3 -right-3 bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">
+                Instant delivery
+              </div>
+            </div>
+          </div>
+
+          {/* Right — copy + form */}
+          <div className="order-1 lg:order-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-widest mb-5">
+              <Gift className="w-3.5 h-3.5" />
+              Available now
+            </div>
+            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-gift-title">
+              Send data to<br />
+              <span className="text-gradient">a loved one.</span>
+            </h2>
+            <p className="text-muted-foreground text-lg leading-relaxed mb-8">
+              Buy an eSIM plan as a gift. They get a link in their inbox to activate it when they're ready — no account needed.
+            </p>
+
+            {submitted ? (
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6 text-center" data-testid="gift-success">
+                <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
+                <p className="font-bold text-lg mb-1">Gift request received!</p>
+                <p className="text-muted-foreground text-sm">We'll reach out to complete the gift order — this feature launches soon.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleGift} className="space-y-3" data-testid="gift-form">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Recipient's name</label>
+                    <input
+                      type="text"
+                      placeholder="Aisha Patel"
+                      value={form.recipientName}
+                      onChange={e => setForm(f => ({ ...f, recipientName: e.target.value }))}
+                      className="w-full rounded-xl border bg-muted/30 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      data-testid="input-gift-recipient-name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Their email</label>
+                    <input
+                      type="email"
+                      placeholder="aisha@example.com"
+                      required
+                      value={form.recipientEmail}
+                      onChange={e => setForm(f => ({ ...f, recipientEmail: e.target.value }))}
+                      className="w-full rounded-xl border bg-muted/30 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      data-testid="input-gift-recipient-email"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Personal message (optional)</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Safe travels on your adventure..."
+                    value={form.message}
+                    onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
+                    className="w-full rounded-xl border bg-muted/30 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+                    data-testid="input-gift-message"
+                  />
+                </div>
+                <Button type="submit" className="w-full" size="lg" disabled={loading} data-testid="button-gift-submit">
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Sending…
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Gift className="w-4 h-4" />
+                      Send a Gift eSIM
+                    </span>
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground text-center">
+                  First select a plan on the next step. Recipient activates at any time.
+                </p>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Voice Calling ──
+function VoiceCallingSection() {
+  const features = [
+    { icon: PhoneCall,   title: "Local number included",     desc: "Get a dedicated number for your destination — calls look local." },
+    { icon: Globe,       title: "Call 190+ countries",       desc: "Same eSIM, voice and data. No separate plan needed." },
+    { icon: Wifi,        title: "Works over VoIP & carrier", desc: "Uses your data or the host network — whichever is stronger." },
+    { icon: ShieldCheck, title: "Encrypted & private",       desc: "End-to-end encrypted calls with no call logs stored." },
+  ];
+
+  return (
+    <section className="py-24 sm:py-32 border-t" id="voice" data-testid="section-voice">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="text-center mb-14">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-widest mb-5">
+            <PhoneCall className="w-3.5 h-3.5" />
+            Coming Q4 2026
+          </div>
+          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4" data-testid="text-voice-title">
+            Make calls with GlobeSIM.
+          </h2>
+          <p className="text-muted-foreground text-lg max-w-xl mx-auto leading-relaxed">
+            Your eSIM, your number — everywhere. Voice calling is coming to GlobeSIM so you can stay fully connected without juggling apps.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+          {features.map((f, i) => (
+            <div
+              key={i}
+              className="rounded-2xl border bg-card p-6 flex flex-col gap-4"
+              data-testid={`card-voice-feature-${i}`}
+            >
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <f.icon className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm mb-1">{f.title}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{f.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Early access prompt */}
+        <div className="max-w-2xl mx-auto rounded-2xl border border-primary/20 bg-primary/5 p-8 text-center" data-testid="card-voice-early-access">
+          <div className="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center mx-auto mb-5">
+            <PhoneCall className="w-7 h-7 text-primary" />
+          </div>
+          <h3 className="text-xl font-bold mb-2">Get early access to voice calling</h3>
+          <p className="text-muted-foreground text-sm mb-6 max-w-md mx-auto">
+            Create a GlobeSIM account and we'll notify you the moment voice calling launches — early users get priority access and a free trial minute pack.
+          </p>
+          <Link href="/signup">
+            <Button size="lg" className="shadow-lg shadow-primary/20" data-testid="button-voice-signup">
+              Join early access
+              <ArrowRight className="ml-2 w-4 h-4" />
+            </Button>
+          </Link>
+          <p className="text-xs text-muted-foreground mt-4">Free to join · No credit card needed</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────
+// 9. TESTIMONIALS + TRUST
 // ─────────────────────────────────────────────
 function TestimonialsSection() {
   const testimonials = [
@@ -1484,6 +1787,9 @@ export default function Home() {
       <BundlesSection />
       <CompatibilitySection />
       <BuiltForTravellers />
+      <DataRolloverSection />
+      <GiftEsimSection />
+      <VoiceCallingSection />
       <TestimonialsSection />
       <CoverageSection />
       <FAQSection />

@@ -360,6 +360,58 @@ export async function registerRoutes(
     }
   });
 
+  // ─── GIFT eSIM ────────────────────────────────────────
+  // POST /api/gift — create a gift eSIM order stub (full flow requires payment integration)
+  app.post("/api/gift", async (req, res) => {
+    try {
+      const schema = z.object({
+        planId: z.string().uuid(),
+        senderEmail: z.string().email(),
+        recipientEmail: z.string().email(),
+        recipientName: z.string().optional(),
+        message: z.string().max(500).optional(),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.flatten() });
+
+      const { planId, senderEmail, recipientEmail, recipientName, message } = parsed.data;
+      const plan = await storage.getPlan(planId);
+      if (!plan) return res.status(404).json({ message: "Plan not found" });
+
+      // Stub: in production, this creates an order, charges the sender, and emails the recipient a claim link
+      res.status(202).json({
+        success: true,
+        message: "Gift eSIM request received. In production, the recipient will receive an email to claim their eSIM.",
+        recipientEmail,
+        planId,
+        status: "pending",
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create gift eSIM" });
+    }
+  });
+
+  // GET /api/features — describe upcoming features (data rollover, voice, gifting)
+  app.get("/api/features", (_req, res) => {
+    res.json({
+      dataRollover: {
+        available: false,
+        description: "Unused data carries forward to your next trip. Coming Q3 2026.",
+        roadmapEta: "Q3 2026",
+      },
+      voiceCalling: {
+        available: false,
+        description: "Make and receive calls using your GlobeSIM number. Coming Q4 2026.",
+        roadmapEta: "Q4 2026",
+      },
+      gifting: {
+        available: true, // stub endpoint live
+        description: "Buy an eSIM plan as a gift for a friend or family member.",
+        endpoint: "POST /api/gift",
+      },
+    });
+  });
+
   // ─── ADMIN ────────────────────────────────────────────
   app.get("/api/admin/stats", async (req, res) => {
     try {

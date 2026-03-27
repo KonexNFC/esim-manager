@@ -56,6 +56,24 @@ export const orders = pgTable("orders", {
   esimStatus: text("esim_status").notNull().default("issued"),
 });
 
+// Gift eSIM orders — sender gifts a plan to a recipient's email
+export const giftOrders = pgTable("gift_orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id),
+  senderUserId: varchar("sender_user_id").references(() => users.id),
+  senderEmail: text("sender_email").notNull(),
+  recipientEmail: text("recipient_email").notNull(),
+  recipientName: text("recipient_name"),
+  message: text("message"),
+  status: text("status").notNull().default("pending"), // pending | sent | claimed
+  claimedAt: timestamp("claimed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type GiftOrder = typeof giftOrders.$inferSelect;
+export type InsertGiftOrder = typeof giftOrders.$inferInsert;
+export const insertGiftOrderSchema = createInsertSchema(giftOrders).omit({ id: true, createdAt: true, claimedAt: true });
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertDestinationSchema = createInsertSchema(destinations).omit({ id: true });
 export const insertPlanSchema = createInsertSchema(plans).omit({ id: true });
