@@ -22,7 +22,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserById(id: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUser(id: string, updates: Partial<{ name: string; passwordHash: string; stripeCustomerId: string }>): Promise<User | undefined>;
+  updateUser(id: string, updates: Partial<{ name: string; passwordHash: string; stripeCustomerId: string; isAdmin: boolean }>): Promise<User | undefined>;
   linkOrdersToUser(email: string, userId: string): Promise<void>;
 
   // Destinations
@@ -125,7 +125,7 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateUser(id: string, updates: Partial<{ name: string; passwordHash: string; stripeCustomerId: string }>): Promise<User | undefined> {
+  async updateUser(id: string, updates: Partial<{ name: string; passwordHash: string; stripeCustomerId: string; isAdmin: boolean }>): Promise<User | undefined> {
     const [updated] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
     return updated;
   }

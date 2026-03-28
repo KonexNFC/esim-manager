@@ -26,6 +26,7 @@ import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
+import { useAuth } from "@/lib/auth";
 import type { Plan, Order } from "@shared/schema";
 
 type AdminStats = {
@@ -494,6 +495,40 @@ function MarginsTab() {
 }
 
 export default function Admin() {
+  const { user, isLoading: authLoading } = useAuth();
+
+  // ── Auth gate ──────────────────────────────────────────
+  if (authLoading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user || !user.isAdmin) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-4">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-2xl bg-destructive/10 border border-destructive/20 flex items-center justify-center mx-auto mb-5">
+            <LayoutDashboard className="w-8 h-8 text-destructive" />
+          </div>
+          <h2 className="text-xl font-bold mb-2" data-testid="text-admin-denied">Access denied</h2>
+          <p className="text-muted-foreground text-sm mb-6">
+            {user
+              ? "Your account does not have admin privileges."
+              : "You must be signed in with an admin account to access this page."}
+          </p>
+          <Link href={user ? "/" : "/login"}>
+            <Button data-testid="button-admin-back">
+              {user ? "Back to site" : "Sign in"}
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">

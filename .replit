@@ -40,3 +40,8 @@ waitForPort = 5000
 
 [agent]
 integrations = ["stripe:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+ADMIN_SETUP_SECRET = "993d0b534c346a228dbea0f5baffff113147d37f895d9202"

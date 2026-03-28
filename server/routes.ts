@@ -7,7 +7,7 @@ import { purchaseEsim as providerPurchase, getAvailableProviders } from "./provi
 import { z } from "zod";
 import {
   hashPassword, verifyPassword, signToken, verifyToken,
-  setAuthCookie, clearAuthCookie, getTokenFromRequest, requireAuth,
+  setAuthCookie, clearAuthCookie, getTokenFromRequest, requireAuth, requireAdmin,
 } from "./auth";
 import {
   createPlanCheckoutSession,
@@ -73,9 +73,9 @@ export async function registerRoutes(
       const user = await storage.createUser({ name, email, passwordHash });
       await storage.linkOrdersToUser(email, user.id);
 
-      const token = signToken(user.id, user.email);
+      const token = signToken(user.id, user.email, user.isAdmin);
       setAuthCookie(res, token);
-      res.status(201).json({ id: user.id, name: user.name, email: user.email });
+      res.status(201).json({ id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin });
     } catch (error) {
       res.status(500).json({ message: "Failed to create account" });
     }
@@ -94,9 +94,9 @@ export async function registerRoutes(
       if (!valid) return res.status(401).json({ message: "Invalid email or password" });
 
       await storage.linkOrdersToUser(email, user.id);
-      const token = signToken(user.id, user.email);
+      const token = signToken(user.id, user.email, user.isAdmin);
       setAuthCookie(res, token);
-      res.json({ id: user.id, name: user.name, email: user.email });
+      res.json({ id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin });
     } catch (error) {
       res.status(500).json({ message: "Failed to log in" });
     }
@@ -116,9 +116,48 @@ export async function registerRoutes(
     try {
       const user = await storage.getUserById(payload.userId);
       if (!user) return res.status(401).json({ message: "User not found" });
-      res.json({ id: user.id, name: user.name, email: user.email });
+      res.json({ id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin });
     } catch {
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // POST /api/admin/promote — grant admin role to a user by email
+  // Protected by ADMIN_SETUP_SECRET env var (for initial bootstrapping)
+  // Once you have at least one admin, manage roles via PATCH /api/admin/users/:id
+  app.post("/api/admin/promote", async (req, res) => {
+    const setupSecret = process.env.ADMIN_SETUP_SECRET;
+    if (!setupSecret) {
+      return res.status(403).json({ message: "ADMIN_SETUP_SECRET not configured" });
+    }
+    const { email, secret } = req.body;
+    if (!secret || secret !== setupSecret) {
+      return res.status(403).json({ message: "Invalid setup secret" });
+    }
+    if (!email) return res.status(400).json({ message: "Email is required" });
+
+    try {
+      const user = await storage.getUserByEmail(email);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      await storage.updateUser(user.id, { isAdmin: true });
+      res.json({ message: `${email} is now an admin. They must log out and back in for the change to take effect.` });
+    } catch {
+      res.status(500).json({ message: "Failed to promote user" });
+    }
+  });
+
+  // PATCH /api/admin/users/:id — update a user's admin role (admin only)
+  app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
+    const { isAdmin } = req.body;
+    if (typeof isAdmin !== "boolean") {
+      return res.status(400).json({ message: "isAdmin must be a boolean" });
+    }
+    try {
+      const user = await storage.updateUser(req.params.id, { isAdmin });
+      if (!user) return res.status(404).json({ message: "User not found" });
+      res.json({ id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin });
+    } catch {
+      res.status(500).json({ message: "Failed to update user" });
     }
   });
 
@@ -694,7 +733,7 @@ export async function registerRoutes(
   });
 
   // ─── ADMIN ────────────────────────────────────────────
-  app.get("/api/admin/stats", async (_req, res) => {
+  app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
     try {
       const [allOrders, allPlans, allDestinations] = await Promise.all([
         storage.getAllOrders(),

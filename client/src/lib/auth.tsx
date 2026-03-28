@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "./queryClient";
 
@@ -6,6 +6,7 @@ interface AuthUser {
   id: string;
   name: string;
   email: string;
+  isAdmin: boolean;
 }
 
 interface AuthContextType {
@@ -27,7 +28,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const res = await fetch("/api/auth/me", { credentials: "include" });
         if (!res.ok) return null;
-        return res.json();
+        const data = await res.json();
+        return { ...data, isAdmin: data.isAdmin ?? false };
       } catch {
         return null;
       }
