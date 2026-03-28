@@ -1,5 +1,6 @@
 // ─── Provider Adapter Interface ──────────────────────────────────────────────
 // All providers must implement this interface, making them interchangeable.
+// Switch providers by setting PROVIDER_NAME env var (default: mock).
 
 export interface EsimProvisionResult {
   providerEsimId: string;
@@ -13,15 +14,59 @@ export interface EsimProvisionResult {
   dataRemainingMb: number;
 }
 
-export interface EsimUsageResult {
+export interface EsimStatusResult {
   providerEsimId: string;
   activationStatus: string; // issued | installed | active | expired | cancelled
+  lastSyncedAt: Date;
+}
+
+export interface EsimUsageResult {
+  providerEsimId: string;
   dataTotalMb: number;
   dataUsedMb: number;
   dataRemainingMb: number;
   daysRemaining: number;
   expiresAt?: Date;
   lastSyncedAt: Date;
+}
+
+export interface EsimBalanceResult {
+  providerEsimId: string;
+  dataRemainingMb: number;
+  daysRemaining: number;
+  expiresAt?: Date;
+}
+
+export interface EsimQrCodeResult {
+  providerEsimId: string;
+  qrCodeUrl: string;
+  manualCode?: string;
+  activationUrl?: string;
+}
+
+export interface EsimSyncResult {
+  providerEsimId: string;
+  activationStatus: string;
+  dataTotalMb: number;
+  dataUsedMb: number;
+  dataRemainingMb: number;
+  daysRemaining: number;
+  expiresAt?: Date;
+  qrCodeUrl?: string;
+  manualCode?: string;
+  lastSyncedAt: Date;
+}
+
+export interface ProviderPlan {
+  providerPlanCode: string;
+  name: string;
+  destination: string;
+  region: string;
+  dataMb: number;
+  durationDays: number;
+  priceMinor: number;
+  currency: string;
+  isActive: boolean;
 }
 
 export interface TopupOption {
@@ -51,10 +96,32 @@ export interface ProviderPurchaseParams {
   customerEmail: string;
 }
 
+export interface CustomerContext {
+  email: string;
+  userId?: string;
+  name?: string;
+}
+
 export interface ProviderAdapter {
   name: string;
-  purchaseEsim(params: ProviderPurchaseParams): Promise<EsimProvisionResult>;
-  getEsimStatus(providerEsimId: string): Promise<EsimUsageResult>;
+
+  // ── Provisioning ────────────────────────────────────
+  purchaseEsim(params: ProviderPurchaseParams, customerContext?: CustomerContext): Promise<EsimProvisionResult>;
+  assignExistingEsim?(params: ProviderPurchaseParams, customerContext?: CustomerContext): Promise<EsimProvisionResult>;
+
+  // ── Status & Usage ──────────────────────────────────
+  getEsimStatus(providerEsimId: string): Promise<EsimStatusResult>;
+  getEsimUsage(providerEsimId: string): Promise<EsimUsageResult>;
+  getEsimBalance(providerEsimId: string): Promise<EsimBalanceResult>;
+  getEsimQrCode(providerEsimId: string): Promise<EsimQrCodeResult>;
+
+  // ── Sync (combined status + usage) ──────────────────
+  syncEsim(providerEsimId: string): Promise<EsimSyncResult>;
+
+  // ── Top-ups ─────────────────────────────────────────
   getTopupOptions(providerEsimId: string): Promise<TopupOption[]>;
   purchaseTopup(providerEsimId: string, optionCode: string): Promise<TopupResult>;
+
+  // ── Plans ───────────────────────────────────────────
+  getSupportedPlans(countryCode?: string): Promise<ProviderPlan[]>;
 }

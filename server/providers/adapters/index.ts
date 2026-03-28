@@ -11,4 +11,17 @@ export function getActiveProvider(): ProviderAdapter {
   }
 }
 
-export type { ProviderAdapter, EsimProvisionResult, EsimUsageResult, TopupOption, TopupResult } from './base';
+export type {
+  ProviderAdapter,
+  EsimProvisionResult,
+  EsimStatusResult,
+  EsimUsageResult,
+  EsimBalanceResult,
+  EsimQrCodeResult,
+  EsimSyncResult,
+  TopupOption,
+  TopupResult,
+  ProviderPlan,
+  ProviderPurchaseParams,
+  CustomerContext,
+} from './base';

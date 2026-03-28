@@ -25,13 +25,16 @@ GlobeSIM is a production-ready eSIM marketplace where users can browse destinati
 - `shared/schema.ts` — Drizzle schemas for all tables
 
 ## Database Schema
-- **users** — Customer accounts (id, name, email, passwordHash, stripeCustomerId, createdAt)
+- **users** — Customer accounts (id, name, email, passwordHash nullable, authProvider, stripeCustomerId, isAdmin, createdAt, updatedAt)
 - **destinations** — Countries with images, flags, regions, corridor assignments
-- **plans** — eSIM data plans (price, dataAmount, validity, dataAmountGb, validityDays, coverage, features, wholesaleCost, planStatus, provider, stripePriceId)
-- **orders** — Purchases with full Stripe + provider data (stripeCheckoutSessionId, stripePaymentIntentId, stripeCustomerId, purchaseType, providerName, providerEsimId, providerReference, dataTotalMb, dataUsedMb, dataRemainingMb, daysRemaining, expiresAt, lastSyncedAt)
-- **topups** — Paid top-ups linked to orders (orderId, optionCode, name, price, currency, status, stripeCheckoutSessionId, fulfilledAt)
+- **plans** — eSIM data plans (externalPlanCode, price, dataAmount, dataAmountGb, validity, validityDays, coverage, features, wholesaleCost, planStatus, isActive, provider, stripePriceId, updatedAt)
+- **orders** — Payment/billing records with full Stripe + provider data (subtotalMinor, totalMinor, stripeCheckoutSessionId, stripePaymentIntentId, stripeCustomerId, purchaseType, providerName, providerEsimId, dataTotalMb, dataUsedMb, dataRemainingMb, daysRemaining, expiresAt, lastSyncedAt, updatedAt)
+- **orderItems** — Line items within an order (orderId, itemType, planId, name, destination, region, dataMb, durationDays, unitAmountMinor, quantity, metadataJson)
+- **esims** — Standalone eSIM entity created on fulfillment (userId, orderId, planId, providerName, providerEsimId, providerIccid, providerReference, qrCodeUrl, manualCode, destination, region, planName, activationStatus, dataTotalMb, dataUsedMb, dataRemainingMb, validityDays, daysRemaining, activatedAt, expiresAt, lastSyncedAt, updatedAt)
+- **topups** — Paid top-ups linked to orders and esims (orderId, esimId, optionCode, name, price, currency, status, stripeCheckoutSessionId, fulfilledAt, updatedAt)
 - **paymentEvents** — Idempotency log for Stripe webhook events (externalEventId, eventType, status, processedAt)
-- **providerSyncLogs** — Provider API call logs (orderId, provider, action, success, responseJson)
+- **providerSyncLogs** — Provider API call logs (orderId, esimId, syncType, providerName, requestSummary, responseSummary, status)
+- **notifications** — Notification log (userId, esimId, type, channel, status, payloadJson, sentAt)
 
 ## Authentication
 - JWT tokens stored in httpOnly cookies (`globe_session`, 30-day expiry)

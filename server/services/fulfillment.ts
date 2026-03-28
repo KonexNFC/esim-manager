@@ -7,7 +7,7 @@
 //   paid → fulfilling → fulfillment_failed  (provider error, will retry once)
 
 import { db } from '../storage';
-import { orders, users, topups, plans, destinations, providerSyncLogs } from '@shared/schema';
+import { orders, esims, users, topups, plans, destinations, providerSyncLogs } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { getActiveProvider } from '../providers/adapters';
 import {
@@ -17,7 +17,8 @@ import {
 const TRANSIENT_RETRY_DELAY_MS = 1500;
 
 async function logSync(
-  orderId: string,
+  orderId: string | null,
+  esimId: string | null,
   syncType: string,
   providerName: string,
   request: string,
@@ -26,7 +27,8 @@ async function logSync(
 ) {
   try {
     await db.insert(providerSyncLogs).values({
-      orderId,
+      orderId: orderId ?? undefined,
+      esimId: esimId ?? undefined,
       syncType,
       providerName,
       requestSummary: request,
@@ -42,28 +44,21 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
   if (!order) throw new Error(`Order ${orderId} not found`);
 
-  // Idempotency: skip if already fulfilled
   if (order.status === 'fulfilled') {
     console.log(`[Fulfillment] Order ${orderId} already fulfilled — skipping`);
     return;
   }
-
-  // Idempotency: skip if currently fulfilling (prevents concurrent webhook retries)
   if (order.status === 'fulfilling') {
     console.log(`[Fulfillment] Order ${orderId} already being fulfilled — skipping`);
     return;
   }
 
-  // Mark as in-progress
-  await db.update(orders)
-    .set({ status: 'fulfilling' })
-    .where(eq(orders.id, orderId));
+  await db.update(orders).set({ status: 'fulfilling' }).where(eq(orders.id, orderId));
 
   const user = order.userId
     ? (await db.select().from(users).where(eq(users.id, order.userId)))[0]
     : null;
 
-  // Resolve plan + destination
   const [planRow] = await db
     .select({ plan: plans, dest: destinations })
     .from(plans)
@@ -78,18 +73,22 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
   const provider = getActiveProvider();
 
   try {
-    const result = await provider.purchaseEsim({
-      planId: order.planId,
-      countryCode: planRow.dest?.countryCode ?? 'US',
-      dataAmountGb: planRow.plan.dataAmountGb,
-      validityDays: planRow.plan.validityDays,
-      providerRef: planRow.plan.provider !== 'manual' ? planRow.plan.provider ?? undefined : undefined,
-      customerEmail: order.email,
-    });
+    const result = await provider.purchaseEsim(
+      {
+        planId: order.planId,
+        countryCode: planRow.dest?.countryCode ?? 'US',
+        dataAmountGb: planRow.plan.dataAmountGb,
+        validityDays: planRow.plan.validityDays,
+        providerRef: planRow.plan.provider !== 'manual' ? planRow.plan.provider ?? undefined : undefined,
+        customerEmail: order.email,
+      },
+      { email: order.email, userId: order.userId ?? undefined, name: user?.name },
+    );
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + planRow.plan.validityDays);
 
+    // ── Update order record ──────────────────────────────────────────
     await db.update(orders).set({
       status: 'fulfilled',
       esimStatus: 'issued',
@@ -106,7 +105,31 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
       lastSyncedAt: new Date(),
     }).where(eq(orders.id, orderId));
 
-    await logSync(orderId, 'initial_purchase', provider.name,
+    // ── Create eSIM entity ───────────────────────────────────────────
+    const [esimRecord] = await db.insert(esims).values({
+      userId: order.userId ?? undefined,
+      orderId: order.id,
+      planId: order.planId,
+      providerName: provider.name,
+      providerEsimId: result.providerEsimId,
+      providerIccid: result.iccid,
+      providerReference: result.activationUrl ?? undefined,
+      qrCodeUrl: result.qrCodeUrl,
+      manualCode: result.manualCode ?? undefined,
+      destination: planRow.dest?.name ?? '',
+      region: planRow.dest?.region ?? '',
+      planName: planRow.plan.name,
+      activationStatus: 'issued',
+      dataTotalMb: result.dataTotalMb,
+      dataUsedMb: result.dataUsedMb,
+      dataRemainingMb: result.dataRemainingMb,
+      validityDays: planRow.plan.validityDays,
+      daysRemaining: planRow.plan.validityDays,
+      expiresAt,
+      lastSyncedAt: new Date(),
+    }).returning();
+
+    await logSync(orderId, esimRecord?.id ?? null, 'initial_purchase', provider.name,
       `purchaseEsim planId=${order.planId}`,
       `iccid=${result.iccid} status=${result.activationStatus}`,
       'ok');
@@ -130,28 +153,26 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
       manualCode: result.manualCode,
     }).catch(console.error);
 
-    console.log(`[Fulfillment] Order ${orderId} fulfilled — ICCID: ${result.iccid}`);
+    console.log(`[Fulfillment] Order ${orderId} fulfilled — ICCID: ${result.iccid}, eSIM: ${esimRecord?.id}`);
   } catch (err: any) {
-    // One automatic retry for transient provider errors
     const isTransient = isTransientError(err);
     if (isTransient) {
       console.warn(`[Fulfillment] Transient error for ${orderId}, retrying in ${TRANSIENT_RETRY_DELAY_MS}ms…`);
       await new Promise(r => setTimeout(r, TRANSIENT_RETRY_DELAY_MS));
       try {
-        // Reset to 'paid' so the next call picks it up cleanly
         await db.update(orders).set({ status: 'paid' }).where(eq(orders.id, orderId));
         await fulfillInitialPurchase(orderId);
         return;
       } catch (retryErr: any) {
         await markFulfillmentFailed(orderId, `Retry failed: ${retryErr.message}`);
-        await logSync(orderId, 'initial_purchase', provider.name,
+        await logSync(orderId, null, 'initial_purchase', provider.name,
           `purchaseEsim retry orderId=${orderId}`, retryErr.message, 'error');
         throw retryErr;
       }
     }
 
     await markFulfillmentFailed(orderId, err.message);
-    await logSync(orderId, 'initial_purchase', provider.name,
+    await logSync(orderId, null, 'initial_purchase', provider.name,
       `purchaseEsim orderId=${orderId}`, err.message, 'error');
     throw err;
   }
@@ -182,7 +203,6 @@ export async function fulfillTopupPurchase(topupId: string): Promise<void> {
   const [topup] = await db.select().from(topups).where(eq(topups.id, topupId));
   if (!topup) throw new Error(`Topup ${topupId} not found`);
 
-  // Idempotency
   if (topup.status === 'completed') {
     console.log(`[Fulfillment] Topup ${topupId} already completed — skipping`);
     return;
@@ -191,7 +211,6 @@ export async function fulfillTopupPurchase(topupId: string): Promise<void> {
   const [order] = await db.select().from(orders).where(eq(orders.id, topup.orderId));
   if (!order) throw new Error(`Order ${topup.orderId} not found`);
 
-  // Guard: order must have a provider eSIM ID to top-up
   if (!order.providerEsimId) {
     await db.update(topups).set({ status: 'failed' }).where(eq(topups.id, topupId));
     throw new Error(`Order ${topup.orderId} has no provider eSIM ID — cannot top up`);
@@ -202,7 +221,6 @@ export async function fulfillTopupPurchase(topupId: string): Promise<void> {
   try {
     const result = await provider.purchaseTopup(order.providerEsimId, topup.optionCode ?? '3gb');
 
-    // Update topup record
     await db.update(topups).set({
       status: 'completed',
       providerTopupId: result.providerTopupId,
@@ -212,28 +230,44 @@ export async function fulfillTopupPurchase(topupId: string): Promise<void> {
     }).where(eq(topups.id, topupId));
 
     // Update order balance
-    const updates: Partial<typeof orders.$inferInsert> = { lastSyncedAt: new Date() };
-
+    const orderUpdates: Partial<typeof orders.$inferInsert> = { lastSyncedAt: new Date() };
     if (result.dataAddedMb && result.dataAddedMb < 999990) {
-      updates.dataRemainingMb = (order.dataRemainingMb ?? 0) + result.dataAddedMb;
-      updates.dataTotalMb = (order.dataTotalMb ?? 0) + result.dataAddedMb;
+      orderUpdates.dataRemainingMb = (order.dataRemainingMb ?? 0) + result.dataAddedMb;
+      orderUpdates.dataTotalMb = (order.dataTotalMb ?? 0) + result.dataAddedMb;
     }
-
     if (result.validityAddedDays) {
-      updates.daysRemaining = (order.daysRemaining ?? 0) + result.validityAddedDays;
+      orderUpdates.daysRemaining = (order.daysRemaining ?? 0) + result.validityAddedDays;
       const newExpiry = order.expiresAt ? new Date(order.expiresAt) : new Date();
       newExpiry.setDate(newExpiry.getDate() + result.validityAddedDays);
-      updates.expiresAt = newExpiry;
+      orderUpdates.expiresAt = newExpiry;
+    }
+    await db.update(orders).set(orderUpdates as any).where(eq(orders.id, order.id));
+
+    // Also update the esims record if one exists
+    const [esimRecord] = await db.select().from(esims).where(eq(esims.orderId, order.id));
+    if (esimRecord) {
+      const esimUpdates: Partial<typeof esims.$inferInsert> = { lastSyncedAt: new Date() };
+      if (result.dataAddedMb && result.dataAddedMb < 999990) {
+        esimUpdates.dataRemainingMb = (esimRecord.dataRemainingMb ?? 0) + result.dataAddedMb;
+        esimUpdates.dataTotalMb = (esimRecord.dataTotalMb ?? 0) + result.dataAddedMb;
+      }
+      if (result.validityAddedDays) {
+        esimUpdates.daysRemaining = (esimRecord.daysRemaining ?? 0) + result.validityAddedDays;
+        const newExpiry = esimRecord.expiresAt ? new Date(esimRecord.expiresAt) : new Date();
+        newExpiry.setDate(newExpiry.getDate() + result.validityAddedDays);
+        esimUpdates.expiresAt = newExpiry;
+      }
+      await db.update(esims).set(esimUpdates as any).where(eq(esims.id, esimRecord.id));
+
+      // Link topup to esim record
+      await db.update(topups).set({ esimId: esimRecord.id }).where(eq(topups.id, topupId));
     }
 
-    await db.update(orders).set(updates as any).where(eq(orders.id, order.id));
-
-    await logSync(order.id, 'topup', provider.name,
+    await logSync(order.id, esimRecord?.id ?? null, 'topup', provider.name,
       `purchaseTopup esimId=${order.providerEsimId} option=${topup.optionCode}`,
       `topupId=${result.providerTopupId} status=${result.status}`,
       'ok');
 
-    // Resolve user for notification
     const user = order.userId
       ? (await db.select().from(users).where(eq(users.id, order.userId)))[0]
       : null;
@@ -249,7 +283,7 @@ export async function fulfillTopupPurchase(topupId: string): Promise<void> {
   } catch (err: any) {
     console.error(`[Fulfillment] Topup ${topupId} failed:`, err.message);
     await db.update(topups).set({ status: 'failed' }).where(eq(topups.id, topupId));
-    await logSync(order.id, 'topup', provider.name,
+    await logSync(order.id, null, 'topup', provider.name,
       `purchaseTopup orderId=${order.id}`, err.message, 'error');
     throw err;
   }
