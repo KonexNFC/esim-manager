@@ -40,21 +40,38 @@ app.post(
       const stripe = await getUncachableStripeClient();
 
       let event: any;
-      try {
-        event = stripe.webhooks.constructEvent(
-          req.body as Buffer,
-          sig,
-          process.env.STRIPE_WEBHOOK_SECRET ?? ""
-        );
-      } catch (parseErr: any) {
-        // Signature check fails if STRIPE_WEBHOOK_SECRET is wrong / not set.
-        // In that case, parse the event without verification (dev-mode only).
-        if (process.env.NODE_ENV !== "production") {
-          console.warn("[Webhook] Signature check failed (dev mode) — parsing raw JSON");
-          event = JSON.parse((req.body as Buffer).toString());
-        } else {
-          console.error("[Webhook] Signature verification failed:", parseErr.message);
-          return;
+
+      // Try signature verification using the env var first
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
+      if (webhookSecret) {
+        try {
+          event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
+        } catch {
+          event = null; // fall through to retrieval
+        }
+      }
+
+      // If signature check failed (or no secret set), retrieve the event directly
+      // from Stripe using the event ID — safe because we use our own API key.
+      if (!event) {
+        try {
+          const rawBody = JSON.parse((req.body as Buffer).toString());
+          const eventId = rawBody?.id;
+          if (!eventId) {
+            console.error("[Webhook] No event ID in payload — cannot process");
+            return;
+          }
+          console.log(`[Webhook] Verifying event ${eventId} via Stripe API`);
+          event = await stripe.events.retrieve(eventId);
+        } catch (fetchErr: any) {
+          if (process.env.NODE_ENV !== "production") {
+            // Dev-only fallback: parse raw JSON without any verification
+            console.warn("[Webhook] Stripe retrieval failed (dev mode) — using raw payload");
+            event = JSON.parse((req.body as Buffer).toString());
+          } else {
+            console.error("[Webhook] Failed to verify event:", fetchErr.message);
+            return;
+          }
         }
       }
 

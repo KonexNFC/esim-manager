@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
   CheckCircle2, Mail, QrCode, Smartphone, Wifi, ArrowRight,
-  Loader2, Clock, AlertCircle, RefreshCcw,
+  Loader2, Clock, AlertCircle, RefreshCcw, Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -198,6 +198,59 @@ export default function CheckoutSuccess() {
                   : <>We sent a payment receipt to {email ? <strong>{email}</strong> : "your email"}. Your eSIM QR code follows once ready.</>
                 }
               </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* ── QR code (shown once fulfilled and qrCode is available) ── */}
+      {isFulfilled && order?.qrCode && (
+        <Card className="mb-6 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <QrCode className="w-5 h-5 text-primary" />
+            <h2 className="font-semibold text-base">Your eSIM QR Code</h2>
+            <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/5 ml-auto">Ready</Badge>
+          </div>
+          <p className="text-sm text-muted-foreground mb-5">
+            Scan this with your phone camera to install your eSIM instantly. A copy has also been sent to your email.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center gap-6">
+            <div className="flex-shrink-0 p-3 border rounded-xl bg-white shadow-sm">
+              <img
+                src={order.qrCode}
+                alt="eSIM QR Code"
+                className="w-44 h-44 object-contain"
+                data-testid="img-qr-code"
+              />
+            </div>
+            <div className="flex-1 space-y-3 text-sm">
+              {order.iccid && (
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-1">ICCID / Manual Code</p>
+                  <code className="font-mono text-xs bg-muted px-2 py-1 rounded select-all break-all" data-testid="text-iccid">
+                    {order.iccid}
+                  </code>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <p className="font-medium">Install instructions:</p>
+                <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                  <li>Open <strong>Settings → Mobile Data</strong></li>
+                  <li>Tap <strong>Add eSIM</strong> or <strong>Add Data Plan</strong></li>
+                  <li>Choose <strong>Use QR Code</strong> and scan above</li>
+                  <li>Label the plan and set as active when you travel</li>
+                </ol>
+              </div>
+              <a
+                href={order.qrCode}
+                download="globesim-esim-qrcode.png"
+                data-testid="link-download-qr"
+              >
+                <Button variant="outline" size="sm" className="mt-1">
+                  <Download className="w-3.5 h-3.5 mr-1.5" />
+                  Download QR Code
+                </Button>
+              </a>
             </div>
           </div>
         </Card>

@@ -18,7 +18,8 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/lib/auth";
 import type { Plan, Destination } from "@shared/schema";
 
 const checkoutSchema = z.object({
@@ -51,6 +52,7 @@ export default function Checkout() {
   const [, params] = useRoute("/checkout/:planId");
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
   const planId = params?.planId;
 
   const [step, setStep] = useState<CheckoutStep>("details");
@@ -82,6 +84,15 @@ export default function Checkout() {
     defaultValues: { name: "", email: "", confirmEmail: "" },
   });
 
+  // Pre-fill form with logged-in user's details
+  useEffect(() => {
+    if (user) {
+      form.setValue("email", user.email ?? "");
+      form.setValue("confirmEmail", user.email ?? "");
+      if (user.name) form.setValue("name", user.name);
+    }
+  }, [user, form]);
+
   // Stripe checkout mutation — redirects to Stripe hosted page
   const checkoutMutation = useMutation({
     mutationFn: async (data: CheckoutFormData) => {
@@ -90,6 +101,7 @@ export default function Checkout() {
         email: data.email,
         name: data.name || undefined,
         upsellOptionId: selectedUpsell || undefined,
+        // userId is resolved server-side from the session cookie — no need to send it
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Checkout failed");
@@ -181,6 +193,17 @@ export default function Checkout() {
                 <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-bold">1</div>
                 Your Details
               </h2>
+
+              {/* Logged-in banner */}
+              {user && (
+                <div className="flex items-center gap-3 rounded-lg bg-primary/5 border border-primary/20 px-4 py-3 mb-5">
+                  <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
+                  <p className="text-sm">
+                    Buying as <span className="font-semibold">{user.name || user.email}</span>
+                    <span className="text-muted-foreground ml-1">— your details have been pre-filled</span>
+                  </p>
+                </div>
+              )}
 
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onDetailsSubmit)} className="space-y-4">
