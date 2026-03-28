@@ -80,7 +80,7 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
         countryCode: planRow.dest?.countryCode ?? 'US',
         dataAmountGb: planRow.plan.dataAmountGb,
         validityDays: planRow.plan.validityDays,
-        providerRef: planRow.plan.provider !== 'manual' ? planRow.plan.provider ?? undefined : undefined,
+        providerRef: planRow.plan.externalPlanCode ?? undefined,
         customerEmail: order.email,
       },
       { email: order.email, userId: order.userId ?? undefined, name: user?.name },
