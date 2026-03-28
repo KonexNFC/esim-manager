@@ -10,6 +10,8 @@ import Home from "@/pages/home";
 import Destinations from "@/pages/destinations";
 import DestinationDetail from "@/pages/destination-detail";
 import Checkout from "@/pages/checkout";
+import CheckoutSuccess from "@/pages/checkout-success";
+import CheckoutCancel from "@/pages/checkout-cancel";
 import Orders from "@/pages/orders";
 import OrderDetail from "@/pages/order-detail";
 import Admin from "@/pages/admin";
@@ -27,6 +29,8 @@ function Router() {
       <Route path="/destinations" component={Destinations} />
       <Route path="/destinations/:id" component={DestinationDetail} />
       <Route path="/checkout/:planId" component={Checkout} />
+      <Route path="/checkout-success" component={CheckoutSuccess} />
+      <Route path="/checkout-cancel" component={CheckoutCancel} />
       <Route path="/orders" component={Orders} />
       <Route path="/orders/:id" component={OrderDetail} />
       <Route path="/compatibility" component={Compatibility} />

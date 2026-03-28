@@ -14,9 +14,9 @@ import { Form, FormField, FormItem, FormLabel, FormMessage, FormControl } from "
 import {
   ArrowLeft, Wifi, Clock, Globe, Lock,
   QrCode, Smartphone, CheckCircle2, RotateCcw,
-  ArrowRight, Zap, Plus, TrendingUp, CreditCard, ShieldCheck
+  ArrowRight, Zap, Plus, TrendingUp, CreditCard, ShieldCheck, ExternalLink
 } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import type { Plan, Destination } from "@shared/schema";
@@ -31,21 +31,20 @@ const checkoutSchema = z.object({
 });
 
 type CheckoutFormData = z.infer<typeof checkoutSchema>;
-
 type CheckoutStep = "details" | "upsell";
 
 const upsellOptions = [
-  { id: "1gb",       label: "+1 GB",         desc: "Light top-up",    price: 3,  tag: null },
-  { id: "3gb",       label: "+3 GB",         desc: "Extra buffer",    price: 7,  tag: "Popular" },
-  { id: "5gb",       label: "+5 GB",         desc: "Heavy use",       price: 11, tag: null },
-  { id: "unlimited", label: "Go Unlimited",  desc: "No data limits",  price: 15, tag: "Best value" },
+  { id: "1gb",       label: "+1 GB",        desc: "Light top-up",   price: 3,  tag: null },
+  { id: "3gb",       label: "+3 GB",        desc: "Extra buffer",   price: 7,  tag: "Popular" },
+  { id: "5gb",       label: "+5 GB",        desc: "Heavy use",      price: 11, tag: null },
+  { id: "unlimited", label: "Go Unlimited", desc: "No data limits", price: 15, tag: "Best value" },
 ];
 
 const nextSteps = [
-  { icon: CreditCard, title: "Order confirmed",    description: "Your purchase is processed instantly." },
-  { icon: QrCode,     title: "QR code delivered",  description: "Emailed to you within seconds." },
+  { icon: CreditCard, title: "Secure payment",     description: "Handled by Stripe — card never leaves Stripe." },
+  { icon: QrCode,     title: "QR code delivered",  description: "Emailed to you within seconds of payment." },
   { icon: Smartphone, title: "Scan & install",     description: "Settings → Mobile Data → Add eSIM." },
-  { icon: Wifi,       title: "You're online",      description: "Data activates on arrival at your destination." },
+  { icon: Wifi,       title: "You're online",      description: "Data activates on arrival." },
 ];
 
 export default function Checkout() {
@@ -83,28 +82,27 @@ export default function Checkout() {
     defaultValues: { name: "", email: "", confirmEmail: "" },
   });
 
-  const orderMutation = useMutation({
+  // Stripe checkout mutation — redirects to Stripe hosted page
+  const checkoutMutation = useMutation({
     mutationFn: async (data: CheckoutFormData) => {
-      const upsell = upsellOptions.find(u => u.id === selectedUpsell);
-      const totalPrice = (plan!.price) + (upsell ? upsell.price : 0);
-      const res = await apiRequest("POST", "/api/orders", {
-        planId: planId,
+      const res = await apiRequest("POST", "/api/checkout/plan", {
+        planId,
         email: data.email,
-        totalPrice,
-        currency: plan!.currency,
-        status: "completed",
+        name: data.name || undefined,
+        upsellOptionId: selectedUpsell || undefined,
       });
-      return res.json();
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Checkout failed");
+      return json as { url: string; sessionId: string };
     },
-    onSuccess: (order) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/orders"] });
-      navigate(`/orders/${order.id}`);
+    onSuccess: ({ url }) => {
+      // Redirect to Stripe Checkout
+      window.location.href = url;
     },
-    onError: () => {
+    onError: (err: any) => {
       toast({
-        title: "Order failed",
-        description: "Something went wrong. Please try again.",
+        title: "Checkout failed",
+        description: err.message || "Something went wrong. Please try again.",
         variant: "destructive",
       });
     },
@@ -117,7 +115,7 @@ export default function Checkout() {
 
   const completeOrder = () => {
     if (formData) {
-      orderMutation.mutate(formData);
+      checkoutMutation.mutate(formData);
     }
   };
 
@@ -129,22 +127,8 @@ export default function Checkout() {
       <div className="max-w-3xl mx-auto px-4 py-8">
         <Skeleton className="h-8 w-48 mb-6" />
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          <div className="lg:col-span-3">
-            <Card className="p-6">
-              <Skeleton className="h-6 w-32 mb-4" />
-              <Skeleton className="h-10 w-full mb-4" />
-              <Skeleton className="h-10 w-full mb-4" />
-              <Skeleton className="h-10 w-full" />
-            </Card>
-          </div>
-          <div className="lg:col-span-2">
-            <Card className="p-6">
-              <Skeleton className="h-6 w-32 mb-4" />
-              <Skeleton className="h-4 w-full mb-2" />
-              <Skeleton className="h-4 w-3/4 mb-4" />
-              <Skeleton className="h-8 w-full" />
-            </Card>
-          </div>
+          <div className="lg:col-span-3"><Card className="p-6"><Skeleton className="h-6 w-32 mb-4" /><Skeleton className="h-10 w-full mb-4" /><Skeleton className="h-10 w-full mb-4" /><Skeleton className="h-10 w-full" /></Card></div>
+          <div className="lg:col-span-2"><Card className="p-6"><Skeleton className="h-6 w-32 mb-4" /><Skeleton className="h-4 w-full mb-2" /><Skeleton className="h-4 w-3/4 mb-4" /><Skeleton className="h-8 w-full" /></Card></div>
         </div>
       </div>
     );
@@ -155,9 +139,7 @@ export default function Checkout() {
       <div className="max-w-3xl mx-auto px-4 py-20 text-center">
         <Wifi className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
         <h2 className="text-xl font-semibold mb-2">Plan not found</h2>
-        <Link href="/destinations">
-          <Button variant="outline">Browse Plans</Button>
-        </Link>
+        <Link href="/destinations"><Button variant="outline">Browse Plans</Button></Link>
       </div>
     );
   }
@@ -166,8 +148,7 @@ export default function Checkout() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
       <Link href={`/destinations/${plan.destinationId}`}>
         <Button variant="ghost" className="mb-5 -ml-2" data-testid="button-back-plan">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Plans
+          <ArrowLeft className="w-4 h-4 mr-2" />Back to Plans
         </Button>
       </Link>
 
@@ -185,7 +166,7 @@ export default function Checkout() {
         <div className="flex-1 h-px bg-border" />
         <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
           <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold bg-muted text-muted-foreground">3</div>
-          Complete
+          Pay securely
         </div>
       </div>
 
@@ -203,64 +184,31 @@ export default function Checkout() {
 
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onDetailsSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Full Name <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="Your name"
-                            data-testid="input-name"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email Address</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="you@example.com"
-                            type="email"
-                            data-testid="input-email"
-                            {...field}
-                          />
-                        </FormControl>
-                        <p className="text-xs text-muted-foreground mt-1">Your QR code will be delivered here instantly</p>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="confirmEmail"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Confirm Email</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="you@example.com"
-                            type="email"
-                            data-testid="input-confirm-email"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <FormField control={form.control} name="name" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Full Name <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                      <FormControl><Input placeholder="Your name" data-testid="input-name" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="email" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email Address</FormLabel>
+                      <FormControl><Input placeholder="you@example.com" type="email" data-testid="input-email" {...field} /></FormControl>
+                      <p className="text-xs text-muted-foreground mt-1">Your QR code and receipt will be delivered here</p>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="confirmEmail" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirm Email</FormLabel>
+                      <FormControl><Input placeholder="you@example.com" type="email" data-testid="input-confirm-email" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
 
                   <Separator className="my-5" />
 
-                  {/* Payment section */}
                   <div>
                     <h3 className="font-semibold text-sm mb-4 flex items-center gap-2">
                       <CreditCard className="w-4 h-4 text-primary" />
@@ -270,30 +218,25 @@ export default function Checkout() {
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-sm text-muted-foreground">Powered by Stripe</span>
                         <div className="flex items-center gap-2.5">
-                          <SiVisa       className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-visa" />
+                          <SiVisa className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-visa" />
                           <SiMastercard className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-mc" />
-                          <SiApplepay   className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-apple-pay" />
-                          <SiStripe     className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-stripe" />
+                          <SiApplepay className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-apple-pay" />
+                          <SiStripe className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-stripe" />
                         </div>
                       </div>
                       <div className="rounded-md border bg-background px-3 py-2.5 text-sm text-muted-foreground flex items-center gap-2">
-                        <CreditCard className="w-4 h-4" />
-                        Card details entered at payment step
+                        <ExternalLink className="w-4 h-4" />
+                        You'll enter card details securely on Stripe's page
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
                     <Lock className="w-3.5 h-3.5" />
-                    <span>SSL encrypted · Your information is never stored</span>
+                    <span>SSL encrypted · Card details handled by Stripe</span>
                   </div>
 
-                  <Button
-                    type="submit"
-                    className="w-full font-semibold"
-                    size="lg"
-                    data-testid="button-continue-to-upsell"
-                  >
+                  <Button type="submit" className="w-full font-semibold" size="lg" data-testid="button-continue-to-upsell">
                     Continue
                     <ArrowRight className="ml-2 w-4 h-4" />
                   </Button>
@@ -360,25 +303,36 @@ export default function Checkout() {
                   className="w-full font-semibold"
                   size="lg"
                   onClick={completeOrder}
-                  disabled={orderMutation.isPending}
+                  disabled={checkoutMutation.isPending}
                   data-testid="button-complete-purchase"
                 >
-                  {orderMutation.isPending
-                    ? "Processing..."
-                    : selectedUpsell
-                      ? `Complete Purchase — $${totalPrice.toFixed(2)}`
-                      : `Pay $${totalPrice.toFixed(2)}`
-                  }
-                  <ArrowRight className="ml-2 w-4 h-4" />
+                  {checkoutMutation.isPending ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Redirecting to payment…
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Lock className="w-4 h-4" />
+                      {selectedUpsell
+                        ? `Pay $${totalPrice.toFixed(2)} securely`
+                        : `Pay $${totalPrice.toFixed(2)} securely`
+                      }
+                    </span>
+                  )}
                 </Button>
                 <button
                   onClick={() => { setSelectedUpsell(null); completeOrder(); }}
                   className="w-full text-center text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
-                  disabled={orderMutation.isPending}
+                  disabled={checkoutMutation.isPending}
                   data-testid="button-skip-upsell"
                 >
                   No thanks, complete my order as is
                 </button>
+                <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1.5">
+                  <SiStripe className="h-3 w-auto" />
+                  You'll be redirected to Stripe's secure payment page
+                </p>
               </div>
             </Card>
           )}
@@ -447,9 +401,7 @@ export default function Checkout() {
 
             <div className="flex items-center justify-between mb-5 pt-2 border-t">
               <span className="font-semibold">Total</span>
-              <span className="text-xl font-bold" data-testid="text-total-price">
-                ${totalPrice.toFixed(2)}
-              </span>
+              <span className="text-xl font-bold" data-testid="text-total-price">${totalPrice.toFixed(2)}</span>
             </div>
 
             <div>

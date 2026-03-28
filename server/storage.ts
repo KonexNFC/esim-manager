@@ -1,12 +1,14 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import {
-  users, destinations, plans, orders,
+  users, destinations, plans, orders, topups, paymentEvents, providerSyncLogs,
   type User, type InsertUser,
   type Destination, type InsertDestination,
   type Plan, type InsertPlan,
   type Order, type InsertOrder,
+  type Topup, type InsertTopup,
+  type PaymentEvent, type ProviderSyncLog,
 } from "@shared/schema";
 
 const pool = new pg.Pool({
@@ -16,32 +18,47 @@ const pool = new pg.Pool({
 export const db = drizzle(pool);
 
 export interface IStorage {
+  // Users
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserById(id: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUser(id: string, updates: Partial<{ name: string; passwordHash: string }>): Promise<User | undefined>;
+  updateUser(id: string, updates: Partial<{ name: string; passwordHash: string; stripeCustomerId: string }>): Promise<User | undefined>;
   linkOrdersToUser(email: string, userId: string): Promise<void>;
 
+  // Destinations
   getDestinations(): Promise<Destination[]>;
   getPopularDestinations(): Promise<Destination[]>;
   getDestination(id: string): Promise<Destination | undefined>;
   createDestination(dest: InsertDestination): Promise<Destination>;
 
+  // Plans
   getAllPlans(): Promise<Plan[]>;
   getPlans(destinationId: string): Promise<Plan[]>;
   getPlan(id: string): Promise<Plan | undefined>;
   createPlan(plan: InsertPlan): Promise<Plan>;
   updatePlan(id: string, updates: Partial<InsertPlan & { planStatus: string }>): Promise<Plan | undefined>;
 
+  // Orders
   getAllOrders(): Promise<(Order & { planName?: string; destinationName?: string; flagEmoji?: string; dataAmount?: string; validity?: string; dataAmountGb?: number; validityDays?: number })[]>;
   getOrdersByEmail(email: string): Promise<(Order & { planName?: string; destinationName?: string; flagEmoji?: string; dataAmount?: string; validity?: string; dataAmountGb?: number; validityDays?: number })[]>;
   getOrdersByUserId(userId: string): Promise<(Order & { planName?: string; destinationName?: string; flagEmoji?: string; dataAmount?: string; validity?: string; dataAmountGb?: number; validityDays?: number })[]>;
   getOrder(id: string): Promise<Order | undefined>;
   createOrder(order: InsertOrder, providerIccid?: string, providerQrCode?: string): Promise<Order>;
-  updateOrder(id: string, updates: Partial<{ status: string; esimStatus: string; userId: string }>): Promise<Order | undefined>;
+  updateOrder(id: string, updates: Partial<Order>): Promise<Order | undefined>;
+
+  // Topups
+  getTopupsByOrderId(orderId: string): Promise<Topup[]>;
+  createTopup(topup: InsertTopup): Promise<Topup>;
+  updateTopup(id: string, updates: Partial<Topup>): Promise<Topup | undefined>;
+
+  // Payment events (idempotency)
+  getPaymentEvent(externalEventId: string): Promise<PaymentEvent | undefined>;
+  createPaymentEvent(event: Partial<PaymentEvent>): Promise<PaymentEvent>;
+  markPaymentEventProcessed(externalEventId: string): Promise<void>;
 }
 
-const orderSelectFields = (db: any) => ({
+// ─── Order join helpers ───────────────────────────────
+const orderSelectFields = (_db: any) => ({
   id: orders.id,
   planId: orders.planId,
   userId: orders.userId,
@@ -54,6 +71,19 @@ const orderSelectFields = (db: any) => ({
   iccid: orders.iccid,
   activationDate: orders.activationDate,
   esimStatus: orders.esimStatus,
+  stripeCheckoutSessionId: orders.stripeCheckoutSessionId,
+  stripePaymentIntentId: orders.stripePaymentIntentId,
+  stripeCustomerId: orders.stripeCustomerId,
+  purchaseType: orders.purchaseType,
+  providerName: orders.providerName,
+  providerEsimId: orders.providerEsimId,
+  providerReference: orders.providerReference,
+  dataTotalMb: orders.dataTotalMb,
+  dataUsedMb: orders.dataUsedMb,
+  dataRemainingMb: orders.dataRemainingMb,
+  daysRemaining: orders.daysRemaining,
+  expiresAt: orders.expiresAt,
+  lastSyncedAt: orders.lastSyncedAt,
   planName: plans.name,
   dataAmount: plans.dataAmount,
   dataAmountGb: plans.dataAmountGb,
@@ -77,6 +107,7 @@ function mapOrderRow(r: any) {
 }
 
 export class DatabaseStorage implements IStorage {
+  // ─── Users ────────────────────────────────────────
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
@@ -92,7 +123,7 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateUser(id: string, updates: Partial<{ name: string; passwordHash: string }>): Promise<User | undefined> {
+  async updateUser(id: string, updates: Partial<{ name: string; passwordHash: string; stripeCustomerId: string }>): Promise<User | undefined> {
     const [updated] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
     return updated;
   }
@@ -101,6 +132,7 @@ export class DatabaseStorage implements IStorage {
     await db.update(orders).set({ userId }).where(and(eq(orders.email, email), eq(orders.userId, null as any)));
   }
 
+  // ─── Destinations ─────────────────────────────────
   async getDestinations(): Promise<Destination[]> {
     return db.select().from(destinations);
   }
@@ -119,6 +151,7 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
+  // ─── Plans ────────────────────────────────────────
   async getPlans(destinationId: string): Promise<Plan[]> {
     return db.select().from(plans).where(eq(plans.destinationId, destinationId));
   }
@@ -142,6 +175,7 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  // ─── Orders ───────────────────────────────────────
   async getAllOrders() {
     const result = await db
       .select(orderSelectFields(db))
@@ -189,9 +223,47 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateOrder(id: string, updates: Partial<{ status: string; esimStatus: string; userId: string }>): Promise<Order | undefined> {
+  async updateOrder(id: string, updates: Partial<Order>): Promise<Order | undefined> {
     const [updated] = await db.update(orders).set(updates).where(eq(orders.id, id)).returning();
     return updated;
+  }
+
+  // ─── Topups ───────────────────────────────────────
+  async getTopupsByOrderId(orderId: string): Promise<Topup[]> {
+    return db.select().from(topups).where(eq(topups.orderId, orderId));
+  }
+
+  async createTopup(topup: InsertTopup): Promise<Topup> {
+    const [created] = await db.insert(topups).values(topup).returning();
+    return created;
+  }
+
+  async updateTopup(id: string, updates: Partial<Topup>): Promise<Topup | undefined> {
+    const [updated] = await db.update(topups).set(updates).where(eq(topups.id, id)).returning();
+    return updated;
+  }
+
+  // ─── Payment Events ───────────────────────────────
+  async getPaymentEvent(externalEventId: string): Promise<PaymentEvent | undefined> {
+    const [event] = await db.select().from(paymentEvents).where(eq(paymentEvents.externalEventId, externalEventId));
+    return event;
+  }
+
+  async createPaymentEvent(event: Partial<PaymentEvent>): Promise<PaymentEvent> {
+    const [created] = await db.insert(paymentEvents).values({
+      provider: event.provider || 'stripe',
+      externalEventId: event.externalEventId!,
+      eventType: event.eventType!,
+      payloadJson: event.payloadJson,
+      status: 'pending',
+    }).returning();
+    return created;
+  }
+
+  async markPaymentEventProcessed(externalEventId: string): Promise<void> {
+    await db.update(paymentEvents)
+      .set({ status: 'processed', processedAt: new Date() })
+      .where(eq(paymentEvents.externalEventId, externalEventId));
   }
 }
 

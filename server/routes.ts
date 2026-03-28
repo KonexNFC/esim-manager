@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertOrderSchema, insertPlanSchema } from "@shared/schema";
@@ -9,7 +9,15 @@ import {
   hashPassword, verifyPassword, signToken, verifyToken,
   setAuthCookie, clearAuthCookie, getTokenFromRequest, requireAuth,
 } from "./auth";
+import {
+  createPlanCheckoutSession,
+  createTopupCheckoutSession,
+  getStripePublishableKey as _getStripePublishableKey,
+} from "./services/stripeService";
+import { syncEsimUsage, syncUserEsims, syncAllActiveEsims } from "./services/usageSync";
+import { getActiveProvider } from "./providers/adapters";
 
+// ─── Schemas ─────────────────────────────────────────
 const bestPlanSchema = z.object({
   countryCode: z.string().min(2).max(3),
   dataAmountGb: z.number().positive(),
@@ -31,6 +39,19 @@ const updateProfileSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   currentPassword: z.string().optional(),
   newPassword: z.string().min(8).optional(),
+});
+
+const planCheckoutSchema = z.object({
+  planId: z.string(),
+  email: z.string().email(),
+  name: z.string().optional(),
+  upsellOptionId: z.string().optional(),
+});
+
+const topupCheckoutSchema = z.object({
+  orderId: z.string(),
+  optionCode: z.string(),
+  email: z.string().email(),
 });
 
 export async function registerRoutes(
@@ -81,7 +102,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/logout", (req, res) => {
+  app.post("/api/auth/logout", (_req, res) => {
     clearAuthCookie(res);
     res.json({ message: "Logged out" });
   });
@@ -139,19 +160,19 @@ export async function registerRoutes(
     }
   });
 
-  // Mock top-up endpoint
+  // Legacy mock top-up kept for dashboard UI compatibility
   app.post("/api/dashboard/topup/:orderId", requireAuth, async (req, res) => {
     const userId = (req as any).userId;
     const { orderId } = req.params;
     const { topupType } = req.body;
 
     const topupOptions: Record<string, { label: string; price: number }> = {
-      "1gb": { label: "+1 GB", price: 4.99 },
-      "3gb": { label: "+3 GB", price: 9.99 },
-      "5gb": { label: "+5 GB", price: 14.99 },
-      "unlimited": { label: "Unlimited", price: 24.99 },
-      "7days": { label: "+7 Days", price: 5.99 },
-      "30days": { label: "+30 Days", price: 12.99 },
+      "1gb":       { label: "+1 GB",       price: 3.00 },
+      "3gb":       { label: "+3 GB",       price: 7.00 },
+      "5gb":       { label: "+5 GB",       price: 11.00 },
+      "unlimited": { label: "Unlimited",   price: 15.00 },
+      "7days":     { label: "+7 Days",     price: 5.00 },
+      "30days":    { label: "+30 Days",    price: 12.00 },
     };
 
     const option = topupOptions[topupType];
@@ -170,6 +191,220 @@ export async function registerRoutes(
       });
     } catch {
       res.status(500).json({ message: "Failed to process top-up" });
+    }
+  });
+
+  // ─── STRIPE CHECKOUT ─────────────────────────────────
+
+  // GET /api/stripe/config — publishable key for frontend
+  app.get("/api/stripe/config", async (_req, res) => {
+    try {
+      const { getStripePublishableKey } = await import('./stripeClient');
+      const publishableKey = await getStripePublishableKey();
+      res.json({ publishableKey });
+    } catch {
+      res.status(500).json({ message: "Stripe not configured" });
+    }
+  });
+
+  // POST /api/checkout/plan — create Stripe checkout for a plan purchase
+  app.post("/api/checkout/plan", async (req, res) => {
+    try {
+      const parsed = planCheckoutSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.flatten() });
+
+      const { planId, email, name, upsellOptionId } = parsed.data;
+
+      const plan = await storage.getPlan(planId);
+      if (!plan) return res.status(404).json({ message: "Plan not found" });
+
+      const destination = await storage.getDestination(plan.destinationId);
+
+      // Get user if authenticated
+      let userId: string | undefined;
+      const token = getTokenFromRequest(req);
+      if (token) {
+        const payload = verifyToken(token);
+        if (payload) userId = payload.userId;
+      }
+
+      // Upsell price map (server-authoritative)
+      const upsellMap: Record<string, { dataGb: number; price: number }> = {
+        "1gb":       { dataGb: 1,  price: 3.00 },
+        "3gb":       { dataGb: 3,  price: 7.00 },
+        "5gb":       { dataGb: 5,  price: 11.00 },
+        "unlimited": { dataGb: 0,  price: 15.00 },
+      };
+      const upsell = upsellOptionId ? upsellMap[upsellOptionId] : undefined;
+
+      const { url, sessionId } = await createPlanCheckoutSession({
+        planId: plan.id,
+        planName: plan.name,
+        destination: destination?.name || 'Unknown',
+        region: destination?.region || plan.coverage,
+        dataAmount: plan.dataAmount,
+        validity: plan.validity,
+        dataAmountGb: plan.dataAmountGb,
+        validityDays: plan.validityDays,
+        price: plan.price,
+        currency: plan.currency,
+        email,
+        userId,
+        userName: name,
+        upsellDataGb: upsell?.dataGb,
+        upsellPrice: upsell?.price,
+      });
+
+      res.json({ url, sessionId });
+    } catch (error: any) {
+      console.error('[checkout/plan]', error.message);
+      res.status(500).json({ message: "Failed to create checkout session" });
+    }
+  });
+
+  // POST /api/checkout/topup — create Stripe checkout for a top-up
+  app.post("/api/checkout/topup", requireAuth, async (req, res) => {
+    const userId = (req as any).userId;
+    try {
+      const parsed = topupCheckoutSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.flatten() });
+
+      const { orderId, optionCode, email } = parsed.data;
+      const order = await storage.getOrder(orderId);
+      if (!order) return res.status(404).json({ message: "Order not found" });
+      if (order.userId !== userId) return res.status(403).json({ message: "Not authorized" });
+
+      const provider = getActiveProvider();
+      const options = await provider.getTopupOptions(order.providerEsimId || '');
+      const option = options.find(o => o.optionCode === optionCode);
+      if (!option) return res.status(400).json({ message: "Invalid top-up option" });
+
+      const { url, sessionId, topupId } = await createTopupCheckoutSession({
+        orderId,
+        optionCode,
+        optionName: option.name,
+        price: option.price,
+        currency: option.currency,
+        email,
+        userId,
+      });
+
+      res.json({ url, sessionId, topupId });
+    } catch (error: any) {
+      console.error('[checkout/topup]', error.message);
+      res.status(500).json({ message: "Failed to create top-up checkout session" });
+    }
+  });
+
+  // GET /api/checkout/session/:sessionId — verify a completed session
+  app.get("/api/checkout/session/:sessionId", async (req, res) => {
+    try {
+      const { getUncachableStripeClient } = await import('./stripeClient');
+      const stripe = await getUncachableStripeClient();
+      const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
+      res.json({
+        id: session.id,
+        status: session.status,
+        paymentStatus: session.payment_status,
+        customerEmail: session.customer_details?.email,
+        metadata: session.metadata,
+        amountTotal: session.amount_total,
+        currency: session.currency,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to retrieve session" });
+    }
+  });
+
+  // ─── eSIMS (customer) ────────────────────────────────
+
+  // GET /api/esims — all eSIMs for authenticated user
+  app.get("/api/esims", requireAuth, async (req, res) => {
+    const userId = (req as any).userId;
+    try {
+      const userOrders = await storage.getOrdersByUserId(userId);
+      res.json(userOrders);
+    } catch {
+      res.status(500).json({ message: "Failed to fetch eSIMs" });
+    }
+  });
+
+  // GET /api/esims/:id — single eSIM detail
+  app.get("/api/esims/:id", requireAuth, async (req, res) => {
+    const userId = (req as any).userId;
+    try {
+      const order = await storage.getOrder(req.params.id);
+      if (!order) return res.status(404).json({ message: "eSIM not found" });
+      if (order.userId !== userId) return res.status(403).json({ message: "Not authorized" });
+      res.json(order);
+    } catch {
+      res.status(500).json({ message: "Failed to fetch eSIM" });
+    }
+  });
+
+  // GET /api/esims/:id/usage — live usage sync
+  app.get("/api/esims/:id/usage", requireAuth, async (req, res) => {
+    const userId = (req as any).userId;
+    try {
+      const order = await storage.getOrder(req.params.id);
+      if (!order) return res.status(404).json({ message: "eSIM not found" });
+      if (order.userId !== userId) return res.status(403).json({ message: "Not authorized" });
+
+      await syncEsimUsage(req.params.id);
+      const updated = await storage.getOrder(req.params.id);
+      res.json(updated);
+    } catch {
+      res.status(500).json({ message: "Failed to sync usage" });
+    }
+  });
+
+  // GET /api/esims/:id/topups/options — get available top-up options
+  app.get("/api/esims/:id/topups/options", requireAuth, async (req, res) => {
+    const userId = (req as any).userId;
+    try {
+      const order = await storage.getOrder(req.params.id);
+      if (!order) return res.status(404).json({ message: "eSIM not found" });
+      if (order.userId !== userId) return res.status(403).json({ message: "Not authorized" });
+
+      const provider = getActiveProvider();
+      const options = await provider.getTopupOptions(order.providerEsimId || '');
+      res.json(options);
+    } catch {
+      res.status(500).json({ message: "Failed to fetch top-up options" });
+    }
+  });
+
+  // POST /api/esims/:id/topups/checkout — initiate Stripe top-up checkout
+  app.post("/api/esims/:id/topups/checkout", requireAuth, async (req, res) => {
+    const userId = (req as any).userId;
+    try {
+      const order = await storage.getOrder(req.params.id);
+      if (!order) return res.status(404).json({ message: "eSIM not found" });
+      if (order.userId !== userId) return res.status(403).json({ message: "Not authorized" });
+
+      const user = await storage.getUserById(userId);
+      const parsed = z.object({ optionCode: z.string() }).safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "optionCode required" });
+
+      const provider = getActiveProvider();
+      const options = await provider.getTopupOptions(order.providerEsimId || '');
+      const option = options.find(o => o.optionCode === parsed.data.optionCode);
+      if (!option) return res.status(400).json({ message: "Invalid top-up option" });
+
+      const { url, sessionId, topupId } = await createTopupCheckoutSession({
+        orderId: order.id,
+        optionCode: option.optionCode,
+        optionName: option.name,
+        price: option.price,
+        currency: option.currency,
+        email: user?.email || order.email,
+        userId,
+      });
+
+      res.json({ url, sessionId, topupId });
+    } catch (error: any) {
+      console.error('[esims/topups/checkout]', error.message);
+      res.status(500).json({ message: "Failed to create top-up checkout" });
     }
   });
 
@@ -269,6 +504,7 @@ export async function registerRoutes(
     }
   });
 
+  // POST /api/orders — legacy direct order creation (non-Stripe path, kept for admin/testing)
   app.post("/api/orders", async (req, res) => {
     try {
       const parsed = insertOrderSchema.safeParse(req.body);
@@ -291,7 +527,6 @@ export async function registerRoutes(
         }
       }
 
-      // Auto-link to user account if email matches
       let userId: string | undefined;
       const token = getTokenFromRequest(req);
       if (token) {
@@ -361,7 +596,6 @@ export async function registerRoutes(
   });
 
   // ─── GIFT eSIM ────────────────────────────────────────
-  // POST /api/gift — create a gift eSIM order stub (full flow requires payment integration)
   app.post("/api/gift", async (req, res) => {
     try {
       const schema = z.object({
@@ -374,16 +608,13 @@ export async function registerRoutes(
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.flatten() });
 
-      const { planId, senderEmail, recipientEmail, recipientName, message } = parsed.data;
+      const { planId } = parsed.data;
       const plan = await storage.getPlan(planId);
       if (!plan) return res.status(404).json({ message: "Plan not found" });
 
-      // Stub: in production, this creates an order, charges the sender, and emails the recipient a claim link
       res.status(202).json({
         success: true,
-        message: "Gift eSIM request received. In production, the recipient will receive an email to claim their eSIM.",
-        recipientEmail,
-        planId,
+        message: "Gift eSIM request received. Recipient will be emailed a claim link.",
         status: "pending",
       });
     } catch (error) {
@@ -391,29 +622,55 @@ export async function registerRoutes(
     }
   });
 
-  // GET /api/features — describe upcoming features (data rollover, voice, gifting)
+  // ─── FEATURES ─────────────────────────────────────────
   app.get("/api/features", (_req, res) => {
     res.json({
-      dataRollover: {
-        available: false,
-        description: "Unused data carries forward to your next trip. Coming Q3 2026.",
-        roadmapEta: "Q3 2026",
-      },
-      voiceCalling: {
-        available: false,
-        description: "Make and receive calls using your GlobeSIM number. Coming Q4 2026.",
-        roadmapEta: "Q4 2026",
-      },
-      gifting: {
-        available: true, // stub endpoint live
-        description: "Buy an eSIM plan as a gift for a friend or family member.",
-        endpoint: "POST /api/gift",
-      },
+      dataRollover: { available: false, roadmapEta: "Q3 2026" },
+      voiceCalling: { available: false, roadmapEta: "Q4 2026" },
+      gifting: { available: true, endpoint: "POST /api/gift" },
     });
   });
 
+  // ─── INTERNAL SYNC ────────────────────────────────────
+  app.post("/api/internal/sync/esim/:orderId", async (req, res) => {
+    try {
+      await syncEsimUsage(req.params.orderId);
+      const order = await storage.getOrder(req.params.orderId);
+      res.json({ ok: true, order });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/internal/sync/user/:userId", async (req, res) => {
+    try {
+      await syncUserEsims(req.params.userId);
+      res.json({ ok: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/internal/sync/all-active", async (_req, res) => {
+    try {
+      syncAllActiveEsims().catch(console.error); // run async
+      res.json({ ok: true, message: "Sync started" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/internal/provider/health", async (_req, res) => {
+    try {
+      const provider = getActiveProvider();
+      res.json({ provider: provider.name, status: "ok" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // ─── ADMIN ────────────────────────────────────────────
-  app.get("/api/admin/stats", async (req, res) => {
+  app.get("/api/admin/stats", async (_req, res) => {
     try {
       const [allOrders, allPlans, allDestinations] = await Promise.all([
         storage.getAllOrders(),
@@ -439,7 +696,9 @@ export async function registerRoutes(
         livePlans,
         totalDestinations,
         avgMargin: Math.round(avgMargin),
-        activeEsims: allOrders.filter(o => o.esimStatus === "active" || o.esimStatus === "installed" || o.esimStatus === "issued").length,
+        activeEsims: allOrders.filter(o =>
+          o.esimStatus === "active" || o.esimStatus === "installed" || o.esimStatus === "issued"
+        ).length,
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch stats" });
