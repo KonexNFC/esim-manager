@@ -7,6 +7,7 @@ import { seedDatabase } from "./seed";
 import { WebhookHandlers } from "./webhookHandlers";
 import { handleCheckoutCompleted, handlePaymentFailed } from "./services/stripeService";
 import { storage } from "./storage";
+import { setWebhookSigningSecret, getWebhookSigningSecret } from "./webhookSecret";
 
 const app = express();
 const httpServer = createServer(app);
@@ -41,13 +42,13 @@ app.post(
 
       let event: any;
 
-      // Try signature verification using the env var first
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
+      // Try signature verification — use env var, then in-memory secret captured at startup
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || getWebhookSigningSecret() || "";
       if (webhookSecret) {
         try {
           event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
         } catch {
-          event = null; // fall through to retrieval
+          event = null; // fall through to event retrieval
         }
       }
 
@@ -177,35 +178,71 @@ app.use((req, res, next) => {
   next();
 });
 
+
 // ─── Stripe initialization ────────────────────────────────────────────────────
 async function initStripe() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    console.warn("[Stripe] DATABASE_URL not set — skipping Stripe init");
+    return;
+  }
+
+  // ── Schema migrations (stripe-replit-sync table setup) ──────────────────
   try {
     const { runMigrations } = await import("stripe-replit-sync");
-    const databaseUrl = process.env.DATABASE_URL;
-    if (!databaseUrl) {
-      console.warn("[Stripe] DATABASE_URL not set — skipping Stripe init");
-      return;
-    }
-
     await runMigrations({ databaseUrl, schema: "stripe" });
     console.log("[Stripe] Schema ready");
+  } catch (err: any) {
+    console.warn("[Stripe] Schema migration skipped:", err.message);
+  }
 
-    const { getStripeSync } = await import("./stripeClient");
-    const stripeSync = await getStripeSync();
-
+  // ── Webhook endpoint registration (direct Stripe API — resilient) ────────
+  try {
+    const { getUncachableStripeClient } = await import("./stripeClient");
+    const stripe = await getUncachableStripeClient();
     const domains = process.env.REPLIT_DOMAINS?.split(",");
+
     if (domains?.[0]) {
       const webhookUrl = `https://${domains[0]}/api/stripe/webhook`;
-      const { webhook } = await stripeSync.findOrCreateManagedWebhook(webhookUrl);
-      console.log("[Stripe] Webhook configured:", webhook?.url ?? webhookUrl);
-    }
 
-    // Async backfill — doesn't block startup
+      // List existing webhook endpoints and find ours
+      const existing = await stripe.webhookEndpoints.list({ limit: 50 });
+      const match = existing.data.find((w: any) => w.url === webhookUrl && w.status === "enabled");
+
+      if (match) {
+        console.log("[Stripe] Webhook endpoint found:", match.url);
+        // Signing secret is not retrievable after creation — rely on event retrieval fallback
+      } else {
+        // Create a fresh webhook endpoint
+        const created = await stripe.webhookEndpoints.create({
+          url: webhookUrl,
+          enabled_events: [
+            "checkout.session.completed",
+            "checkout.session.async_payment_succeeded",
+            "checkout.session.async_payment_failed",
+            "payment_intent.payment_failed",
+            "customer.created",
+            "customer.updated",
+          ],
+          description: "GlobeSIM managed webhook",
+        });
+        if ((created as any).secret) setWebhookSigningSecret((created as any).secret);
+        console.log("[Stripe] Webhook created:", created.url, "— signing secret captured");
+      }
+    }
+  } catch (err: any) {
+    console.warn("[Stripe] Webhook registration skipped:", err.message);
+  }
+
+  // ── Sync backfill (stripe-replit-sync — non-blocking) ────────────────────
+  try {
+    const { getStripeSync } = await import("./stripeClient");
+    const stripeSync = await getStripeSync();
     stripeSync.syncBackfill()
       .then(() => console.log("[Stripe] Backfill complete"))
       .catch((err: any) => console.error("[Stripe] Backfill error:", err.message));
   } catch (err: any) {
-    console.warn("[Stripe] Init skipped:", err.message);
+    console.warn("[Stripe] Sync init skipped:", err.message);
   }
 }
 
