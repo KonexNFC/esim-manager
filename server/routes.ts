@@ -316,6 +316,30 @@ export async function registerRoutes(
     }
   });
 
+  // GET /api/checkout/order-by-session/:sessionId — look up our DB order by Stripe session ID
+  // Used by the success page to poll for order readiness after webhook fulfillment
+  app.get("/api/checkout/order-by-session/:sessionId", async (req, res) => {
+    try {
+      const order = await storage.getOrderBySessionId(req.params.sessionId);
+      if (!order) return res.status(404).json({ message: "Order not found yet" });
+      // Sanitize: only return fields the frontend needs
+      res.json({
+        id: order.id,
+        status: order.status,
+        esimStatus: order.esimStatus,
+        qrCode: order.qrCode,
+        iccid: order.iccid,
+        email: order.email,
+        totalPrice: order.totalPrice,
+        currency: order.currency,
+        planId: order.planId,
+        providerEsimId: order.providerEsimId,
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: "Failed to look up order" });
+    }
+  });
+
   // ─── eSIMS (customer) ────────────────────────────────
 
   // GET /api/esims — all eSIMs for authenticated user

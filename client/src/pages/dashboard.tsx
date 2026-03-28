@@ -42,6 +42,14 @@ type EnrichedOrder = {
   dataAmountGb?: number;
   validity?: string;
   validityDays?: number;
+  // Backend usage fields (populated by provider sync)
+  providerEsimId?: string | null;
+  dataTotalMb?: number | null;
+  dataUsedMb?: number | null;
+  dataRemainingMb?: number | null;
+  daysRemaining?: number | null;
+  expiresAt?: string | null;
+  lastSyncedAt?: string | null;
 };
 
 // ─── Helpers ──────────────────────────────────────────
@@ -56,14 +64,22 @@ function statusConfig(status: string) {
   }
 }
 
-function mockDataUsed(order: EnrichedOrder): number {
-  const gb = order.dataAmountGb ?? 1;
-  if (gb >= 999) return 0;
-  const seed = order.id.charCodeAt(0) + order.id.charCodeAt(1);
-  return Math.round((seed % 60) / 100 * gb * 10) / 10;
+/** Resolve GB used from backend MB fields, falling back to 0 */
+function resolveUsedGb(order: EnrichedOrder): number {
+  if (order.dataUsedMb != null) return order.dataUsedMb / 1024;
+  return 0;
 }
 
-function daysRemaining(order: EnrichedOrder): number {
+/** Resolve total GB from backend MB field, falling back to dataAmountGb */
+function resolveTotalGb(order: EnrichedOrder): number {
+  if (order.dataTotalMb != null) return order.dataTotalMb / 1024;
+  return order.dataAmountGb ?? 1;
+}
+
+/** Resolve days remaining from backend field, falling back to validityDays */
+function resolveDaysRemaining(order: EnrichedOrder): number {
+  if (order.daysRemaining != null) return Math.max(0, order.daysRemaining);
+  // Best-effort fallback from plan validity
   if (!order.createdAt) return order.validityDays ?? 30;
   const created = new Date(order.createdAt).getTime();
   const validity = (order.validityDays ?? 30) * 24 * 60 * 60 * 1000;
@@ -154,41 +170,58 @@ function QrModal({ order, open, onClose }: { order: EnrichedOrder; open: boolean
   );
 }
 
-// ─── TopUp Modal ──────────────────────────────────────
-const topupOptions = [
-  { id: "1gb",       label: "+1 GB",        sub: "Extra data",       price: 4.99,  tag: null        },
-  { id: "3gb",       label: "+3 GB",        sub: "Extra data",       price: 9.99,  tag: "Popular"   },
-  { id: "5gb",       label: "+5 GB",        sub: "Best value",       price: 14.99, tag: "Best value" },
-  { id: "unlimited", label: "Unlimited",    sub: "No limits",        price: 24.99, tag: null        },
-  { id: "7days",     label: "+7 Days",      sub: "Extend validity",  price: 5.99,  tag: null        },
-  { id: "30days",    label: "+30 Days",     sub: "Extend validity",  price: 12.99, tag: null        },
-];
+// ─── TopUp Modal (Stripe-backed) ──────────────────────
+type TopupOption = {
+  optionCode: string;
+  name: string;
+  dataAddedMb?: number | null;
+  validityAddedDays?: number | null;
+  price: number;
+  currency: string;
+  tag?: string | null;
+};
 
 function TopupModal({ order, open, onClose }: { order: EnrichedOrder; open: boolean; onClose: () => void }) {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
 
-  const topupMutation = useMutation({
-    mutationFn: (topupType: string) =>
-      apiRequest("POST", `/api/dashboard/topup/${order.id}`, { topupType }),
-    onSuccess: () => {
-      setSuccess(true);
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/orders"] });
+  // Load real topup options from provider via backend
+  const { data: options, isLoading: optionsLoading, isError: optionsError } = useQuery<TopupOption[]>({
+    queryKey: ["/api/esims", order.id, "topups/options"],
+    queryFn: async () => {
+      const res = await fetch(`/api/esims/${order.id}/topups/options`);
+      if (!res.ok) throw new Error("Failed to load options");
+      return res.json();
     },
-    onError: () => {
-      toast({ title: "Top-up failed", description: "Please try again.", variant: "destructive" });
-    },
+    enabled: open,
+    staleTime: 60_000,
   });
 
   function handleClose() {
     setSelected(null);
-    setSuccess(false);
+    setRedirecting(false);
     onClose();
   }
 
-  const selectedOption = topupOptions.find(o => o.id === selected);
+  async function handleCheckout() {
+    if (!selected) return;
+    setRedirecting(true);
+    try {
+      const res = await apiRequest("POST", `/api/esims/${order.id}/topups/checkout`, { optionCode: selected });
+      const { url } = await res.json();
+      if (url) {
+        window.location.href = url;
+      } else {
+        throw new Error("No checkout URL returned");
+      }
+    } catch (err: any) {
+      setRedirecting(false);
+      toast({ title: "Top-up failed", description: err.message ?? "Please try again.", variant: "destructive" });
+    }
+  }
+
+  const selectedOption = options?.find(o => o.optionCode === selected);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -199,58 +232,66 @@ function TopupModal({ order, open, onClose }: { order: EnrichedOrder; open: bool
             Top Up — {order.destinationName}
           </DialogTitle>
         </DialogHeader>
-        {success ? (
-          <div className="flex flex-col items-center gap-4 py-8 text-center" data-testid="topup-success">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-              <CheckCircle className="w-8 h-8 text-emerald-500" />
-            </div>
-            <div>
-              <p className="font-bold text-xl">Top-up successful</p>
-              <p className="text-muted-foreground text-sm mt-1">Your eSIM balance has been updated.</p>
-            </div>
-            <Button onClick={handleClose} className="w-full" data-testid="button-done">Done</Button>
-          </div>
-        ) : (
-          <div className="space-y-4 pt-1">
-            <p className="text-sm text-muted-foreground">Select an add-on to apply to your eSIM:</p>
+
+        <div className="space-y-4 pt-1">
+          <p className="text-sm text-muted-foreground">Select an add-on to apply to your eSIM:</p>
+
+          {optionsLoading ? (
             <div className="grid grid-cols-2 gap-2.5">
-              {topupOptions.map(opt => (
+              {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}
+            </div>
+          ) : optionsError ? (
+            <p className="text-sm text-destructive py-4 text-center">Failed to load options. Please try again.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2.5">
+              {(options ?? []).map(opt => (
                 <button
-                  key={opt.id}
-                  className={`relative rounded-xl border p-3.5 text-left transition-all ${selected === opt.id ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "border-border hover:border-primary/40 hover:bg-muted/30"}`}
-                  onClick={() => setSelected(opt.id)}
-                  data-testid={`topup-option-${opt.id}`}
+                  key={opt.optionCode}
+                  className={`relative rounded-xl border p-3.5 text-left transition-all ${selected === opt.optionCode ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "border-border hover:border-primary/40 hover:bg-muted/30"}`}
+                  onClick={() => setSelected(opt.optionCode)}
+                  data-testid={`topup-option-${opt.optionCode}`}
                 >
                   {opt.tag && (
                     <span className="absolute -top-2 right-2 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-[9px] font-bold uppercase tracking-wide">
                       {opt.tag}
                     </span>
                   )}
-                  <p className="font-bold text-sm">{opt.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{opt.sub}</p>
+                  <p className="font-bold text-sm">{opt.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {opt.dataAddedMb ? `+${(opt.dataAddedMb / 1024).toFixed(0)} GB` : opt.validityAddedDays ? `+${opt.validityAddedDays} days` : "Unlimited"}
+                  </p>
                   <p className="text-base font-bold mt-2">${opt.price.toFixed(2)}</p>
                 </button>
               ))}
             </div>
-            {selectedOption && (
-              <div className="rounded-xl bg-primary/5 border border-primary/20 px-4 py-3 flex items-center justify-between">
-                <span className="text-sm font-medium">
-                  <span className="text-muted-foreground">Adding</span> {selectedOption.label}
-                </span>
-                <span className="font-bold">${selectedOption.price.toFixed(2)}</span>
-              </div>
-            )}
-            <Button
-              className="w-full"
-              size="lg"
-              disabled={!selected || topupMutation.isPending}
-              onClick={() => selected && topupMutation.mutate(selected)}
-              data-testid="button-confirm-topup"
-            >
-              {topupMutation.isPending ? "Processing…" : selectedOption ? `Add ${selectedOption.label} — $${selectedOption.price.toFixed(2)}` : "Select an option"}
-            </Button>
-          </div>
-        )}
+          )}
+
+          {selectedOption && (
+            <div className="rounded-xl bg-primary/5 border border-primary/20 px-4 py-3 flex items-center justify-between">
+              <span className="text-sm font-medium">
+                <span className="text-muted-foreground">Adding</span> {selectedOption.name}
+              </span>
+              <span className="font-bold">${selectedOption.price.toFixed(2)}</span>
+            </div>
+          )}
+
+          <Button
+            className="w-full"
+            size="lg"
+            disabled={!selected || redirecting || optionsLoading}
+            onClick={handleCheckout}
+            data-testid="button-confirm-topup"
+          >
+            {redirecting
+              ? "Redirecting to payment…"
+              : selectedOption
+                ? `Pay ${selectedOption.name} — $${selectedOption.price.toFixed(2)}`
+                : "Select an option"}
+          </Button>
+          <p className="text-xs text-center text-muted-foreground">
+            Secure checkout via Stripe. You'll be redirected to complete payment.
+          </p>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -263,8 +304,9 @@ function EsimCard({ order }: { order: EnrichedOrder }) {
   const sc = statusConfig(order.esimStatus);
   const StatusIcon = sc.icon;
   const isUnlimited = (order.dataAmountGb ?? 0) >= 999;
-  const used = mockDataUsed(order);
-  const days = daysRemaining(order);
+  const used = resolveUsedGb(order);
+  const total = resolveTotalGb(order);
+  const days = resolveDaysRemaining(order);
   const isActive = ["issued", "active", "installed"].includes(order.esimStatus);
   const daysLow = days <= 5 && days > 0;
 
@@ -295,7 +337,7 @@ function EsimCard({ order }: { order: EnrichedOrder }) {
 
         {/* Usage section */}
         <div className="px-5 py-4 border-b">
-          <UsageBar used={used} total={order.dataAmountGb ?? 1} isUnlimited={isUnlimited} />
+          <UsageBar used={used} total={total} isUnlimited={isUnlimited} />
         </div>
 
         {/* Meta row */}

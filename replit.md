@@ -110,18 +110,21 @@ GlobeSIM is a production-ready eSIM marketplace where users can browse destinati
 
 ## Key Features
 - **Stripe Checkout** — Full hosted payment flow with redirect to Stripe, 2-step checkout (details → upsell → Stripe)
-- **Webhook fulfillment** — checkout.session.completed triggers eSIM provisioning and email delivery
-- **Idempotent webhooks** — paymentEvents table prevents double-fulfillment
-- **Top-up via Stripe** — Authenticated users can top up active eSIMs via Stripe Checkout
-- **Provider adapter layer** — Abstract interface for any eSIM provider; mock adapter ships by default
+- **Webhook fulfillment** — checkout.session.completed triggers eSIM provisioning and email delivery; state machine: paid → fulfilling → fulfilled/fulfillment_failed
+- **Idempotent webhooks** — paymentEvents table prevents double-fulfillment; events marked 'processed' or 'failed'
+- **Fulfillment retry** — Transient provider errors (network timeouts etc.) trigger one automatic retry before marking fulfillment_failed
+- **Top-up via Stripe** — Dashboard TopupModal loads real options from provider API, redirects to Stripe Checkout; webhook fulfills topup
+- **Provider adapter layer** — Abstract interface for any eSIM provider; mock adapter with seeded-per-ICCID realistic scenarios (issued/installed/active/low-data/expiring)
+- **Real usage data** — Dashboard uses backend dataTotalMb/dataUsedMb/dataRemainingMb/daysRemaining; falls back gracefully to plan validity
 - **Usage sync** — syncEsimUsage() pulls live data from provider, alerts on low data / expiry
+- **Order polling on success** — GET /api/checkout/order-by-session/:sessionId lets success page poll for order readiness after webhook fires; shows fulfillment progress
 - **Premium landing page** with 14+ sections
 - **Customer accounts** — post-purchase, low-friction (no forced signup before checkout)
-- **eSIM dashboard** — usage tracking, status badges, QR viewer, top-up
+- **eSIM dashboard** — real usage tracking from backend, status badges, QR viewer, Stripe-backed top-up
 - **Context-aware navbar** — shows "Log In" or "Dashboard" depending on auth state
 - **Destination detail** with Data Usage Estimator
 - **Checkout** with trust badges, upsell step, and Stripe redirect
-- **Checkout Success** page — verifies session, shows install steps, links to order and dashboard
+- **Checkout Success** page — polls for order (via session ID), shows processing/fulfilled/failed states, links to order and dashboard
 - **Checkout Cancel** page — reassures user, provides retry and browse buttons
 - **Order detail** with QR code, install guide, "Go to Dashboard" CTA
 - **Admin dashboard** (5 tabs): Dashboard stats, Plans, Orders, eSIM Inventory, Margins

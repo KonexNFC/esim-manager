@@ -93,6 +93,7 @@ export const topups = pgTable("topups", {
   currency: text("currency").notNull().default("USD"),
   status: text("status").notNull().default("pending"), // pending | completed | failed
   stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+  fulfilledAt: timestamp("fulfilled_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

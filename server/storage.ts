@@ -55,6 +55,8 @@ export interface IStorage {
   getPaymentEvent(externalEventId: string): Promise<PaymentEvent | undefined>;
   createPaymentEvent(event: Partial<PaymentEvent>): Promise<PaymentEvent>;
   markPaymentEventProcessed(externalEventId: string): Promise<void>;
+  updatePaymentEventStatus(externalEventId: string, status: string): Promise<void>;
+  getOrderBySessionId(sessionId: string): Promise<Order | undefined>;
 }
 
 // ─── Order join helpers ───────────────────────────────
@@ -264,6 +266,18 @@ export class DatabaseStorage implements IStorage {
     await db.update(paymentEvents)
       .set({ status: 'processed', processedAt: new Date() })
       .where(eq(paymentEvents.externalEventId, externalEventId));
+  }
+
+  async updatePaymentEventStatus(externalEventId: string, status: string): Promise<void> {
+    await db.update(paymentEvents)
+      .set({ status })
+      .where(eq(paymentEvents.externalEventId, externalEventId));
+  }
+
+  async getOrderBySessionId(sessionId: string): Promise<Order | undefined> {
+    const [order] = await db.select().from(orders)
+      .where(eq(orders.stripeCheckoutSessionId, sessionId));
+    return order;
   }
 }
 

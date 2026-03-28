@@ -1,11 +1,25 @@
 // ─── Mock Provider Adapter ────────────────────────────────────────────────────
-// Provides realistic simulated responses for development and testing.
-// Replace with a real provider adapter when API credentials are available.
+// Provides realistic, deterministic simulated responses for dev/testing.
+// Each eSIM gets a consistent scenario seeded from its ICCID — so dashboards
+// show a variety of statuses and usage levels rather than identical cards.
 
 import type {
   ProviderAdapter, ProviderPurchaseParams, EsimProvisionResult,
   EsimUsageResult, TopupOption, TopupResult,
 } from './base';
+
+// ─── Seeded helpers ───────────────────────────────────────────────────────────
+
+function numericSeed(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+function seededRandom(seed: number, min: number, max: number): number {
+  const x = Math.sin(seed + 1) * 10000;
+  return min + (x - Math.floor(x)) * (max - min);
+}
 
 function randomIccid(): string {
   const digits = Array.from({ length: 17 }, () => Math.floor(Math.random() * 10)).join('');
@@ -16,15 +30,38 @@ function randomId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
 }
 
+// ─── Lifecycle scenarios (deterministic per ICCID) ───────────────────────────
+// Scenario is based on seed mod 5 so we get a spread of realistic states.
+
+type Scenario = {
+  status: string;
+  usagePct: number;    // 0–1 fraction of total used
+  daysRemaining: number;
+  description: string;
+};
+
+function pickScenario(seed: number): Scenario {
+  const scenarios: Scenario[] = [
+    { status: 'issued',    usagePct: 0,    daysRemaining: 30, description: 'Ready to install' },
+    { status: 'installed', usagePct: 0.05, daysRemaining: 28, description: 'Installed, not yet active' },
+    { status: 'active',    usagePct: 0.32, daysRemaining: 22, description: 'Normal active usage' },
+    { status: 'active',    usagePct: 0.85, daysRemaining: 18, description: 'Active — low data warning' },
+    { status: 'active',    usagePct: 0.55, daysRemaining: 2,  description: 'Active — expiring soon' },
+  ];
+  return scenarios[seed % scenarios.length];
+}
+
+// ─── Adapter ─────────────────────────────────────────────────────────────────
+
 export class MockProviderAdapter implements ProviderAdapter {
-  name = 'mock';
+  readonly name = 'mock';
 
   async purchaseEsim(params: ProviderPurchaseParams): Promise<EsimProvisionResult> {
-    // Simulate ~100ms provider latency
-    await new Promise(r => setTimeout(r, 100));
+    // Simulate ~80ms provider latency
+    await new Promise(r => setTimeout(r, 80));
 
     const iccid = randomIccid();
-    const providerEsimId = randomId('MOCK_ESIM');
+    const providerEsimId = randomId('MOCK');
     const dataTotalMb = Math.round(params.dataAmountGb * 1024);
 
     return {
@@ -41,21 +78,30 @@ export class MockProviderAdapter implements ProviderAdapter {
   }
 
   async getEsimStatus(providerEsimId: string): Promise<EsimUsageResult> {
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 40));
 
-    // Simulate semi-realistic usage — seed from provider ID for consistency
-    const seed = providerEsimId.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-    const dataTotalMb = 5120; // 5 GB
-    const dataUsedMb = (seed % 4096); // 0-4 GB used
+    const seed = numericSeed(providerEsimId);
+    const scenario = pickScenario(seed);
+
+    // Base total from seed: 1 GB, 3 GB, 5 GB, 10 GB, or 20 GB
+    const totalOptions = [1024, 3072, 5120, 10240, 20480];
+    const dataTotalMb = totalOptions[seed % totalOptions.length];
+    const dataUsedMb = Math.round(dataTotalMb * scenario.usagePct);
     const dataRemainingMb = Math.max(0, dataTotalMb - dataUsedMb);
-    const daysRemaining = 30 - (seed % 28);
+    const daysRemaining = scenario.daysRemaining;
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + daysRemaining);
 
+    const status = dataRemainingMb === 0
+      ? 'expired'
+      : daysRemaining === 0
+        ? 'expired'
+        : scenario.status;
+
     return {
       providerEsimId,
-      activationStatus: dataRemainingMb > 0 && daysRemaining > 0 ? 'active' : 'expired',
+      activationStatus: status,
       dataTotalMb,
       dataUsedMb,
       dataRemainingMb,
@@ -67,17 +113,17 @@ export class MockProviderAdapter implements ProviderAdapter {
 
   async getTopupOptions(_providerEsimId: string): Promise<TopupOption[]> {
     return [
-      { optionCode: '1gb',       name: '+1 GB',        dataAddedMb: 1024,  price: 3.00,  currency: 'USD', tag: undefined },
-      { optionCode: '3gb',       name: '+3 GB',        dataAddedMb: 3072,  price: 7.00,  currency: 'USD', tag: 'Popular' },
-      { optionCode: '5gb',       name: '+5 GB',        dataAddedMb: 5120,  price: 11.00, currency: 'USD', tag: undefined },
-      { optionCode: 'unlimited', name: 'Go Unlimited',  dataAddedMb: 0,     price: 15.00, currency: 'USD', tag: 'Best value' },
-      { optionCode: '7days',     name: '+7 Days',       validityAddedDays: 7, price: 5.00, currency: 'USD', tag: undefined },
-      { optionCode: '30days',    name: '+30 Days',      validityAddedDays: 30, price: 12.00, currency: 'USD', tag: undefined },
+      { optionCode: '1gb',       name: '+1 GB',        dataAddedMb: 1024,  validityAddedDays: undefined, price: 3.00,  currency: 'USD', tag: undefined },
+      { optionCode: '3gb',       name: '+3 GB',        dataAddedMb: 3072,  validityAddedDays: undefined, price: 7.00,  currency: 'USD', tag: 'Popular' },
+      { optionCode: '5gb',       name: '+5 GB',        dataAddedMb: 5120,  validityAddedDays: undefined, price: 11.00, currency: 'USD', tag: undefined },
+      { optionCode: 'unlimited', name: 'Go Unlimited', dataAddedMb: 0,     validityAddedDays: undefined, price: 15.00, currency: 'USD', tag: 'Best value' },
+      { optionCode: '7days',     name: '+7 Days',      dataAddedMb: undefined, validityAddedDays: 7,  price: 5.00,  currency: 'USD', tag: undefined },
+      { optionCode: '30days',    name: '+30 Days',     dataAddedMb: undefined, validityAddedDays: 30, price: 12.00, currency: 'USD', tag: undefined },
     ];
   }
 
   async purchaseTopup(providerEsimId: string, optionCode: string): Promise<TopupResult> {
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise(r => setTimeout(r, 80));
 
     const optionMap: Record<string, { dataAddedMb?: number; validityAddedDays?: number }> = {
       '1gb':       { dataAddedMb: 1024 },
@@ -88,14 +134,13 @@ export class MockProviderAdapter implements ProviderAdapter {
       '30days':    { validityAddedDays: 30 },
     };
 
-    const option = optionMap[optionCode] || { dataAddedMb: 1024 };
+    const option = optionMap[optionCode] ?? { dataAddedMb: 1024 };
 
     return {
       providerTopupId: randomId('TOPUP'),
       status: 'completed',
       dataAddedMb: option.dataAddedMb,
       validityAddedDays: option.validityAddedDays,
-      updatedDataRemainingMb: option.dataAddedMb ? option.dataAddedMb + 2048 : undefined,
     };
   }
 }
