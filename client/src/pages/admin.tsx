@@ -20,13 +20,14 @@ import {
 import {
   LayoutDashboard, Package, ShoppingCart, Wifi, TrendingUp,
   DollarSign, Globe, BarChart3, Pause, Play, HelpCircle,
-  Send, RotateCcw, Download, ChevronRight, ArrowLeft, Smartphone
+  Send, RotateCcw, Download, ChevronRight, ArrowLeft, Smartphone, LogOut
 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { useLocation } from "wouter";
 import type { Plan, Order } from "@shared/schema";
 
 type AdminStats = {
@@ -495,7 +496,15 @@ function MarginsTab() {
 }
 
 export default function Admin() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, logout } = useAuth();
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+
+  async function handleLogout() {
+    await logout();
+    navigate("/");
+    toast({ title: "Signed out" });
+  }
 
   // ── Auth gate ──────────────────────────────────────────
   if (authLoading) {
@@ -545,6 +554,16 @@ export default function Admin() {
           <p className="text-muted-foreground text-sm mt-1">
             Manage plans, orders, and eSIM inventory
           </p>
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="text-right hidden sm:block">
+            <p className="text-sm font-medium">{user.name}</p>
+            <p className="text-xs text-muted-foreground">{user.email}</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleLogout} data-testid="button-admin-logout">
+            <LogOut className="w-3.5 h-3.5 mr-1.5" />
+            Sign out
+          </Button>
         </div>
       </div>
 
