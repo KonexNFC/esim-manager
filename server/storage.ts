@@ -1,4 +1,4 @@
-import { eq, and, isNotNull } from "drizzle-orm";
+import { eq, and, or, isNull, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import {
@@ -157,7 +157,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async linkOrdersToUser(email: string, userId: string): Promise<void> {
-    await db.update(orders).set({ userId }).where(and(eq(orders.email, email), eq(orders.userId, null as any)));
+    // Match rows where userId is NULL or empty string (empty string from Stripe metadata fallback)
+    const unclaimedOrders = or(isNull(orders.userId), eq(orders.userId, ""));
+    await db.update(orders).set({ userId }).where(and(eq(orders.email, email), unclaimedOrders));
+    // Find the newly-claimed order IDs and link their eSIMs too
+    const claimedOrders = await db.select({ id: orders.id }).from(orders).where(eq(orders.userId, userId));
+    if (claimedOrders.length > 0) {
+      const orderIds = claimedOrders.map(o => o.id);
+      const unclaimedEsims = or(isNull(esims.userId), eq(esims.userId, ""));
+      for (const oid of orderIds) {
+        await db.update(esims).set({ userId }).where(and(eq(esims.orderId, oid), unclaimedEsims));
+      }
+    }
   }
 
   // ─── Destinations ─────────────────────────────────
