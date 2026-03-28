@@ -5,20 +5,20 @@ type Theme = "light" | "dark";
 const ThemeContext = createContext<{
   theme: Theme;
   toggleTheme: () => void;
-}>({ theme: "dark", toggleTheme: () => {} });
+}>({ theme: "light", toggleTheme: () => {} });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem("globe_theme") as Theme) || "dark";
+      return (localStorage.getItem("globe_theme") as Theme) || "light";
     }
-    return "dark";
+    return "light";
   });
 
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove("light", "dark");
-    root.classList.add(theme);
+    if (theme === "dark") root.classList.add("dark");
     localStorage.setItem("globe_theme", theme);
   }, [theme]);
 
