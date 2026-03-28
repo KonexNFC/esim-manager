@@ -12,6 +12,7 @@ import { eq } from 'drizzle-orm';
 import { getActiveProvider } from '../providers/adapters';
 import {
   sendPurchaseConfirmation, sendEsimReadyEmail, sendTopupConfirmation,
+  sendFulfillmentFailedEmail,
 } from './notifications';
 
 const TRANSIENT_RETRY_DELAY_MS = 1500;
@@ -183,6 +184,17 @@ async function markFulfillmentFailed(orderId: string, reason: string) {
   await db.update(orders)
     .set({ status: 'fulfillment_failed', esimStatus: 'issued' })
     .where(eq(orders.id, orderId));
+
+  // Notify customer their eSIM could not be provisioned
+  try {
+    const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+    if (order) {
+      const user = order.userId
+        ? (await db.select().from(users).where(eq(users.id, order.userId)))[0]
+        : null;
+      sendFulfillmentFailedEmail({ email: order.email, name: user?.name, orderId, reason }).catch(console.error);
+    }
+  } catch { /* non-fatal */ }
 }
 
 function isTransientError(err: any): boolean {

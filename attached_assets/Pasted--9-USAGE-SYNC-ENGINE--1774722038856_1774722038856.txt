@@ -1,0 +1,284 @@
+==================================================
+9. USAGE SYNC ENGINE
+==================================================
+
+Implement usage sync services.
+
+Required functions:
+- syncEsimUsage(esimId)
+- syncUserEsims(userId)
+- syncAllActiveEsims()
+
+Each sync should:
+- call provider adapter
+- update status
+- update data used / remaining
+- update days remaining / expiry
+- write sync logs
+- gracefully handle errors
+
+Add support for:
+- manual sync button in dashboard later
+- scheduled sync jobs / cron compatibility
+
+Use a service layer so a scheduler can call:
+runUsageSyncJob()
+
+==================================================
+10. TOP-UP INTEGRATION
+==================================================
+
+Connect top-up UI to backend.
+
+Required flow:
+A. Customer clicks Top Up
+B. Backend gets provider-compatible top-up options
+C. Customer selects top-up
+D. Stripe checkout session created for top-up
+E. Payment succeeds
+F. Webhook triggers top-up fulfillment
+G. eSIM record updates
+H. Dashboard reflects updated balance
+
+Build endpoints/services:
+- getTopupOptions(esimId)
+- createTopupCheckoutSession(esimId, optionCode)
+- fulfillTopupPurchase(orderId)
+
+==================================================
+11. ACCOUNT CREATION / ORDER LINKING
+==================================================
+
+Implement robust account handling.
+
+Rules:
+- If logged in customer buys, attach order to existing user
+- If guest buys and email does not exist, create user
+- If guest buys and email already exists, attach order to existing user
+- If using magic links later, prepare auth-safe flow
+
+Success page should route customer to:
+- dashboard
+- order details
+- install eSIM
+- view QR code
+
+==================================================
+12. API ENDPOINTS
+==================================================
+
+Create clean backend endpoints such as:
+
+Public / checkout:
+- POST /api/checkout/plan
+- POST /api/checkout/topup
+- POST /api/stripe/webhook
+
+Customer:
+- GET /api/me
+- GET /api/dashboard
+- GET /api/esims
+- GET /api/esims/:id
+- GET /api/esims/:id/usage
+- GET /api/esims/:id/topups/options
+- POST /api/esims/:id/topups/checkout
+- GET /api/orders
+- GET /api/orders/:id
+
+Admin / internal utilities:
+- POST /api/internal/sync/esim/:id
+- POST /api/internal/sync/user/:id
+- POST /api/internal/sync/all-active
+- POST /api/internal/provider/import-plans
+- GET /api/internal/provider/health
+
+Protect customer routes with auth.
+Protect internal routes appropriately.
+
+==================================================
+13. SUCCESS / FAILURE STATES
+==================================================
+
+Implement proper UX handling for:
+- payment success
+- payment failure
+- fulfillment failure
+- provider temporary error
+- partially fulfilled order
+- top-up pending
+- top-up failed
+
+Examples:
+Payment successful, provisioning in progress
+Your eSIM is being prepared. Refresh shortly or check your email.
+
+Provider issue
+Your payment was successful, but activation is delayed. We’re processing your eSIM and will update your dashboard shortly.
+
+==================================================
+14. EMAIL / NOTIFICATION SERVICE LAYER
+==================================================
+
+Create notification service abstractions for:
+- purchase confirmation
+- fulfillment confirmation
+- top-up confirmation
+- low data alert
+- expiry reminder
+- payment failure / action required
+- magic login / dashboard access
+
+If live email provider is not wired yet, implement service placeholders and mock sends with logs.
+
+Build methods like:
+- sendPurchaseConfirmation(...)
+- sendEsimReadyEmail(...)
+- sendTopupConfirmation(...)
+- sendLowDataAlert(...)
+- sendExpiryReminder(...)
+
+==================================================
+15. LIFECYCLE AUTOMATION READINESS
+==================================================
+
+Prepare backend logic for lifecycle triggers.
+
+Create services that can later run by cron or job worker:
+- findEsimsLowOnData(thresholdPercent)
+- findEsimsExpiringSoon(days)
+- findExpiredEsimsNeedingRenewal()
+
+For each, create notification jobs / placeholder hooks.
+
+Support these future triggers:
+- usage below 20%
+- 2 days left
+- expired yesterday
+- top-up available
+- reorder recommended
+
+==================================================
+16. PLAN CATALOG / PRICING SOURCE
+==================================================
+
+Create a structured internal plan catalog.
+
+Support:
+- static local plan seed data now
+- provider sync later
+- plan lookup by destination / region / data / duration
+
+Build plan search logic used by:
+- landing page plan finder
+- checkout
+- dashboard reorder / buy again
+- provider fulfillment mapping
+
+Ensure plans can map to provider plan codes.
+
+==================================================
+17. SECURITY / RELIABILITY
+==================================================
+
+Implement:
+- Stripe secret usage via environment variables
+- webhook signature verification
+- auth protection for customer endpoints
+- idempotent webhook processing
+- server-side validation for plan and top-up pricing
+- never trust frontend price input
+- error logging
+- safe fallbacks
+
+Do not let client-side price manipulation affect order totals.
+Use server-side plan lookup only.
+
+==================================================
+18. ENVIRONMENT VARIABLES
+==================================================
+
+Prepare environment variable usage for:
+
+Stripe:
+- STRIPE_SECRET_KEY
+- STRIPE_WEBHOOK_SECRET
+- STRIPE_PUBLISHABLE_KEY
+
+Provider:
+- PROVIDER_NAME
+- PROVIDER_API_KEY
+- PROVIDER_API_SECRET
+- PROVIDER_BASE_URL
+
+App:
+- APP_BASE_URL
+- APP_ENV
+
+Email if needed later:
+- EMAIL_PROVIDER_API_KEY
+- EMAIL_FROM_ADDRESS
+
+==================================================
+19. FRONTEND HOOKUP
+==================================================
+
+Connect the existing frontend to the new backend flows.
+
+Required updates:
+- plan purchase buttons call backend checkout session endpoint
+- top-up buttons call top-up checkout session endpoint
+- success page reflects real payment / fulfillment state
+- dashboard reads real/mocked backend order and eSIM data
+- order history reflects Stripe-backed orders
+- eSIM detail page shows provider-backed sync data when available
+
+Do not redesign the whole frontend.
+Only wire it properly.
+
+==================================================
+20. TEST DATA / DEV EXPERIENCE
+==================================================
+
+Seed realistic test data for:
+- sample plans
+- one test user
+- active eSIM
+- expired eSIM
+- sample order history
+- sample top-up history
+
+Ensure local development can run even without live provider credentials by using the mock adapter.
+
+==================================================
+21. IMPLEMENTATION QUALITY
+==================================================
+
+Code must be:
+- modular
+- readable
+- production-minded
+- easy to swap providers
+- easy to replace mock data with live API calls
+- structured for future background jobs
+
+Avoid hard-coding provider-specific logic inside controllers.
+Keep business logic in services and adapters.
+
+==================================================
+22. DELIVERABLE
+==================================================
+
+Return a working GlobeSIM backend/payment integration layer with:
+- Stripe checkout for plan purchases
+- Stripe checkout for top-ups
+- webhook-driven order confirmation
+- user/order linking
+- provider abstraction layer
+- mock provider adapter
+- fulfillment logic
+- usage sync services
+- top-up fulfillment
+- real database-backed order/esim records
+- frontend wired to backend
+
+The result should make GlobeSIM feel like a real commerce platform, not a static prototype.

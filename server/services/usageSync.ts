@@ -1,6 +1,6 @@
 // ─── Usage Sync Service ───────────────────────────────────────────────────────
 // Syncs eSIM usage from the active provider.
-// Call syncAllActiveEsims() from a cron job for periodic background sync.
+// Call runUsageSyncJob() from a cron job or scheduler for periodic background sync.
 
 import { db } from '../storage';
 import { orders, esims, providerSyncLogs } from '@shared/schema';
@@ -11,6 +11,8 @@ import { sendLowDataAlert, sendExpiryReminder } from './notifications';
 const LOW_DATA_THRESHOLD_PCT = 0.2;
 const EXPIRY_REMINDER_DAYS = 2;
 
+// ─── Per-eSIM sync ────────────────────────────────────────────────────────────
+
 export async function syncEsimUsage(orderId: string): Promise<void> {
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
   if (!order?.providerEsimId) return;
@@ -20,7 +22,6 @@ export async function syncEsimUsage(orderId: string): Promise<void> {
   try {
     const sync = await provider.syncEsim(order.providerEsimId);
 
-    // Update orders table
     await db.update(orders).set({
       esimStatus: sync.activationStatus,
       dataTotalMb: sync.dataTotalMb,
@@ -59,12 +60,11 @@ export async function syncEsimUsage(orderId: string): Promise<void> {
 
     // Lifecycle alerts
     const usagePct = sync.dataTotalMb > 0 ? (sync.dataUsedMb / sync.dataTotalMb) : 0;
-
     if (sync.activationStatus === 'active' && usagePct >= (1 - LOW_DATA_THRESHOLD_PCT)) {
-      await sendLowDataAlert(order.email, orderId, sync.dataRemainingMb);
+      await sendLowDataAlert(order.email, orderId, sync.dataRemainingMb).catch(console.error);
     }
     if (sync.activationStatus === 'active' && sync.daysRemaining <= EXPIRY_REMINDER_DAYS) {
-      await sendExpiryReminder(order.email, orderId, sync.daysRemaining);
+      await sendExpiryReminder(order.email, orderId, sync.daysRemaining).catch(console.error);
     }
   } catch (err: any) {
     console.error(`[UsageSync] Failed for order ${orderId}:`, err.message);
@@ -75,9 +75,11 @@ export async function syncEsimUsage(orderId: string): Promise<void> {
       requestSummary: `syncEsim ${order.providerEsimId}`,
       responseSummary: err.message,
       status: 'error',
-    });
+    }).catch(() => {});
   }
 }
+
+// ─── Batch sync ───────────────────────────────────────────────────────────────
 
 export async function syncUserEsims(userId: string): Promise<void> {
   const userOrders = await db
@@ -95,13 +97,29 @@ export async function syncAllActiveEsims(): Promise<void> {
     .where(isNotNull(orders.providerEsimId));
 
   console.log(`[UsageSync] Syncing ${activeOrders.length} eSIMs...`);
-  await Promise.allSettled(activeOrders.map(o => syncEsimUsage(o.id)));
-  console.log(`[UsageSync] Done`);
+  const results = await Promise.allSettled(activeOrders.map(o => syncEsimUsage(o.id)));
+  const failed = results.filter(r => r.status === 'rejected').length;
+  console.log(`[UsageSync] Done. ${activeOrders.length - failed} ok, ${failed} failed.`);
+}
+
+// ─── Scheduler entry point ────────────────────────────────────────────────────
+// Call this from a cron job, worker, or setInterval:
+//   import { runUsageSyncJob } from './services/usageSync';
+//   setInterval(runUsageSyncJob, 15 * 60 * 1000); // every 15 min
+
+export async function runUsageSyncJob(): Promise<void> {
+  console.log(`[UsageSyncJob] Starting scheduled sync at ${new Date().toISOString()}`);
+  try {
+    await syncAllActiveEsims();
+    console.log(`[UsageSyncJob] Scheduled sync complete`);
+  } catch (err: any) {
+    console.error(`[UsageSyncJob] Sync job failed:`, err.message);
+  }
 }
 
 // ─── Lifecycle helpers ────────────────────────────────────────────────────────
 
-export async function findEsimsLowOnData(thresholdPct = 0.2) {
+export async function findEsimsLowOnData(thresholdPct = LOW_DATA_THRESHOLD_PCT) {
   const all = await db.select().from(orders).where(isNotNull(orders.providerEsimId));
   return all.filter(o =>
     o.dataTotalMb && o.dataTotalMb > 0 &&
@@ -109,7 +127,7 @@ export async function findEsimsLowOnData(thresholdPct = 0.2) {
   );
 }
 
-export async function findEsimsExpiringSoon(days = 2) {
+export async function findEsimsExpiringSoon(days = EXPIRY_REMINDER_DAYS) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + days);
   const all = await db.select().from(orders).where(isNotNull(orders.expiresAt));
@@ -121,3 +139,6 @@ export async function findExpiredEsims() {
   const all = await db.select().from(orders).where(isNotNull(orders.expiresAt));
   return all.filter(o => o.expiresAt && o.expiresAt < now && o.esimStatus !== 'expired');
 }
+
+// Alias matching spec naming
+export const findExpiredEsimsNeedingRenewal = findExpiredEsims;

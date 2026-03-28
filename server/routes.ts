@@ -14,7 +14,7 @@ import {
   createTopupCheckoutSession,
   getStripePublishableKey as _getStripePublishableKey,
 } from "./services/stripeService";
-import { syncEsimUsage, syncUserEsims, syncAllActiveEsims } from "./services/usageSync";
+import { syncEsimUsage, syncUserEsims, syncAllActiveEsims, runUsageSyncJob, findEsimsLowOnData, findEsimsExpiringSoon, findExpiredEsimsNeedingRenewal } from "./services/usageSync";
 import { getActiveProvider } from "./providers/adapters";
 
 // ─── Schemas ─────────────────────────────────────────
@@ -122,6 +122,18 @@ export async function registerRoutes(
     }
   });
 
+  // GET /api/me — canonical alias matching spec (Section 12)
+  app.get("/api/me", requireAuth, async (req, res) => {
+    const userId = (req as any).userId;
+    try {
+      const user = await storage.getUserById(userId);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      res.json({ id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin, authProvider: user.authProvider });
+    } catch {
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
   // POST /api/admin/promote — grant admin role to a user by email
   // Protected by ADMIN_SETUP_SECRET env var (for initial bootstrapping)
   // Once you have at least one admin, manage roles via PATCH /api/admin/users/:id
@@ -189,6 +201,36 @@ export async function registerRoutes(
   });
 
   // ─── DASHBOARD ───────────────────────────────────────
+
+  // GET /api/dashboard — full user dashboard summary (orders + esims + stats)
+  app.get("/api/dashboard", requireAuth, async (req, res) => {
+    const userId = (req as any).userId;
+    try {
+      const [user, userOrders] = await Promise.all([
+        storage.getUserById(userId),
+        storage.getOrdersByUserId(userId),
+      ]);
+      const esimOrders = userOrders.filter(o => o.status === 'fulfilled' || o.esimStatus !== 'issued');
+      const totalSpent = userOrders.reduce((sum, o) => sum + o.totalPrice, 0);
+      const activeEsims = userOrders.filter(o =>
+        o.esimStatus === 'active' || o.esimStatus === 'installed' || o.esimStatus === 'issued'
+      ).length;
+      res.json({
+        user: user ? { id: user.id, name: user.name, email: user.email } : null,
+        stats: {
+          totalOrders: userOrders.length,
+          activeEsims,
+          totalSpent: Math.round(totalSpent * 100) / 100,
+          currency: 'USD',
+        },
+        orders: userOrders,
+        esims: esimOrders,
+      });
+    } catch {
+      res.status(500).json({ message: "Failed to fetch dashboard" });
+    }
+  });
+
   app.get("/api/dashboard/orders", requireAuth, async (req, res) => {
     const userId = (req as any).userId;
     try {
@@ -727,6 +769,98 @@ export async function registerRoutes(
     try {
       const provider = getActiveProvider();
       res.json({ provider: provider.name, status: "ok" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // POST /api/internal/provider/import-plans — fetch provider plan catalog and upsert into DB
+  app.post("/api/internal/provider/import-plans", requireAdmin, async (req, res) => {
+    try {
+      const countryCode = req.body?.countryCode as string | undefined;
+      const provider = getActiveProvider();
+      const providerPlans = await provider.getSupportedPlans(countryCode);
+      const imported: string[] = [];
+
+      for (const pp of providerPlans) {
+        // Find destination by region or name match (best-effort)
+        const destinations = await storage.getDestinations();
+        const dest = destinations.find(d =>
+          d.name.toLowerCase() === pp.destination.toLowerCase() ||
+          d.region.toLowerCase() === pp.region.toLowerCase()
+        );
+        if (!dest) continue;
+
+        // Check if plan already exists by externalPlanCode
+        const existing = (await storage.getAllPlans()).find(p => p.externalPlanCode === pp.providerPlanCode);
+        if (existing) {
+          await storage.updatePlan(existing.id, {
+            isActive: pp.isActive,
+            price: pp.priceMinor / 100,
+            planStatus: pp.isActive ? 'live' : 'archived',
+          });
+          imported.push(`updated:${pp.providerPlanCode}`);
+        } else {
+          const dataGb = pp.dataMb / 1024;
+          await storage.createPlan({
+            destinationId: dest.id,
+            externalPlanCode: pp.providerPlanCode,
+            name: pp.name,
+            dataAmount: dataGb >= 1 ? `${dataGb} GB` : `${pp.dataMb} MB`,
+            dataAmountGb: dataGb,
+            validity: `${pp.durationDays} days`,
+            validityDays: pp.durationDays,
+            price: pp.priceMinor / 100,
+            currency: pp.currency,
+            coverage: pp.destination,
+            features: [],
+            planStatus: pp.isActive ? 'live' : 'archived',
+            isActive: pp.isActive,
+            provider: provider.name,
+          });
+          imported.push(`created:${pp.providerPlanCode}`);
+        }
+      }
+
+      res.json({ ok: true, provider: provider.name, totalFromProvider: providerPlans.length, imported });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // POST /api/internal/sync/run-job — scheduler-compatible single entry point
+  app.post("/api/internal/sync/run-job", requireAdmin, async (_req, res) => {
+    runUsageSyncJob().catch(console.error); // fire-and-forget
+    res.json({ ok: true, message: "Sync job triggered" });
+  });
+
+  // GET /api/internal/lifecycle/low-data — eSIMs with <20% data remaining
+  app.get("/api/internal/lifecycle/low-data", requireAdmin, async (req, res) => {
+    try {
+      const threshold = parseFloat(req.query.threshold as string) || 0.2;
+      const result = await findEsimsLowOnData(threshold);
+      res.json({ count: result.length, esims: result });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // GET /api/internal/lifecycle/expiring — eSIMs expiring within N days
+  app.get("/api/internal/lifecycle/expiring", requireAdmin, async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 2;
+      const result = await findEsimsExpiringSoon(days);
+      res.json({ count: result.length, esims: result });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // GET /api/internal/lifecycle/expired — eSIMs that have expired
+  app.get("/api/internal/lifecycle/expired", requireAdmin, async (req, res) => {
+    try {
+      const result = await findExpiredEsimsNeedingRenewal();
+      res.json({ count: result.length, esims: result });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
