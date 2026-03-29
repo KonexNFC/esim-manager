@@ -42,6 +42,17 @@ type ProviderBreakdownEntry = {
   marginPct: number;
 };
 
+type TopPlanEntry = {
+  planId: string;
+  planName: string;
+  destinationName: string;
+  orderCount: number;
+  revenue: number;
+  cost: number;
+  profit: number;
+  marginPct: number;
+};
+
 type AdminStats = {
   totalRevenue: number;
   totalOrders: number;
@@ -54,6 +65,7 @@ type AdminStats = {
   avgProfitPerOrder: number;
   activeEsims: number;
   providerBreakdown: ProviderBreakdownEntry[];
+  topPerformingPlans: TopPlanEntry[];
 };
 
 type AdminSettings = {
@@ -162,7 +174,7 @@ function DashboardTab() {
       {/* ── Primary profit metrics ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Revenue" value={`$${(stats?.totalRevenue || 0).toFixed(2)}`} icon={DollarSign} />
-        <StatCard title="Profit" value={`$${(stats?.totalProfit || 0).toFixed(2)}`} icon={TrendingUp} />
+        <StatCard title="Net Profit" value={`$${(stats?.totalProfit || 0).toFixed(2)}`} icon={TrendingUp} />
         <StatCard title="Margin %" value={`${(stats?.weightedMargin || 0).toFixed(1)}`} icon={BarChart3} suffix="%" />
         <StatCard title="Total Cost" value={`$${(stats?.totalCost || 0).toFixed(2)}`} icon={TrendingDown} />
       </div>
@@ -211,6 +223,58 @@ function DashboardTab() {
                     <span className="text-right text-muted-foreground text-xs">{row.orderCount}</span>
                     <span className="text-right text-xs">${row.revenue.toFixed(2)}</span>
                     <span className={`text-right text-xs font-semibold ${profitColor}`}>
+                      ${row.profit.toFixed(2)}
+                    </span>
+                    <span className={`text-right text-xs font-bold ${marginColor}`}>
+                      {row.marginPct.toFixed(1)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </Card>
+
+      {/* ── Top Performing Plans ── */}
+      <Card className="p-5">
+        <h3 className="font-semibold text-sm mb-4 flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-primary" />
+          Top Performing Plans
+        </h3>
+        {!stats?.topPerformingPlans || stats.topPerformingPlans.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No order data yet — plan performance will appear after purchases.</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-5 gap-2 text-xs font-medium text-muted-foreground mb-1 px-2">
+              <span className="col-span-2">Plan</span>
+              <span className="text-right">Orders</span>
+              <span className="text-right">Net Profit</span>
+              <span className="text-right">Margin</span>
+            </div>
+            <div className="divide-y divide-border rounded-lg border overflow-hidden">
+              {stats.topPerformingPlans.map((row, idx) => {
+                const marginColor =
+                  row.marginPct >= 50 ? "text-emerald-600 dark:text-emerald-400"
+                  : row.marginPct >= 30 ? "text-yellow-600 dark:text-yellow-400"
+                  : "text-red-600 dark:text-red-400";
+                return (
+                  <div
+                    key={row.planId}
+                    className="grid grid-cols-5 gap-2 items-center px-2 py-2.5 hover:bg-muted/40 transition-colors"
+                    data-testid={`row-top-plan-${row.planId}`}
+                  >
+                    <div className="col-span-2 min-w-0 flex items-center gap-2">
+                      <span className="text-xs font-mono text-muted-foreground w-4 flex-shrink-0">#{idx + 1}</span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium truncate">{row.planName}</p>
+                        {row.destinationName && (
+                          <p className="text-[10px] text-muted-foreground truncate">{row.destinationName}</p>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-right text-xs text-muted-foreground">{row.orderCount}</span>
+                    <span className="text-right text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                       ${row.profit.toFixed(2)}
                     </span>
                     <span className={`text-right text-xs font-bold ${marginColor}`}>
@@ -542,65 +606,86 @@ function PlansTab() {
         const isExpanded = expandedPlanId === plan.id;
         const marginColor = margin === null ? "" : margin >= 50 ? "text-emerald-600 dark:text-emerald-400" : margin >= 30 ? "text-yellow-600 dark:text-yellow-400" : "text-red-600 dark:text-red-400";
 
+        // Profitability border: green ≥30%, yellow 0–30%, red <0%, neutral = no cost
+        const borderClass =
+          margin === null ? ""
+          : margin >= 30 ? "border-l-4 border-l-emerald-400 dark:border-l-emerald-500"
+          : margin >= 0  ? "border-l-4 border-l-yellow-400 dark:border-l-yellow-500"
+          : "border-l-4 border-l-red-400 dark:border-l-red-500";
+
         return (
-          <Card key={plan.id} className="p-4" data-testid={`card-admin-plan-${plan.id}`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <Card key={plan.id} className={`p-4 ${borderClass}`} data-testid={`card-admin-plan-${plan.id}`}>
+            {/* ── Top row: name + status badges + actions ── */}
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
+                {/* Title + status */}
+                <div className="flex items-center gap-2 flex-wrap mb-2">
                   <h3 className="font-semibold text-sm">{plan.name}</h3>
                   {getStatusBadge(plan.planStatus)}
-                  <Badge variant="outline" className="text-[10px] font-mono" data-testid={`badge-provider-${plan.id}`}>
-                    {plan.provider || "manual"}
-                  </Badge>
-                  <Badge
-                    variant="outline"
-                    className={`text-[10px] gap-0.5 cursor-default ${isAuto ? "border-violet-300 text-violet-700 dark:text-violet-300" : "border-muted text-muted-foreground"}`}
-                    data-testid={`badge-pricing-mode-${plan.id}`}
-                  >
-                    {isAuto ? <Zap className="w-2.5 h-2.5" /> : <Wrench className="w-2.5 h-2.5" />}
-                    {isAuto ? "Auto" : "Manual"}
-                  </Badge>
-                  {margin !== null && (
-                    <Badge variant="outline" className={`text-[10px] ${marginColor}`} data-testid={`badge-profit-pct-${plan.id}`}>
-                      {Math.round(margin)}% profit
+                  {plan.provider && plan.provider !== 'manual' && (
+                    <Badge variant="outline" className="text-[10px] font-mono" data-testid={`badge-provider-${plan.id}`}>
+                      {plan.provider}
                     </Badge>
                   )}
                 </div>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5 flex-wrap">
+
+                {/* Spec line */}
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
                   <span>{plan.dataAmount}</span>
-                  <span>|</span>
+                  <span className="opacity-40">·</span>
                   <span>{plan.validity}</span>
-                  <span>|</span>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="flex items-center gap-0.5 cursor-help">
-                        Retail: <span className="font-medium text-foreground">${plan.price.toFixed(2)}</span>
-                        {isAuto && <Zap className="w-2.5 h-2.5 text-violet-500 ml-0.5" />}
-                        <HelpCircle className="w-3 h-3" />
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {isAuto ? `Auto-computed: cost ÷ (1 − margin)` : "Manually set retail price"}
-                    </TooltipContent>
-                  </Tooltip>
-                  {plan.wholesaleCost != null && plan.wholesaleCost > 0 && (
-                    <span>Cost: ${plan.wholesaleCost.toFixed(2)}</span>
-                  )}
+                </div>
+
+                {/* ── Pricing metrics row ── */}
+                <div className="flex items-center gap-4 flex-wrap">
+                  {/* Cost */}
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Cost</span>
+                    <span className="text-sm font-semibold" data-testid={`text-cost-${plan.id}`}>
+                      {plan.wholesaleCost != null && plan.wholesaleCost > 0 ? `$${plan.wholesaleCost.toFixed(2)}` : "—"}
+                    </span>
+                  </div>
+
+                  <span className="text-muted-foreground opacity-30 text-lg font-thin">|</span>
+
+                  {/* Retail */}
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium flex items-center gap-0.5">
+                      Retail {isAuto && <Zap className="w-2.5 h-2.5 text-violet-500" />}
+                    </span>
+                    <span className="text-sm font-semibold" data-testid={`text-retail-${plan.id}`}>
+                      ${plan.price.toFixed(2)}
+                    </span>
+                  </div>
+
+                  <span className="text-muted-foreground opacity-30 text-lg font-thin">|</span>
+
+                  {/* Margin % */}
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Margin</span>
+                    <span className={`text-sm font-bold ${marginColor || "text-muted-foreground"}`} data-testid={`text-margin-${plan.id}`}>
+                      {margin !== null ? `${Math.round(margin)}%` : "—"}
+                    </span>
+                  </div>
+
+                  <span className="text-muted-foreground opacity-30 text-lg font-thin">|</span>
+
+                  {/* Pricing Mode */}
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Pricing Mode</span>
+                    <span
+                      className={`text-xs font-semibold flex items-center gap-0.5 ${isAuto ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground"}`}
+                      data-testid={`badge-pricing-mode-${plan.id}`}
+                    >
+                      {isAuto ? <><Zap className="w-3 h-3" /> Auto</> : <><Wrench className="w-3 h-3" /> Manual</>}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-                {/* Edit button */}
-                <Button
-                  size="sm"
-                  variant={isExpanded ? "secondary" : "outline"}
-                  onClick={() => setExpandedPlanId(isExpanded ? null : plan.id)}
-                  data-testid={`button-edit-plan-${plan.id}`}
-                >
-                  <Settings className="w-3.5 h-3.5 mr-1" />
-                  {isExpanded ? "Close" : "Edit pricing"}
-                </Button>
-                {/* Pricing Mode toggle */}
+              {/* ── Actions ── */}
+              <div className="flex items-center gap-2 flex-shrink-0 flex-wrap sm:flex-col sm:items-end">
+                {/* Auto Pricing toggle */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -615,37 +700,50 @@ function PlansTab() {
                       data-testid={`button-toggle-pricing-mode-${plan.id}`}
                     >
                       {isAuto ? <Zap className="w-3.5 h-3.5 mr-1" /> : <Wrench className="w-3.5 h-3.5 mr-1" />}
-                      {isAuto ? "Auto" : "Manual"}
+                      {isAuto ? "Auto Pricing ON" : "Auto Pricing OFF"}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {isAuto ? "Switch to manual pricing" : "Switch to auto pricing"}
+                    {isAuto ? "Click to switch to manual pricing" : "Click to enable auto pricing (cost ÷ (1 − margin))"}
                   </TooltipContent>
                 </Tooltip>
-                {/* Plan status toggle */}
-                {plan.planStatus === "live" ? (
+
+                <div className="flex gap-2">
+                  {/* Edit pricing button */}
                   <Button
                     size="sm"
-                    variant="outline"
-                    onClick={() => updateMutation.mutate({ id: plan.id, updates: { planStatus: "paused" } })}
-                    disabled={updateMutation.isPending}
-                    data-testid={`button-pause-plan-${plan.id}`}
+                    variant={isExpanded ? "secondary" : "outline"}
+                    onClick={() => setExpandedPlanId(isExpanded ? null : plan.id)}
+                    data-testid={`button-edit-plan-${plan.id}`}
                   >
-                    <Pause className="w-3.5 h-3.5 mr-1" />
-                    Pause
+                    <Settings className="w-3.5 h-3.5 mr-1" />
+                    {isExpanded ? "Close" : "Edit"}
                   </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="default"
-                    onClick={() => updateMutation.mutate({ id: plan.id, updates: { planStatus: "live" } })}
-                    disabled={updateMutation.isPending}
-                    data-testid={`button-activate-plan-${plan.id}`}
-                  >
-                    <Play className="w-3.5 h-3.5 mr-1" />
-                    Activate
-                  </Button>
-                )}
+                  {/* Plan status toggle */}
+                  {plan.planStatus === "live" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => updateMutation.mutate({ id: plan.id, updates: { planStatus: "paused" } })}
+                      disabled={updateMutation.isPending}
+                      data-testid={`button-pause-plan-${plan.id}`}
+                    >
+                      <Pause className="w-3.5 h-3.5 mr-1" />
+                      Pause
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => updateMutation.mutate({ id: plan.id, updates: { planStatus: "live" } })}
+                      disabled={updateMutation.isPending}
+                      data-testid={`button-activate-plan-${plan.id}`}
+                    >
+                      <Play className="w-3.5 h-3.5 mr-1" />
+                      Activate
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -738,63 +836,100 @@ function OrdersTab() {
           <p className="text-muted-foreground">No orders yet</p>
         </Card>
       )}
-      {allOrders?.map((order) => (
+      {allOrders?.map((order) => {
+        const orderProfit = (order as any).profit as number | null | undefined;
+        const providerDisplay = (order as any).selectedProviderKey || (order as any).providerName || null;
+        const profitColor =
+          orderProfit == null ? ""
+          : orderProfit > 0 ? "text-emerald-600 dark:text-emerald-400"
+          : "text-red-500 dark:text-red-400";
+        const marginPct = (order as any).marginPercent as number | null | undefined;
+
+        return (
         <Card key={order.id} className="p-4" data-testid={`card-admin-order-${order.id}`}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-semibold text-sm">{order.destinationName || "Unknown"} - {order.planName || "Plan"}</h3>
+              {/* Title row */}
+              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                <h3 className="font-semibold text-sm">{order.destinationName || "Unknown"} — {order.planName || "Plan"}</h3>
                 {getOrderStatusBadge(order.status)}
                 {getEsimStatusBadge(order.esimStatus)}
-                {order.selectedProviderKey && (
-                  <Badge variant="outline" className="font-mono text-xs border-violet-300 text-violet-700 dark:text-violet-300" data-testid={`badge-provider-${order.id}`}>
-                    {order.selectedProviderKey}
+                {providerDisplay && (
+                  <Badge variant="outline" className="font-mono text-[10px] border-violet-300 text-violet-700 dark:text-violet-300" data-testid={`badge-provider-${order.id}`}>
+                    {providerDisplay}
                   </Badge>
                 )}
-                {order.marginPercent != null && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Badge
-                        variant="outline"
-                        className={`text-xs cursor-default ${
-                          order.marginPercent >= 40
-                            ? "border-emerald-300 text-emerald-700 dark:text-emerald-400"
-                            : order.marginPercent >= 25
-                            ? "border-yellow-300 text-yellow-700 dark:text-yellow-400"
-                            : "border-red-300 text-red-700 dark:text-red-400"
-                        }`}
-                        data-testid={`badge-margin-${order.id}`}
-                      >
-                        {order.marginPercent.toFixed(1)}% margin
-                      </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {order.wholesaleCostUsd != null
-                        ? `Wholesale $${Number(order.wholesaleCostUsd).toFixed(2)} · Retail $${order.totalPrice.toFixed(2)}`
-                        : "Margin at checkout time"}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
               </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5 flex-wrap">
-                <span>{order.email}</span>
-                <span>|</span>
-                <span>${order.totalPrice.toFixed(2)}</span>
-                {order.wholesaleCostUsd != null && (
+
+              {/* Metrics row: Revenue | Cost | Profit | Margin */}
+              <div className="flex items-center gap-4 flex-wrap mb-2">
+                <div className="flex flex-col">
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Revenue</span>
+                  <span className="text-sm font-semibold" data-testid={`text-revenue-${order.id}`}>${order.totalPrice.toFixed(2)}</span>
+                </div>
+                {(order as any).wholesaleCostUsd != null && (
                   <>
-                    <span>|</span>
-                    <span className="text-muted-foreground">cost ${Number(order.wholesaleCostUsd).toFixed(2)}</span>
+                    <span className="text-muted-foreground opacity-30 text-lg font-thin">|</span>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Cost</span>
+                      <span className="text-sm font-semibold text-muted-foreground" data-testid={`text-cost-order-${order.id}`}>
+                        ${Number((order as any).wholesaleCostUsd).toFixed(2)}
+                      </span>
+                    </div>
                   </>
                 )}
+                {orderProfit != null && (
+                  <>
+                    <span className="text-muted-foreground opacity-30 text-lg font-thin">|</span>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Profit</span>
+                      <span className={`text-sm font-bold ${profitColor}`} data-testid={`text-profit-${order.id}`}>
+                        ${orderProfit.toFixed(2)}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {marginPct != null && (
+                  <>
+                    <span className="text-muted-foreground opacity-30 text-lg font-thin">|</span>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Margin</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span
+                            className={`text-sm font-bold cursor-default ${
+                              marginPct >= 40 ? "text-emerald-600 dark:text-emerald-400"
+                              : marginPct >= 25 ? "text-yellow-600 dark:text-yellow-400"
+                              : "text-red-600 dark:text-red-400"
+                            }`}
+                            data-testid={`text-margin-${order.id}`}
+                          >
+                            {marginPct.toFixed(1)}%
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          {(order as any).wholesaleCostUsd != null
+                            ? `Cost $${Number((order as any).wholesaleCostUsd).toFixed(2)} → Retail $${order.totalPrice.toFixed(2)}`
+                            : "Margin at checkout time"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Detail line: email | iccid | date */}
+              <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                <span>{order.email}</span>
                 {order.iccid && (
                   <>
-                    <span>|</span>
-                    <span className="font-mono">{order.iccid.slice(0, 10)}...</span>
+                    <span>·</span>
+                    <span className="font-mono">{order.iccid.slice(0, 10)}…</span>
                   </>
                 )}
                 {order.createdAt && (
                   <>
-                    <span>|</span>
+                    <span>·</span>
                     <span>{new Date(order.createdAt).toLocaleDateString()}</span>
                   </>
                 )}
@@ -829,7 +964,8 @@ function OrdersTab() {
             </div>
           </div>
         </Card>
-      ))}
+        );
+      })}
     </div>
   );
 }

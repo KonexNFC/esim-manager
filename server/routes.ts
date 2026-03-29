@@ -943,12 +943,15 @@ export async function registerRoutes(
         o.status === 'fulfilled' || o.status === 'completed' || o.status === 'paid'
       );
 
-      // Build per-order profit entries
+      // Build per-order profit entries (include planId/planName for plan-level aggregation)
       interface OrderProfit {
         revenue: number;
         cost: number;
         profit: number;
         provider: string;
+        planId: string;
+        planName: string;
+        destinationName: string;
       }
       const profitEntries: OrderProfit[] = revenueOrders.map(o => {
         const cost = o.wholesaleCostUsd ?? planCostMap[o.planId] ?? 0;
@@ -960,6 +963,9 @@ export async function registerRoutes(
           cost,
           profit,
           provider: o.selectedProviderKey ?? o.providerName ?? 'unknown',
+          planId: o.planId,
+          planName: (o as any).planName ?? 'Unknown Plan',
+          destinationName: (o as any).destinationName ?? '',
         };
       });
 
@@ -1003,6 +1009,31 @@ export async function registerRoutes(
 
       const totalCost = Math.round(profitEntries.reduce((s, e) => s + e.cost, 0) * 100) / 100;
 
+      // ── Top performing plans by profit ─────────────────────────────────────
+      const planPerfMap: Record<string, { planName: string; destinationName: string; orderCount: number; revenue: number; cost: number; profit: number }> = {};
+      for (const e of profitEntries) {
+        if (!planPerfMap[e.planId]) {
+          planPerfMap[e.planId] = { planName: e.planName, destinationName: e.destinationName, orderCount: 0, revenue: 0, cost: 0, profit: 0 };
+        }
+        planPerfMap[e.planId].orderCount++;
+        planPerfMap[e.planId].revenue += e.revenue;
+        planPerfMap[e.planId].cost += e.cost;
+        planPerfMap[e.planId].profit += e.profit;
+      }
+      const topPerformingPlans = Object.entries(planPerfMap)
+        .map(([planId, d]) => ({
+          planId,
+          planName: d.planName,
+          destinationName: d.destinationName,
+          orderCount: d.orderCount,
+          revenue: Math.round(d.revenue * 100) / 100,
+          cost: Math.round(d.cost * 100) / 100,
+          profit: Math.round(d.profit * 100) / 100,
+          marginPct: d.revenue > 0 ? Math.round((d.profit / d.revenue) * 1000) / 10 : 0,
+        }))
+        .sort((a, b) => b.profit - a.profit)
+        .slice(0, 10);
+
       res.json({
         totalRevenue: Math.round(totalRevenue * 100) / 100,
         totalOrders,
@@ -1017,6 +1048,7 @@ export async function registerRoutes(
           o.esimStatus === "active" || o.esimStatus === "installed" || o.esimStatus === "issued"
         ).length,
         providerBreakdown,
+        topPerformingPlans,
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch stats" });
