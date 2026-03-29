@@ -1069,15 +1069,43 @@ export async function registerRoutes(
 
   app.put("/api/admin/settings", requireAdmin, async (req, res) => {
     try {
-      const allowed = ['targetMarginPercent'];
-      for (const key of allowed) {
-        if (req.body[key] !== undefined) {
-          const value = String(req.body[key]);
-          await db.insert(settings)
-            .values({ key, value })
-            .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt: new Date() } });
+      const PROFIT_MODE_MARGINS: Record<string, string> = {
+        growth: '0.30',
+        balanced: '0.50',
+        profit: '0.70',
+      };
+
+      async function upsertSetting(key: string, value: string) {
+        await db.insert(settings)
+          .values({ key, value })
+          .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt: new Date() } });
+      }
+
+      // Handle profit mode preset — auto-syncs targetMarginPercent
+      if (req.body.profitMode !== undefined) {
+        const mode = String(req.body.profitMode);
+        const validModes = ['growth', 'balanced', 'profit', 'custom'];
+        if (!validModes.includes(mode)) {
+          return res.status(400).json({ message: "Invalid profitMode" });
+        }
+        await upsertSetting('profitMode', mode);
+        if (PROFIT_MODE_MARGINS[mode]) {
+          await upsertSetting('targetMarginPercent', PROFIT_MODE_MARGINS[mode]);
         }
       }
+
+      // Handle manual targetMarginPercent (also sets mode to custom)
+      if (req.body.targetMarginPercent !== undefined) {
+        const val = parseFloat(String(req.body.targetMarginPercent));
+        if (isNaN(val) || val <= 0 || val >= 1) {
+          return res.status(400).json({ message: "Invalid targetMarginPercent" });
+        }
+        await upsertSetting('targetMarginPercent', String(val));
+        // If manually setting, check if it matches a preset or mark as custom
+        const matchedMode = Object.entries(PROFIT_MODE_MARGINS).find(([, v]) => Math.abs(parseFloat(v) - val) < 0.001)?.[0];
+        await upsertSetting('profitMode', matchedMode ?? 'custom');
+      }
+
       res.json({ success: true });
     } catch {
       res.status(500).json({ message: "Failed to update settings" });

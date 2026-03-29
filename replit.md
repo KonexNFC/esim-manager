@@ -26,7 +26,7 @@ GlobeSIM is built with a modern web stack. The **frontend** uses React with Type
 -   **Admin Dashboard:** Offers comprehensive administrative capabilities including:
     -   **Profit Stats**: 8 live stat cards — Total Revenue, Total Profit, Weighted Margin, Avg Profit/Order, Orders, Live Plans, Destinations, Active eSIMs.
     -   **Provider Cost Breakdown**: Per-provider table showing revenue, cost, profit, and margin % (sorted by profit), built from order-level `wholesaleCostUsd` with plan-level fallback.
-    -   **Global Pricing Settings Panel**: Live target margin input + "Reprice Auto Plans" button to batch-recompute all auto-mode plan prices.
+    -   **Profit Optimisation Mode**: Three preset modes (Growth 30%, Balanced 50%, Profit 70%) plus a custom margin input. Selecting a preset atomically updates both `profitMode` and `targetMarginPercent` in the settings table. Stored as `profitMode` setting key; auto-detected when manually entering a margin that matches a preset.
     -   Plan management with **per-plan pricing mode toggle** (Auto ⚡ / Manual 🔧), profit % badge, and color-coded margin indicators.
 
 **UI/UX Design:**

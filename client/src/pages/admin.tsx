@@ -70,7 +70,41 @@ type AdminStats = {
 
 type AdminSettings = {
   targetMarginPercent: string;
+  profitMode?: string;
 };
+
+const PROFIT_MODES = [
+  {
+    key: 'growth',
+    label: 'Growth',
+    description: 'Lower prices, higher volume',
+    margin: 30,
+    color: 'text-blue-600 dark:text-blue-400',
+    borderActive: 'border-blue-500 bg-blue-50 dark:bg-blue-950/40',
+    borderInactive: 'border-border hover:border-blue-300',
+    dotColor: 'bg-blue-500',
+  },
+  {
+    key: 'balanced',
+    label: 'Balanced',
+    description: 'Competitive and profitable',
+    margin: 50,
+    color: 'text-violet-600 dark:text-violet-400',
+    borderActive: 'border-violet-500 bg-violet-50 dark:bg-violet-950/40',
+    borderInactive: 'border-border hover:border-violet-300',
+    dotColor: 'bg-violet-500',
+  },
+  {
+    key: 'profit',
+    label: 'Profit',
+    description: 'Maximum margin per sale',
+    margin: 70,
+    color: 'text-emerald-600 dark:text-emerald-400',
+    borderActive: 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40',
+    borderInactive: 'border-border hover:border-emerald-300',
+    dotColor: 'bg-emerald-500',
+  },
+] as const;
 
 function StatCard({ title, value, icon: Icon, suffix }: { title: string; value: string | number; icon: any; suffix?: string }) {
   return (
@@ -288,24 +322,69 @@ function DashboardTab() {
         )}
       </Card>
 
-      {/* ── Pricing settings ── */}
+      {/* ── Profit Optimisation Mode ── */}
       <Card className="p-5">
-        <h3 className="font-semibold text-sm mb-1 flex items-center gap-2">
-          <Settings className="w-4 h-4 text-primary" />
-          Global Pricing Settings
-        </h3>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-semibold text-sm flex items-center gap-2">
+            <Target className="w-4 h-4 text-primary" />
+            Profit Optimisation Mode
+          </h3>
+          {settingsLoading ? (
+            <Skeleton className="h-5 w-20" />
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              Active margin: <span className="font-semibold text-foreground" data-testid="text-current-margin">{currentMarginPct}%</span>
+            </span>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground mb-4">
-          Controls the target margin used when a plan's pricing mode is set to <span className="font-medium">Auto</span>.
-          Formula: retail = cost ÷ (1 − margin)
+          Sets the global target margin for all auto-priced plans. Retail = cost ÷ (1 − margin). Per-plan overrides take precedence.
         </p>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Target Margin:</span>
-            {settingsLoading
-              ? <Skeleton className="h-6 w-12" />
-              : <span className="font-semibold text-sm" data-testid="text-current-margin">{currentMarginPct}%</span>
-            }
-          </div>
+
+        {/* Mode cards */}
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          {PROFIT_MODES.map((mode) => {
+            const isActive = adminSettings?.profitMode === mode.key;
+            return (
+              <button
+                key={mode.key}
+                onClick={() => {
+                  saveSettingsMutation.mutate({ profitMode: mode.key });
+                  setTargetMarginInput("");
+                }}
+                disabled={saveSettingsMutation.isPending}
+                className={`rounded-lg border-2 p-3 text-left transition-all focus:outline-none ${
+                  isActive ? mode.borderActive : mode.borderInactive
+                }`}
+                data-testid={`button-mode-${mode.key}`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className={`text-sm font-bold ${isActive ? mode.color : "text-foreground"}`}>
+                    {mode.label}
+                  </span>
+                  <span className={`text-xs font-mono font-bold ${isActive ? mode.color : "text-muted-foreground"}`}>
+                    {mode.margin}%
+                  </span>
+                </div>
+                <p className={`text-[11px] leading-tight ${isActive ? "text-foreground/70" : "text-muted-foreground"}`}>
+                  {mode.description}
+                </p>
+                {isActive && (
+                  <div className={`mt-2 flex items-center gap-1 text-[10px] font-medium ${mode.color}`}>
+                    <div className={`w-1.5 h-1.5 rounded-full ${mode.dotColor}`} />
+                    Active
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Custom margin input */}
+        <div className="flex items-center gap-3 flex-wrap pt-3 border-t border-border">
+          <span className="text-xs text-muted-foreground font-medium">
+            {adminSettings?.profitMode === 'custom' ? '⚙️ Custom margin active:' : 'Or set a custom margin:'}
+          </span>
           <div className="flex items-center gap-2">
             <Input
               type="number"
@@ -326,36 +405,38 @@ function DashboardTab() {
               disabled={saveSettingsMutation.isPending || !targetMarginInput}
               data-testid="button-save-margin"
             >
-              Save
+              Apply
             </Button>
           </div>
-          <Button
-            size="sm"
-            variant="default"
-            onClick={() => applyAutoPricingMutation.mutate()}
-            disabled={applyAutoPricingMutation.isPending}
-            data-testid="button-apply-auto-pricing"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${applyAutoPricingMutation.isPending ? "animate-spin" : ""}`} />
-            Reprice Auto Plans
-          </Button>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => backfillProfitMutation.mutate()}
-                disabled={backfillProfitMutation.isPending}
-                data-testid="button-backfill-profit"
-              >
-                <TrendingUp className={`w-3.5 h-3.5 mr-1.5 ${backfillProfitMutation.isPending ? "animate-spin" : ""}`} />
-                Backfill Profit
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              Retroactively compute and store profit/margin on existing orders that are missing this data.
-            </TooltipContent>
-          </Tooltip>
+          <div className="flex gap-2 ml-auto">
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => applyAutoPricingMutation.mutate()}
+              disabled={applyAutoPricingMutation.isPending}
+              data-testid="button-apply-auto-pricing"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${applyAutoPricingMutation.isPending ? "animate-spin" : ""}`} />
+              Reprice Auto Plans
+            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => backfillProfitMutation.mutate()}
+                  disabled={backfillProfitMutation.isPending}
+                  data-testid="button-backfill-profit"
+                >
+                  <TrendingUp className={`w-3.5 h-3.5 mr-1.5 ${backfillProfitMutation.isPending ? "animate-spin" : ""}`} />
+                  Backfill Profit
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Retroactively compute and store profit/margin on existing orders that are missing this data.
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       </Card>
     </div>
@@ -475,11 +556,42 @@ function PlanEditPanel({
         </div>
 
         {/* Per-plan margin override */}
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
             <Target className="w-3 h-3" />
             Margin Override %
           </label>
+          {/* Preset quick-picks */}
+          <div className="flex gap-1.5 flex-wrap">
+            {PROFIT_MODES.map((mode) => {
+              const isSelected = marginOverride === String(mode.margin);
+              return (
+                <button
+                  key={mode.key}
+                  type="button"
+                  onClick={() => setMarginOverride(isSelected ? "" : String(mode.margin))}
+                  className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
+                    isSelected
+                      ? `${mode.borderActive} ${mode.color}`
+                      : `border-border text-muted-foreground hover:border-primary/40 hover:text-foreground`
+                  }`}
+                  data-testid={`button-margin-preset-${mode.key}-${plan.id}`}
+                >
+                  {mode.label} {mode.margin}%
+                </button>
+              );
+            })}
+            {marginOverride !== "" && (
+              <button
+                type="button"
+                onClick={() => setMarginOverride("")}
+                className="px-2 py-0.5 rounded text-[10px] border border-border text-muted-foreground hover:text-foreground transition-colors"
+                data-testid={`button-margin-clear-${plan.id}`}
+              >
+                Use global ({globalMarginPct}%)
+              </button>
+            )}
+          </div>
           <div className="relative">
             <Input
               type="number"
@@ -496,7 +608,9 @@ function PlanEditPanel({
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
             )}
           </div>
-          <p className="text-[10px] text-muted-foreground">Leave blank to use global ({globalMarginPct}%)</p>
+          <p className="text-[10px] text-muted-foreground">
+            Leave blank to use the global margin ({globalMarginPct}%). Preset shortcuts above match optimisation modes.
+          </p>
         </div>
       </div>
 
