@@ -620,6 +620,16 @@ export async function registerRoutes(
         }
       }
 
+      // Validation: manual-mode retail price must not be below provider cost
+      if (effectiveMode === 'manual' && effectiveCost > 0) {
+        const finalPrice = updates.price ?? existing?.price ?? 0;
+        if (finalPrice > 0 && finalPrice < effectiveCost) {
+          return res.status(400).json({
+            message: `Retail price ($${finalPrice.toFixed(2)}) cannot be less than provider cost ($${effectiveCost.toFixed(2)}). This would result in a loss.`,
+          });
+        }
+      }
+
       const updated = await storage.updatePlan(req.params.id, updates);
       if (!updated) return res.status(404).json({ message: "Plan not found" });
       res.json(updated);

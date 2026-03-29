@@ -250,8 +250,174 @@ function DashboardTab() {
   );
 }
 
+// ── Inline edit panel for a single plan ─────────────────────────────────────
+function PlanEditPanel({
+  plan,
+  globalMarginPct,
+  onSave,
+  onClose,
+  isSaving,
+}: {
+  plan: Plan;
+  globalMarginPct: number;
+  onSave: (updates: Record<string, any>) => void;
+  onClose: () => void;
+  isSaving: boolean;
+}) {
+  const [cost, setCost] = useState(plan.wholesaleCost != null ? String(plan.wholesaleCost) : "");
+  const [manualPrice, setManualPrice] = useState(String(plan.price));
+  const [marginOverride, setMarginOverride] = useState(
+    plan.targetMargin != null ? String(Math.round(plan.targetMargin * 100)) : ""
+  );
+  const isAuto = plan.pricingMode === 'auto';
+
+  // Effective margin for preview (per-plan override or global)
+  const effectiveMarginPct = marginOverride !== "" && !isNaN(parseFloat(marginOverride))
+    ? parseFloat(marginOverride)
+    : globalMarginPct;
+  const costNum = parseFloat(cost);
+  const computedAutoPrice = !isNaN(costNum) && costNum > 0 && effectiveMarginPct > 0 && effectiveMarginPct < 100
+    ? Math.ceil(costNum / (1 - effectiveMarginPct / 100) * 100) / 100
+    : null;
+
+  const manualPriceNum = parseFloat(manualPrice);
+  const priceValidationError: string | null = (() => {
+    if (!isAuto && !isNaN(costNum) && costNum > 0 && !isNaN(manualPriceNum) && manualPriceNum > 0) {
+      if (manualPriceNum < costNum) return `Price must be ≥ cost ($${costNum.toFixed(2)})`;
+    }
+    return null;
+  })();
+
+  function handleSave() {
+    const updates: Record<string, any> = {};
+    if (cost !== "" && !isNaN(parseFloat(cost))) updates.wholesaleCost = parseFloat(cost);
+    if (!isAuto && manualPrice !== "" && !isNaN(parseFloat(manualPrice))) {
+      updates.price = parseFloat(manualPrice);
+    }
+    if (marginOverride !== "") {
+      const m = parseFloat(marginOverride);
+      updates.targetMargin = (!isNaN(m) && m > 0 && m < 100) ? m / 100 : null;
+    } else {
+      updates.targetMargin = null;
+    }
+    onSave(updates);
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border" data-testid={`edit-panel-${plan.id}`}>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Provider cost */}
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+            Provider Cost (USD)
+          </label>
+          <Input
+            type="number"
+            min={0}
+            step={0.01}
+            value={cost}
+            onChange={e => setCost(e.target.value)}
+            placeholder="e.g. 1.20"
+            className="h-8 text-sm"
+            data-testid={`input-cost-${plan.id}`}
+          />
+        </div>
+
+        {/* Retail price — read-only when auto */}
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            Retail Price (USD)
+            {isAuto && <Badge variant="outline" className="text-[9px] py-0 px-1 border-violet-300 text-violet-600 dark:text-violet-300"><Zap className="w-2 h-2 mr-0.5" />Auto</Badge>}
+          </label>
+          {isAuto ? (
+            <div className="relative">
+              <Input
+                readOnly
+                value={computedAutoPrice != null ? `$${computedAutoPrice.toFixed(2)}` : "—"}
+                className="h-8 text-sm bg-muted/60 cursor-default text-muted-foreground"
+                data-testid={`input-price-auto-${plan.id}`}
+              />
+              {computedAutoPrice != null && (
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-violet-500">
+                  computed
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                value={manualPrice}
+                onChange={e => setManualPrice(e.target.value)}
+                placeholder="e.g. 9.99"
+                className={`h-8 text-sm ${priceValidationError ? "border-red-400 focus-visible:ring-red-400" : ""}`}
+                data-testid={`input-price-manual-${plan.id}`}
+              />
+              {priceValidationError && (
+                <p className="text-[11px] text-red-500" data-testid={`error-price-${plan.id}`}>{priceValidationError}</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Per-plan margin override */}
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+            <Target className="w-3 h-3" />
+            Margin Override %
+          </label>
+          <div className="relative">
+            <Input
+              type="number"
+              min={1}
+              max={99}
+              step={1}
+              value={marginOverride}
+              onChange={e => setMarginOverride(e.target.value)}
+              placeholder={`Global: ${globalMarginPct}%`}
+              className="h-8 text-sm pr-6"
+              data-testid={`input-margin-override-${plan.id}`}
+            />
+            {marginOverride !== "" && (
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+            )}
+          </div>
+          <p className="text-[10px] text-muted-foreground">Leave blank to use global ({globalMarginPct}%)</p>
+        </div>
+      </div>
+
+      {/* Auto-pricing formula explainer */}
+      {isAuto && costNum > 0 && computedAutoPrice != null && (
+        <div className="mt-2 text-[11px] text-muted-foreground bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900 rounded-md px-3 py-1.5">
+          <Zap className="w-3 h-3 inline mr-1 text-violet-500" />
+          Formula: ${costNum.toFixed(2)} ÷ (1 − {effectiveMarginPct}%) = <span className="font-semibold text-violet-700 dark:text-violet-300">${computedAutoPrice.toFixed(2)}</span>
+          {" "}→ margin = {Math.round(((computedAutoPrice - costNum) / computedAutoPrice) * 100)}%
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 mt-3">
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={isSaving || priceValidationError !== null}
+          data-testid={`button-save-plan-${plan.id}`}
+        >
+          {isSaving ? <RotateCcw className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
+          Save changes
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onClose} data-testid={`button-cancel-edit-${plan.id}`}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function PlansTab() {
   const { toast } = useToast();
+  const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
 
   const { data: plans, isLoading } = useQuery<Plan[]>({
     queryKey: ["/api/plans", "all"],
@@ -262,15 +428,30 @@ function PlansTab() {
     },
   });
 
+  const { data: adminSettings } = useQuery<AdminSettings>({
+    queryKey: ["/api/admin/settings"],
+  });
+  const globalMarginPct = adminSettings?.targetMarginPercent
+    ? Math.round(parseFloat(adminSettings.targetMarginPercent) * 100)
+    : 60;
+
   const updateMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Record<string, any> }) => {
       const res = await apiRequest("PATCH", `/api/plans/${id}`, updates);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Request failed" }));
+        throw new Error(err.message || "Request failed");
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
       toast({ title: "Plan updated" });
+      setExpandedPlanId(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -310,6 +491,7 @@ function PlansTab() {
           ? ((plan.price - plan.wholesaleCost) / plan.price) * 100
           : null;
         const isAuto = plan.pricingMode === 'auto';
+        const isExpanded = expandedPlanId === plan.id;
         const marginColor = margin === null ? "" : margin >= 50 ? "text-emerald-600 dark:text-emerald-400" : margin >= 30 ? "text-yellow-600 dark:text-yellow-400" : "text-red-600 dark:text-red-400";
 
         return (
@@ -322,7 +504,6 @@ function PlansTab() {
                   <Badge variant="outline" className="text-[10px] font-mono" data-testid={`badge-provider-${plan.id}`}>
                     {plan.provider || "manual"}
                   </Badge>
-                  {/* Pricing Mode indicator */}
                   <Badge
                     variant="outline"
                     className={`text-[10px] gap-0.5 cursor-default ${isAuto ? "border-violet-300 text-violet-700 dark:text-violet-300" : "border-muted text-muted-foreground"}`}
@@ -331,13 +512,8 @@ function PlansTab() {
                     {isAuto ? <Zap className="w-2.5 h-2.5" /> : <Wrench className="w-2.5 h-2.5" />}
                     {isAuto ? "Auto" : "Manual"}
                   </Badge>
-                  {/* Profit % badge */}
                   {margin !== null && (
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] ${marginColor}`}
-                      data-testid={`badge-profit-pct-${plan.id}`}
-                    >
+                    <Badge variant="outline" className={`text-[10px] ${marginColor}`} data-testid={`badge-profit-pct-${plan.id}`}>
                       {Math.round(margin)}% profit
                     </Badge>
                   )}
@@ -356,7 +532,7 @@ function PlansTab() {
                       </span>
                     </TooltipTrigger>
                     <TooltipContent>
-                      {isAuto ? "Auto-computed from wholesale cost" : "Manually set retail price"}
+                      {isAuto ? `Auto-computed: cost ÷ (1 − margin)` : "Manually set retail price"}
                     </TooltipContent>
                   </Tooltip>
                   {plan.wholesaleCost != null && plan.wholesaleCost > 0 && (
@@ -364,7 +540,18 @@ function PlansTab() {
                   )}
                 </div>
               </div>
+
               <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                {/* Edit button */}
+                <Button
+                  size="sm"
+                  variant={isExpanded ? "secondary" : "outline"}
+                  onClick={() => setExpandedPlanId(isExpanded ? null : plan.id)}
+                  data-testid={`button-edit-plan-${plan.id}`}
+                >
+                  <Settings className="w-3.5 h-3.5 mr-1" />
+                  {isExpanded ? "Close" : "Edit pricing"}
+                </Button>
                 {/* Pricing Mode toggle */}
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -384,7 +571,7 @@ function PlansTab() {
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {isAuto ? "Click to switch to manual pricing" : "Click to switch to auto pricing"}
+                    {isAuto ? "Switch to manual pricing" : "Switch to auto pricing"}
                   </TooltipContent>
                 </Tooltip>
                 {/* Plan status toggle */}
@@ -413,6 +600,17 @@ function PlansTab() {
                 )}
               </div>
             </div>
+
+            {/* ── Inline edit panel ── */}
+            {isExpanded && (
+              <PlanEditPanel
+                plan={plan}
+                globalMarginPct={globalMarginPct}
+                onSave={(updates) => updateMutation.mutate({ id: plan.id, updates })}
+                onClose={() => setExpandedPlanId(null)}
+                isSaving={updateMutation.isPending}
+              />
+            )}
           </Card>
         );
       })}
