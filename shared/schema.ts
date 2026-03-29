@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, timestamp, doublePrecision, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, doublePrecision, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -210,6 +210,55 @@ export const giftOrders = pgTable("gift_orders", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ─── PROVIDERS (registry) ────────────────────────────
+// health_status: healthy | degraded | down | unknown
+export const providers = pgTable("providers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(),           // e.g. "esimgo", "esimAccess", "zendit"
+  name: text("name").notNull(),                  // display name
+  enabled: boolean("enabled").notNull().default(true),
+  priority: integer("priority").notNull().default(10), // lower = higher priority
+  healthStatus: text("health_status").notNull().default("unknown"),
+  lastHealthCheck: timestamp("last_health_check"),
+  metadata: jsonb("metadata"),                   // arbitrary config / notes
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ─── NORMALIZED PLANS ────────────────────────────────
+// Provider-agnostic plan definitions shown to customers.
+// plan_type: data | unlimited | daypass
+export const normalizedPlans = pgTable("normalized_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  destinationId: varchar("destination_id").references(() => destinations.id),
+  regionCode: text("region_code").notNull(),      // ISO country code or "GLOBAL" / region slug
+  name: text("name").notNull(),                   // e.g. "United Kingdom 1 GB / 7 Days"
+  dataMb: integer("data_mb").notNull(),           // 999999 = unlimited
+  validityDays: integer("validity_days").notNull(),
+  isUnlimited: boolean("is_unlimited").notNull().default(false),
+  planType: text("plan_type").notNull().default("data"), // data | unlimited | daypass
+  retailPriceUsd: doublePrecision("retail_price_usd").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ─── PROVIDER OFFERS ─────────────────────────────────
+// Maps each normalizedPlan to one or more provider-specific bundles.
+// The routing system picks the best offer at purchase time.
+export const providerOffers = pgTable("provider_offers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  normalizedPlanId: varchar("normalized_plan_id").notNull().references(() => normalizedPlans.id),
+  providerKey: text("provider_key").notNull(),    // FK to providers.key (denormalised for speed)
+  providerPlanCode: text("provider_plan_code").notNull(), // provider-specific bundle code
+  wholesalePriceUsd: doublePrecision("wholesale_price_usd").notNull(),
+  currency: text("currency").notNull().default("USD"),
+  isActive: boolean("is_active").notNull().default(true),
+  lastSyncedAt: timestamp("last_synced_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // ─── INSERT SCHEMAS ───────────────────────────────────
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertDestinationSchema = createInsertSchema(destinations).omit({ id: true });
@@ -220,6 +269,9 @@ export const insertEsimSchema = createInsertSchema(esims).omit({ id: true, creat
 export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true, createdAt: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
 export const insertGiftOrderSchema = createInsertSchema(giftOrders).omit({ id: true, createdAt: true, claimedAt: true });
+export const insertProviderSchema = createInsertSchema(providers).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertNormalizedPlanSchema = createInsertSchema(normalizedPlans).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertProviderOfferSchema = createInsertSchema(providerOffers).omit({ id: true, createdAt: true, updatedAt: true });
 
 // ─── TYPES ────────────────────────────────────────────
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -242,3 +294,9 @@ export type GiftOrder = typeof giftOrders.$inferSelect;
 export type InsertGiftOrder = typeof giftOrders.$inferInsert;
 export type PaymentEvent = typeof paymentEvents.$inferSelect;
 export type ProviderSyncLog = typeof providerSyncLogs.$inferSelect;
+export type Provider = typeof providers.$inferSelect;
+export type InsertProvider = z.infer<typeof insertProviderSchema>;
+export type NormalizedPlan = typeof normalizedPlans.$inferSelect;
+export type InsertNormalizedPlan = z.infer<typeof insertNormalizedPlanSchema>;
+export type ProviderOffer = typeof providerOffers.$inferSelect;
+export type InsertProviderOffer = z.infer<typeof insertProviderOfferSchema>;

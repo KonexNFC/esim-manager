@@ -94,9 +94,32 @@ GlobeSIM is a production-ready eSIM marketplace where users can browse destinati
 ## Provider System
 - `server/providers/adapters/base.ts` — ProviderAdapter interface (provisionEsim, getUsage, getTopupOptions, executeTopup)
 - `server/providers/adapters/mock.ts` — MockProviderAdapter with realistic responses
-- `server/providers/adapters/index.ts` — getActiveProvider() using PROVIDER_NAME env (default: mock)
-- `server/providers/esimgo.ts` — eSIMGo provider (LIVE, uses ESIMGO_API_KEY)
+- `server/providers/adapters/esimgo.ts` — eSIMGo adapter (LIVE, uses ESIMGO_API_KEY)
+- `server/providers/adapters/esimAccess.ts` — eSIM Access adapter (LIVE, HMAC-SHA256 auth)
+- `server/providers/adapters/failover.ts` — Failover wrapper: eSIMGo primary → eSIM Access fallback
+- `server/providers/adapters/index.ts` — getActiveProvider(); auto-detects esimgo+esimAccess if both keys present
+- `server/providers/esimgo.ts` — eSIMGo provider client
 - `server/providers/providerManager.ts` — Routes purchases to correct provider
+
+## Multi-Provider Routing (DB layer)
+- **providers** — Registry of eSIM providers (key, name, enabled, priority, healthStatus)
+  - eSIMGo: priority=1, enabled=true
+  - eSIM Access: priority=2, enabled=true
+  - Zendit: priority=3, enabled=false (no API key yet)
+  - Mock: priority=99, enabled=false (dev only)
+- **normalized_plans** — Provider-agnostic plan definitions (regionCode, name, dataMb, validityDays, retailPriceUsd) — 24 seeded
+- **provider_offers** — Maps each normalized plan to provider-specific bundle codes with wholesale prices — 54 seeded
+- `server/services/providerRegistry.ts` — Core routing service:
+  - `getEnabledProviders()` — enabled providers sorted by priority
+  - `getProviderByKey(key)` — single provider lookup
+  - `upsertProvider(data)` — insert or update by key
+  - `updateProviderHealth(key, status)` — health status updates
+  - `getAllNormalizedPlans()`, `getNormalizedPlansByRegion(code)` — plan lookups
+  - `getOffersForNormalizedPlan(planId)` — returns offers enriched with provider priority, filtered to enabled only
+  - `getBestOffersForRequirement(regionCode, minDataMb, minValidityDays)` — top-level routing: finds cheapest valid offer sorted by provider priority
+  - `upsertProviderOffer(data)` — idempotent offer upsert
+  - `deactivateProviderOffers(providerKey)` — bulk deactivate on provider outage
+- `server/seeds/providerRegistry.ts` — Idempotent seed; run via `npx tsx -e "import('./server/seeds/providerRegistry').then(m => m.seedProviderRegistry())"`
 
 ## Services
 - `server/services/stripeService.ts` — Checkout session creation, payment completion handlers
