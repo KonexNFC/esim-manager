@@ -1,21 +1,31 @@
 // ─── Fulfillment Service ──────────────────────────────────────────────────────
-// Handles post-payment eSIM provisioning via the active provider adapter.
+// Handles post-payment eSIM provisioning.
 // Called by the Stripe webhook handler after checkout.session.completed.
 //
 // State machine:
-//   paid → fulfilling → fulfilled  (happy path)
-//   paid → fulfilling → fulfillment_failed  (provider error, will retry once)
+//   paid → fulfilling → fulfilled              (happy path)
+//   paid → fulfilling → fulfillment_failed     (all providers exhausted)
+//
+// Provider selection:
+//   • Orders with routing data (normalizedPlanId + fallbackProvidersJson)
+//     → iterate fallback chain, log each attempt to provider_attempts
+//   • Legacy orders without routing data
+//     → getActiveProvider() (transparent failover adapter, unchanged)
 
 import { db } from '../storage';
-import { orders, esims, users, topups, plans, destinations, providerSyncLogs } from '@shared/schema';
+import { orders, esims, users, topups, plans, destinations, providerSyncLogs, providerAttempts } from '@shared/schema';
 import { eq } from 'drizzle-orm';
-import { getActiveProvider } from '../providers/adapters';
+import { getActiveProvider, getProviderAdapterByKey } from '../providers/adapters';
+import type { ProviderAdapter, ProviderPurchaseParams, CustomerContext, EsimProvisionResult } from '../providers/adapters';
 import {
   sendPurchaseConfirmation, sendEsimReadyEmail, sendTopupConfirmation,
   sendFulfillmentFailedEmail,
 } from './notifications';
+import type { FallbackEntry } from './stripeService';
 
 const TRANSIENT_RETRY_DELAY_MS = 1500;
+
+// ─── Generic sync logger ──────────────────────────────────────────────────────
 
 async function logSync(
   orderId: string | null,
@@ -37,6 +47,74 @@ async function logSync(
       status,
     });
   } catch { /* non-fatal */ }
+}
+
+// ─── Provider attempt logger ──────────────────────────────────────────────────
+
+async function logProviderAttempt(
+  orderId: string,
+  providerKey: string,
+  planCode: string | null,
+  attemptNumber: number,
+  status: 'ok' | 'error' | 'skipped',
+  errorMessage?: string,
+  durationMs?: number,
+) {
+  try {
+    await db.insert(providerAttempts).values({
+      orderId,
+      providerKey,
+      providerPlanCode: planCode ?? undefined,
+      attemptNumber,
+      status,
+      errorMessage,
+      durationMs,
+    });
+  } catch { /* non-fatal */ }
+}
+
+// ─── Fallback chain executor ──────────────────────────────────────────────────
+// Tries each provider in the fallback chain in order.
+// Logs every attempt. Returns on the first success.
+
+async function fulfillWithFallbackChain(
+  orderId: string,
+  fallbackChain: FallbackEntry[],
+  baseParams: ProviderPurchaseParams,
+  ctx: CustomerContext,
+): Promise<{ result: EsimProvisionResult; providerName: string; providerKey: string }> {
+  let lastError: Error | null = null;
+
+  for (let i = 0; i < fallbackChain.length; i++) {
+    const entry = fallbackChain[i];
+    const provider = getProviderAdapterByKey(entry.k);
+
+    if (!provider) {
+      console.warn(`[Fulfillment] Provider key "${entry.k}" unavailable — skipping`);
+      await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'skipped', 'Provider adapter not available');
+      continue;
+    }
+
+    const startMs = Date.now();
+    try {
+      console.log(`[Fulfillment] Attempt ${i + 1}/${fallbackChain.length}: ${entry.k} / ${entry.c}`);
+      const result = await provider.purchaseEsim(
+        { ...baseParams, providerRef: entry.c },
+        ctx,
+      );
+      const durationMs = Date.now() - startMs;
+      await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'ok', undefined, durationMs);
+      console.log(`[Fulfillment] ✓ ${entry.k} succeeded in ${durationMs}ms`);
+      return { result, providerName: provider.name, providerKey: entry.k };
+    } catch (err: any) {
+      const durationMs = Date.now() - startMs;
+      await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'error', err.message, durationMs);
+      console.warn(`[Fulfillment] ✗ ${entry.k} failed in ${durationMs}ms: ${err.message}`);
+      lastError = err;
+    }
+  }
+
+  throw lastError ?? new Error('All providers in fallback chain failed');
 }
 
 // ─── Initial Purchase Fulfillment ─────────────────────────────────────────────
@@ -71,31 +149,71 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
     throw new Error(`Plan ${order.planId} not found`);
   }
 
-  const provider = getActiveProvider();
+  // Base params shared across all provider attempts
+  const baseParams: ProviderPurchaseParams = {
+    planId: order.planId,
+    countryCode: planRow.dest?.countryCode ?? 'US',
+    dataAmountGb: planRow.plan.dataAmountGb,
+    validityDays: planRow.plan.validityDays,
+    providerRef: planRow.plan.externalPlanCode ?? undefined,
+    customerEmail: order.email,
+  };
+
+  const ctx: CustomerContext = {
+    email: order.email,
+    userId: order.userId ?? undefined,
+    name: user?.name,
+  };
 
   try {
-    const result = await provider.purchaseEsim(
-      {
-        planId: order.planId,
-        countryCode: planRow.dest?.countryCode ?? 'US',
-        dataAmountGb: planRow.plan.dataAmountGb,
-        validityDays: planRow.plan.validityDays,
-        providerRef: planRow.plan.externalPlanCode ?? undefined,
-        customerEmail: order.email,
-      },
-      { email: order.email, userId: order.userId ?? undefined, name: user?.name },
-    );
+    let result: EsimProvisionResult;
+    let resolvedProviderName: string;
+    let resolvedProviderKey: string;
+
+    // ── Routing-aware path ──────────────────────────────────────────────────
+    // Use if the order was created through the routing engine (has fallback chain).
+    const hasFallbackChain =
+      order.selectedProviderKey &&
+      Array.isArray(order.fallbackProvidersJson) &&
+      (order.fallbackProvidersJson as any[]).length > 0;
+
+    if (hasFallbackChain) {
+      const chain = order.fallbackProvidersJson as unknown as FallbackEntry[];
+      console.log(
+        `[Fulfillment] Using routing fallback chain for order ${orderId}: ` +
+        chain.map(e => e.k).join(' → '),
+      );
+      const fulfilled = await fulfillWithFallbackChain(orderId, chain, baseParams, ctx);
+      result = fulfilled.result;
+      resolvedProviderName = fulfilled.providerName;
+      resolvedProviderKey = fulfilled.providerKey;
+    } else {
+      // ── Legacy path ─────────────────────────────────────────────────────
+      // No routing data — use the active provider (failover adapter handles transparently).
+      console.log(`[Fulfillment] No routing chain for order ${orderId} — using active provider`);
+      const provider = getActiveProvider();
+      const startMs = Date.now();
+      try {
+        result = await provider.purchaseEsim(baseParams, ctx);
+        await logProviderAttempt(orderId, provider.name, baseParams.providerRef ?? null, 1, 'ok', undefined, Date.now() - startMs);
+      } catch (err: any) {
+        await logProviderAttempt(orderId, provider.name, baseParams.providerRef ?? null, 1, 'error', err.message, Date.now() - startMs);
+        throw err;
+      }
+      resolvedProviderName = provider.name;
+      resolvedProviderKey = provider.name;
+    }
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + planRow.plan.validityDays);
 
-    // ── Update order record ──────────────────────────────────────────
+    // ── Update order record ────────────────────────────────────────────────
     await db.update(orders).set({
       status: 'fulfilled',
       esimStatus: 'issued',
       qrCode: result.qrCodeUrl,
       iccid: result.iccid,
-      providerName: provider.name,
+      providerName: resolvedProviderName,
       providerEsimId: result.providerEsimId,
       activationDate: new Date(),
       dataTotalMb: result.dataTotalMb,
@@ -106,12 +224,12 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
       lastSyncedAt: new Date(),
     }).where(eq(orders.id, orderId));
 
-    // ── Create eSIM entity ───────────────────────────────────────────
+    // ── Create eSIM entity ─────────────────────────────────────────────────
     const [esimRecord] = await db.insert(esims).values({
       userId: order.userId ?? undefined,
       orderId: order.id,
       planId: order.planId,
-      providerName: provider.name,
+      providerName: resolvedProviderName,
       providerEsimId: result.providerEsimId,
       providerIccid: result.iccid,
       providerReference: result.activationUrl ?? undefined,
@@ -130,7 +248,7 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
       lastSyncedAt: new Date(),
     }).returning();
 
-    await logSync(orderId, esimRecord?.id ?? null, 'initial_purchase', provider.name,
+    await logSync(orderId, esimRecord?.id ?? null, 'initial_purchase', resolvedProviderName,
       `purchaseEsim planId=${order.planId}`,
       `iccid=${result.iccid} status=${result.activationStatus}`,
       'ok');
@@ -154,7 +272,7 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
       manualCode: result.manualCode,
     }).catch(console.error);
 
-    console.log(`[Fulfillment] Order ${orderId} fulfilled — ICCID: ${result.iccid}, eSIM: ${esimRecord?.id}`);
+    console.log(`[Fulfillment] ✓ Order ${orderId} fulfilled via ${resolvedProviderKey} — ICCID: ${result.iccid}`);
   } catch (err: any) {
     const isTransient = isTransientError(err);
     if (isTransient) {
@@ -166,18 +284,20 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
         return;
       } catch (retryErr: any) {
         await markFulfillmentFailed(orderId, `Retry failed: ${retryErr.message}`);
-        await logSync(orderId, null, 'initial_purchase', provider.name,
-          `purchaseEsim retry orderId=${orderId}`, retryErr.message, 'error');
+        await logSync(orderId, null, 'initial_purchase_retry', 'unknown',
+          `retryFulfill orderId=${orderId}`, retryErr.message, 'error');
         throw retryErr;
       }
     }
 
     await markFulfillmentFailed(orderId, err.message);
-    await logSync(orderId, null, 'initial_purchase', provider.name,
+    await logSync(orderId, null, 'initial_purchase', 'unknown',
       `purchaseEsim orderId=${orderId}`, err.message, 'error');
     throw err;
   }
 }
+
+// ─── Failure handler ──────────────────────────────────────────────────────────
 
 async function markFulfillmentFailed(orderId: string, reason: string) {
   console.error(`[Fulfillment] Failed for ${orderId}: ${reason}`);
@@ -185,7 +305,6 @@ async function markFulfillmentFailed(orderId: string, reason: string) {
     .set({ status: 'fulfillment_failed', esimStatus: 'issued' })
     .where(eq(orders.id, orderId));
 
-  // Notify customer their eSIM could not be provisioned
   try {
     const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
     if (order) {
@@ -228,6 +347,7 @@ export async function fulfillTopupPurchase(topupId: string): Promise<void> {
     throw new Error(`Order ${topup.orderId} has no provider eSIM ID — cannot top up`);
   }
 
+  // Top-ups always use the active provider (the one that provisioned the eSIM)
   const provider = getActiveProvider();
 
   try {
@@ -270,8 +390,6 @@ export async function fulfillTopupPurchase(topupId: string): Promise<void> {
         esimUpdates.expiresAt = newExpiry;
       }
       await db.update(esims).set(esimUpdates as any).where(eq(esims.id, esimRecord.id));
-
-      // Link topup to esim record
       await db.update(topups).set({ esimId: esimRecord.id }).where(eq(topups.id, topupId));
     }
 

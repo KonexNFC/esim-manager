@@ -1,6 +1,8 @@
 import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { db } from "./storage";
+import { sql, eq } from "drizzle-orm";
 import { insertOrderSchema, insertPlanSchema } from "@shared/schema";
 import { fetchProviderPlans, getBestPlan } from "./providers";
 import { purchaseEsim as providerPurchase, getAvailableProviders } from "./providers/providerManager";
@@ -12,7 +14,6 @@ import {
 import {
   createPlanCheckoutSession,
   createTopupCheckoutSession,
-  getStripePublishableKey as _getStripePublishableKey,
 } from "./services/stripeService";
 import { syncEsimUsage, syncUserEsims, syncAllActiveEsims, runUsageSyncJob, findEsimsLowOnData, findEsimsExpiringSoon, findExpiredEsimsNeedingRenewal } from "./services/usageSync";
 import { getActiveProvider } from "./providers/adapters";
@@ -323,12 +324,13 @@ export async function registerRoutes(
         planId: plan.id,
         planName: plan.name,
         destination: destination?.name || 'Unknown',
+        countryCode: destination?.countryCode || '',
         region: destination?.region || plan.coverage,
         dataAmount: plan.dataAmount,
         validity: plan.validity,
         dataAmountGb: plan.dataAmountGb,
         validityDays: plan.validityDays,
-        price: plan.price,
+        price: plan.price,          // server-controlled fallback price
         currency: plan.currency,
         email,
         userId,
@@ -900,6 +902,39 @@ export async function registerRoutes(
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
+
+  // ── Routing decisions (admin) ───────────────────────────────────────────────
+  app.get("/api/admin/routing-decisions", requireAdmin, async (req, res) => {
+    try {
+      const { routingDecisions, providerOffers, providers } = await import("@shared/schema");
+      const limit = parseInt(req.query.limit as string || "50", 10);
+      const rows = await db
+        .select()
+        .from(routingDecisions)
+        .orderBy(sql`${routingDecisions.createdAt} desc`)
+        .limit(limit);
+      res.json(rows);
+    } catch (err: any) {
+      console.error("/api/admin/routing-decisions error:", err.message);
+      res.status(500).json({ message: "Failed to fetch routing decisions" });
+    }
+  });
+
+  // ── Provider attempts for an order (admin) ──────────────────────────────────
+  app.get("/api/admin/provider-attempts/:orderId", requireAdmin, async (req, res) => {
+    try {
+      const { providerAttempts } = await import("@shared/schema");
+      const rows = await db
+        .select()
+        .from(providerAttempts)
+        .where(eq(providerAttempts.orderId, req.params.orderId))
+        .orderBy(sql`${providerAttempts.createdAt} asc`);
+      res.json(rows);
+    } catch (err: any) {
+      console.error("/api/admin/provider-attempts error:", err.message);
+      res.status(500).json({ message: "Failed to fetch provider attempts" });
     }
   });
 

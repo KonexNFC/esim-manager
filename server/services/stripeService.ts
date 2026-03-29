@@ -1,16 +1,24 @@
 // ─── Stripe Service ───────────────────────────────────────────────────────────
-// Handles creating Stripe checkout sessions for plan purchases and top-ups.
-// Uses price_data (not pre-created prices) for one-time eSIM purchases.
+// Creates Stripe Checkout sessions for plan purchases and top-ups.
+// Pricing is ALWAYS server-controlled:
+//   • If a matching normalized plan is found → pricing engine computes the price
+//     from the routing engine's selected offer's wholesale cost.
+//   • Otherwise → plan.price from the database (already server-controlled).
+// No frontend-supplied price is ever trusted.
 
 import { getUncachableStripeClient } from '../stripeClient';
 import { db } from '../storage';
-import { users, orders, topups } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { users, orders, topups, normalizedPlans } from '@shared/schema';
+import { eq, and } from 'drizzle-orm';
+import { selectBestProviderForPlan } from './routingEngine';
+import { calculateRetailPrice } from './pricingEngine';
 
 const BASE_URL = process.env.APP_BASE_URL ||
   (process.env.REPLIT_DOMAINS
     ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
     : 'http://localhost:5000');
+
+// ─── Customer helper ──────────────────────────────────────────────────────────
 
 export async function getOrCreateStripeCustomer(
   email: string,
@@ -19,20 +27,17 @@ export async function getOrCreateStripeCustomer(
 ): Promise<string> {
   const stripe = await getUncachableStripeClient();
 
-  // If user is logged in, check for existing customer ID
   if (userId) {
     const [user] = await db.select().from(users).where(eq(users.id, userId));
     if (user?.stripeCustomerId) return user.stripeCustomerId;
   }
 
-  // Create new Stripe customer
   const customer = await stripe.customers.create({
     email,
     name: name || undefined,
     metadata: { userId: userId || '', source: 'globesim' },
   });
 
-  // Persist stripe customer ID to user record
   if (userId) {
     await db.update(users)
       .set({ stripeCustomerId: customer.id })
@@ -42,16 +47,48 @@ export async function getOrCreateStripeCustomer(
   return customer.id;
 }
 
+// ─── Normalized plan lookup ───────────────────────────────────────────────────
+
+/** Compact fallback entry stored in Stripe metadata + orders table */
+export interface FallbackEntry {
+  r: number;            // rank
+  k: string;            // providerKey
+  c: string;            // providerPlanCode
+  w: number;            // wholesalePriceUsd
+}
+
+async function findNormalizedPlanForParams(
+  countryCode: string,
+  dataAmountGb: number,
+  validityDays: number,
+) {
+  // dataMb in normalized_plans = dataAmountGb * 1024
+  const dataMb = Math.round(dataAmountGb * 1024);
+  const [match] = await db
+    .select()
+    .from(normalizedPlans)
+    .where(and(
+      eq(normalizedPlans.regionCode, countryCode),
+      eq(normalizedPlans.dataMb, dataMb),
+      eq(normalizedPlans.validityDays, validityDays),
+      eq(normalizedPlans.isActive, true),
+    ));
+  return match ?? null;
+}
+
+// ─── Checkout params ──────────────────────────────────────────────────────────
+
 export interface PlanCheckoutParams {
   planId: string;
   planName: string;
   destination: string;
+  countryCode: string;   // ISO-2 country code (e.g. "GB")
   region: string;
   dataAmount: string;
   validity: string;
   dataAmountGb: number;
   validityDays: number;
-  price: number;
+  price: number;          // DB price — used as fallback only
   currency: string;
   email: string;
   userId?: string;
@@ -60,16 +97,81 @@ export interface PlanCheckoutParams {
   upsellPrice?: number;
 }
 
-export async function createPlanCheckoutSession(params: PlanCheckoutParams): Promise<{ url: string; sessionId: string }> {
-  const stripe = await getUncachableStripeClient();
+// ─── Plan checkout ────────────────────────────────────────────────────────────
 
+export async function createPlanCheckoutSession(
+  params: PlanCheckoutParams,
+): Promise<{ url: string; sessionId: string }> {
+  const stripe = await getUncachableStripeClient();
   const customerId = await getOrCreateStripeCustomer(params.email, params.userId, params.userName);
 
+  // ── Server-side pricing via routing engine ─────────────────────────────
+  // Try to find a normalized plan that matches this product.
+  // If found: use routing engine + pricing engine for server-authoritative price.
+  // If not found: fall back to plan.price from DB (already server-controlled).
+
+  let finalPriceUsd = params.price;
+  const routingMetadata: Record<string, string> = {};
+
+  try {
+    const normalizedPlan = await findNormalizedPlanForParams(
+      params.countryCode,
+      params.dataAmountGb,
+      params.validityDays,
+    );
+
+    if (normalizedPlan) {
+      const routing = await selectBestProviderForPlan(normalizedPlan.id, 'blended_score');
+      const winner = routing.fallbackChain[0];
+
+      // Compute server-side retail price from wholesale cost
+      const pricing = calculateRetailPrice(winner.wholesalePriceUsd, {
+        markupPercent: 40,
+        minimumMarginPercent: 30,
+        charmPricing: true,
+        floorPriceUsd: 0.99,
+      });
+
+      finalPriceUsd = pricing.retailPriceUsd;
+
+      // Compact fallback chain for metadata storage
+      const compactChain: FallbackEntry[] = routing.fallbackChain.map(p => ({
+        r: p.rank,
+        k: p.providerKey,
+        c: p.providerPlanCode,
+        w: p.wholesalePriceUsd,
+      }));
+
+      routingMetadata.normalizedPlanId = normalizedPlan.id;
+      routingMetadata.routingDecisionId = routing.decisionId;
+      routingMetadata.selectedProviderKey = routing.selectedProviderKey;
+      routingMetadata.selectedProviderPlanCode = routing.selectedProviderPlanCode;
+      routingMetadata.fallbackChainJson = JSON.stringify(compactChain);
+      routingMetadata.wholesaleCostUsd = winner.wholesalePriceUsd.toFixed(4);
+      routingMetadata.marginPercent = pricing.marginPercent.toFixed(2);
+
+      console.log(
+        `[Stripe] Routing: plan "${params.planName}" → ${routing.selectedProviderKey}` +
+        ` | retail $${finalPriceUsd} (was $${params.price}) | margin ${pricing.marginPercent.toFixed(1)}%`,
+      );
+    } else {
+      // No normalized plan → log and use DB price, which is still server-controlled
+      // Store a rough margin based on DB price if we have a wholesale estimate
+      console.log(
+        `[Stripe] No normalized plan for ${params.countryCode}/${params.dataAmountGb}GB/${params.validityDays}d — using DB price $${params.price}`,
+      );
+    }
+  } catch (routingErr: any) {
+    // Routing failure is non-fatal: fall back to DB price
+    console.error(`[Stripe] Routing engine error (falling back to DB price): ${routingErr.message}`);
+  }
+
+  // ── Line items ─────────────────────────────────────────────────────────
   const lineItems: any[] = [
     {
       price_data: {
         currency: params.currency.toLowerCase(),
-        unit_amount: Math.round(params.price * 100),
+        unit_amount: Math.round(finalPriceUsd * 100),
         product_data: {
           name: `${params.destination} eSIM — ${params.dataAmount} · ${params.validity}`,
           description: `GlobeSIM plan for ${params.destination}. Coverage: ${params.region}.`,
@@ -85,7 +187,6 @@ export async function createPlanCheckoutSession(params: PlanCheckoutParams): Pro
     },
   ];
 
-  // Add upsell top-up as second line item if selected
   if (params.upsellPrice && params.upsellDataGb) {
     lineItems.push({
       price_data: {
@@ -118,12 +219,15 @@ export async function createPlanCheckoutSession(params: PlanCheckoutParams): Pro
       dataAmountGb: String(params.dataAmountGb),
       validityDays: String(params.validityDays),
       purchaseType: 'initial_purchase',
+      ...routingMetadata,    // routing engine fields (if resolved)
     },
     allow_promotion_codes: true,
   });
 
   return { url: session.url!, sessionId: session.id };
 }
+
+// ─── Topup checkout ───────────────────────────────────────────────────────────
 
 export interface TopupCheckoutParams {
   orderId: string;
@@ -135,12 +239,12 @@ export interface TopupCheckoutParams {
   userId?: string;
 }
 
-export async function createTopupCheckoutSession(params: TopupCheckoutParams): Promise<{ url: string; sessionId: string; topupId: string }> {
+export async function createTopupCheckoutSession(
+  params: TopupCheckoutParams,
+): Promise<{ url: string; sessionId: string; topupId: string }> {
   const stripe = await getUncachableStripeClient();
-
   const customerId = await getOrCreateStripeCustomer(params.email, params.userId);
 
-  // Create pending topup record
   const [topup] = await db.insert(topups).values({
     orderId: params.orderId,
     optionCode: params.optionCode,
@@ -179,7 +283,6 @@ export async function createTopupCheckoutSession(params: TopupCheckoutParams): P
     },
   });
 
-  // Save session ID to topup
   await db.update(topups)
     .set({ stripeCheckoutSessionId: session.id })
     .where(eq(topups.id, topup.id));
@@ -187,10 +290,10 @@ export async function createTopupCheckoutSession(params: TopupCheckoutParams): P
   return { url: session.url!, sessionId: session.id, topupId: topup.id };
 }
 
-export async function handleCheckoutCompleted(session: any): Promise<void> {
-  const metadata = session.metadata || {};
-  const purchaseType = metadata.purchaseType;
+// ─── Webhook handlers ─────────────────────────────────────────────────────────
 
+export async function handleCheckoutCompleted(session: any): Promise<void> {
+  const purchaseType = session.metadata?.purchaseType;
   if (purchaseType === 'initial_purchase') {
     await handleInitialPurchaseCompleted(session);
   } else if (purchaseType === 'topup') {
@@ -202,7 +305,7 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
   const { fulfillInitialPurchase } = await import('./fulfillment');
   const metadata = session.metadata || {};
 
-  // Ensure idempotent: don't create duplicate orders
+  // Idempotency: don't create duplicate orders
   const existing = await db.select().from(orders)
     .where(eq(orders.stripeCheckoutSessionId, session.id));
 
@@ -213,16 +316,20 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
   }
 
   const email = metadata.email || session.customer_details?.email || '';
-  const userId = metadata.userId || undefined;
+  let resolvedUserId = metadata.userId || undefined;
 
-  // Link order to user if they exist
-  let resolvedUserId = userId;
   if (!resolvedUserId && email) {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     if (user) resolvedUserId = user.id;
   }
 
   const totalPrice = (session.amount_total || 0) / 100;
+
+  // Parse routing fields from metadata
+  let fallbackProvidersJson: any = null;
+  if (metadata.fallbackChainJson) {
+    try { fallbackProvidersJson = JSON.parse(metadata.fallbackChainJson); } catch { /* ignore */ }
+  }
 
   const [order] = await db.insert(orders).values({
     planId: metadata.planId,
@@ -235,10 +342,17 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
     stripePaymentIntentId: session.payment_intent || null,
     stripeCustomerId: session.customer || null,
     purchaseType: 'initial_purchase',
-    providerName: 'mock',
+    providerName: metadata.selectedProviderKey || 'mock',
+    // Routing & pricing fields
+    normalizedPlanId: metadata.normalizedPlanId || null,
+    routingDecisionId: metadata.routingDecisionId || null,
+    selectedProviderKey: metadata.selectedProviderKey || null,
+    fallbackProvidersJson,
+    wholesaleCostUsd: metadata.wholesaleCostUsd ? parseFloat(metadata.wholesaleCostUsd) : null,
+    marginPercent: metadata.marginPercent ? parseFloat(metadata.marginPercent) : null,
   }).returning();
 
-  console.log(`[Stripe] Created order ${order.id} for session ${session.id}`);
+  console.log(`[Stripe] Created order ${order.id} for session ${session.id} | provider=${order.selectedProviderKey ?? 'default'}`);
   await fulfillInitialPurchase(order.id);
 }
 
@@ -252,7 +366,6 @@ async function handleTopupCompleted(session: any): Promise<void> {
     return;
   }
 
-  // Update topup payment intent
   await db.update(topups)
     .set({ status: 'paid' as any })
     .where(eq(topups.id, topupId));

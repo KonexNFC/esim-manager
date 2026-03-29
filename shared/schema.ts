@@ -86,6 +86,28 @@ export const orders = pgTable("orders", {
   daysRemaining: integer("days_remaining"),
   expiresAt: timestamp("expires_at"),
   lastSyncedAt: timestamp("last_synced_at"),
+  // Routing & pricing fields (populated at checkout time by routing engine)
+  normalizedPlanId: varchar("normalized_plan_id"),
+  routingDecisionId: varchar("routing_decision_id"),
+  selectedProviderKey: text("selected_provider_key"),
+  fallbackProvidersJson: jsonb("fallback_providers_json"),
+  wholesaleCostUsd: doublePrecision("wholesale_cost_usd"),
+  marginPercent: doublePrecision("margin_percent"),
+});
+
+// ─── PROVIDER ATTEMPTS ────────────────────────────────
+// Logs every provider provisioning attempt during fulfillment.
+// status: ok | error | skipped
+export const providerAttempts = pgTable("provider_attempts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id),
+  providerKey: text("provider_key").notNull(),
+  providerPlanCode: text("provider_plan_code"),
+  attemptNumber: integer("attempt_number").notNull().default(1),
+  status: text("status").notNull().default("pending"), // ok | error | skipped
+  errorMessage: text("error_message"),
+  durationMs: integer("duration_ms"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // ─── ORDER ITEMS ──────────────────────────────────────
@@ -291,6 +313,7 @@ export const insertProviderSchema = createInsertSchema(providers).omit({ id: tru
 export const insertNormalizedPlanSchema = createInsertSchema(normalizedPlans).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertProviderOfferSchema = createInsertSchema(providerOffers).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertRoutingDecisionSchema = createInsertSchema(routingDecisions).omit({ id: true, createdAt: true });
+export const insertProviderAttemptSchema = createInsertSchema(providerAttempts).omit({ id: true, createdAt: true });
 
 // ─── TYPES ────────────────────────────────────────────
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -321,3 +344,5 @@ export type ProviderOffer = typeof providerOffers.$inferSelect;
 export type InsertProviderOffer = z.infer<typeof insertProviderOfferSchema>;
 export type RoutingDecision = typeof routingDecisions.$inferSelect;
 export type InsertRoutingDecision = z.infer<typeof insertRoutingDecisionSchema>;
+export type ProviderAttempt = typeof providerAttempts.$inferSelect;
+export type InsertProviderAttempt = z.infer<typeof insertProviderAttemptSchema>;

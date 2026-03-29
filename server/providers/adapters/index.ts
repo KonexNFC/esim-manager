@@ -12,6 +12,27 @@ import type { ProviderAdapter } from './base';
 //   • Neither           → Mock (dev/test only)
 const PROVIDER_NAME = process.env.PROVIDER_NAME;
 
+/** Return a specific provider adapter by its registry key, or null if unavailable. */
+export function getProviderAdapterByKey(key: string): ProviderAdapter | null {
+  const esimgoKey = process.env.ESIMGO_API_KEY;
+  const eaCode = process.env.ESIM_ACCESS_API_KEY;
+  const eaSecret = process.env.ESIM_ACCESS_SECRET_KEY;
+
+  switch (key) {
+    case 'esimgo':
+      if (!esimgoKey) { console.warn(`[Provider] getProviderAdapterByKey: ESIMGO_API_KEY missing`); return null; }
+      return new EsimGoAdapter(esimgoKey);
+    case 'esimAccess':
+      if (!eaCode || !eaSecret) { console.warn(`[Provider] getProviderAdapterByKey: eSIM Access keys missing`); return null; }
+      return new EsimAccessAdapter(eaCode, eaSecret);
+    case 'mock':
+      return new MockProviderAdapter();
+    default:
+      console.warn(`[Provider] getProviderAdapterByKey: unknown key "${key}"`);
+      return null;
+  }
+}
+
 export function getActiveProvider(): ProviderAdapter {
   const esimgoKey = process.env.ESIMGO_API_KEY;
   const eaAccessCode = process.env.ESIM_ACCESS_API_KEY;

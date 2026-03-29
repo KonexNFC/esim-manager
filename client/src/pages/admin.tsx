@@ -313,11 +313,46 @@ function OrdersTab() {
                 <h3 className="font-semibold text-sm">{order.destinationName || "Unknown"} - {order.planName || "Plan"}</h3>
                 {getOrderStatusBadge(order.status)}
                 {getEsimStatusBadge(order.esimStatus)}
+                {order.selectedProviderKey && (
+                  <Badge variant="outline" className="font-mono text-xs border-violet-300 text-violet-700 dark:text-violet-300" data-testid={`badge-provider-${order.id}`}>
+                    {order.selectedProviderKey}
+                  </Badge>
+                )}
+                {order.marginPercent != null && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge
+                        variant="outline"
+                        className={`text-xs cursor-default ${
+                          order.marginPercent >= 40
+                            ? "border-emerald-300 text-emerald-700 dark:text-emerald-400"
+                            : order.marginPercent >= 25
+                            ? "border-yellow-300 text-yellow-700 dark:text-yellow-400"
+                            : "border-red-300 text-red-700 dark:text-red-400"
+                        }`}
+                        data-testid={`badge-margin-${order.id}`}
+                      >
+                        {order.marginPercent.toFixed(1)}% margin
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {order.wholesaleCostUsd != null
+                        ? `Wholesale $${Number(order.wholesaleCostUsd).toFixed(2)} · Retail $${order.totalPrice.toFixed(2)}`
+                        : "Margin at checkout time"}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5 flex-wrap">
                 <span>{order.email}</span>
                 <span>|</span>
                 <span>${order.totalPrice.toFixed(2)}</span>
+                {order.wholesaleCostUsd != null && (
+                  <>
+                    <span>|</span>
+                    <span className="text-muted-foreground">cost ${Number(order.wholesaleCostUsd).toFixed(2)}</span>
+                  </>
+                )}
                 {order.iccid && (
                   <>
                     <span>|</span>
