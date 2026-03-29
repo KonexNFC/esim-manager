@@ -22,7 +22,8 @@ import {
   LayoutDashboard, Package, ShoppingCart, Wifi, TrendingUp,
   DollarSign, Globe, BarChart3, Pause, Play, HelpCircle,
   Send, RotateCcw, Download, ChevronRight, ArrowLeft, Smartphone, LogOut,
-  Zap, Wrench, Settings, Target, TrendingDown, RefreshCw
+  Zap, Wrench, Settings, Target, TrendingDown, RefreshCw,
+  Network, CheckCircle2, XCircle, AlertCircle, Clock, GitBranch, Server
 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -947,6 +948,276 @@ function MarginsTab() {
   );
 }
 
+// ─── Health badge helper ───────────────────────────────────────────────────
+
+function HealthBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; className: string; Icon: any }> = {
+    healthy:  { label: "Healthy",  className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300", Icon: CheckCircle2 },
+    degraded: { label: "Degraded", className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300", Icon: AlertCircle },
+    down:     { label: "Down",     className: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300", Icon: XCircle },
+    unknown:  { label: "Unknown",  className: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400", Icon: HelpCircle },
+  };
+  const { label, className, Icon } = map[status] ?? map.unknown;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${className}`}>
+      <Icon className="w-3 h-3" />
+      {label}
+    </span>
+  );
+}
+
+function AttemptStatusBadge({ status }: { status: string }) {
+  if (status === 'ok')      return <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium"><CheckCircle2 className="w-3 h-3" />ok</span>;
+  if (status === 'error')   return <span className="inline-flex items-center gap-1 text-xs text-red-500 dark:text-red-400 font-medium"><XCircle className="w-3 h-3" />error</span>;
+  if (status === 'skipped') return <span className="inline-flex items-center gap-1 text-xs text-yellow-600 dark:text-yellow-400 font-medium"><AlertCircle className="w-3 h-3" />skipped</span>;
+  return <span className="text-xs text-muted-foreground">{status}</span>;
+}
+
+// ─── Routing Tab ───────────────────────────────────────────────────────────
+
+function RoutingTab() {
+  const { toast } = useToast();
+
+  const { data: providers, isLoading: providersLoading, refetch: refetchProviders } = useQuery<any[]>({
+    queryKey: ["/api/admin/providers"],
+  });
+
+  const { data: decisions, isLoading: decisionsLoading, refetch: refetchDecisions } = useQuery<any[]>({
+    queryKey: ["/api/admin/routing-decisions"],
+  });
+
+  const { data: attempts, isLoading: attemptsLoading, refetch: refetchAttempts } = useQuery<any[]>({
+    queryKey: ["/api/admin/routing/attempts"],
+  });
+
+  const seedMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/providers/seed", {}),
+    onSuccess: async (res: any) => {
+      const data = await res.json();
+      toast({ title: "Providers seeded", description: `${data.providers?.length ?? 0} provider(s) upserted.` });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/providers"] });
+    },
+    onError: () => toast({ title: "Seed failed", variant: "destructive" }),
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/routing/sync-plans", {}),
+    onSuccess: async (res: any) => {
+      const data = await res.json();
+      toast({
+        title: "Plans synced to routing",
+        description: `${data.createdPlans} normalized plan(s) created, ${data.createdOffers} offer(s) upserted, ${data.skipped} plan(s) skipped (no code/cost).`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/routing-decisions"] });
+    },
+    onError: () => toast({ title: "Sync failed", variant: "destructive" }),
+  });
+
+  const toggleProvider = useMutation({
+    mutationFn: ({ key, enabled }: { key: string; enabled: boolean }) =>
+      apiRequest("PATCH", `/api/admin/providers/${key}`, { enabled }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/admin/providers"] }),
+    onError: () => toast({ title: "Update failed", variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── Provider Management ── */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Server className="w-5 h-5 text-violet-500" />
+            <h3 className="font-semibold text-base">Provider Management</h3>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => seedMutation.mutate()}
+              disabled={seedMutation.isPending}
+              data-testid="button-seed-providers"
+            >
+              {seedMutation.isPending ? <RefreshCw className="w-3 h-3 mr-1.5 animate-spin" /> : <Server className="w-3 h-3 mr-1.5" />}
+              Seed Providers
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+              data-testid="button-sync-plans"
+            >
+              {syncMutation.isPending ? <RefreshCw className="w-3 h-3 mr-1.5 animate-spin" /> : <GitBranch className="w-3 h-3 mr-1.5" />}
+              Sync Plans → Routing
+            </Button>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Seed registers the known providers (eSIMGo, eSIM Access, Mock). Sync reads all active plans and creates routing data so the engine can pick the cheapest provider at checkout.
+        </p>
+        {providersLoading ? (
+          <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+        ) : !providers || providers.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <Server className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No providers found. Click "Seed Providers" to register them.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border rounded-lg border overflow-hidden">
+            <div className="grid grid-cols-5 gap-3 px-4 py-2 bg-muted/40 text-xs font-medium text-muted-foreground">
+              <span>Provider</span>
+              <span className="text-center">Priority</span>
+              <span className="text-center">Health</span>
+              <span className="text-center">Last Check</span>
+              <span className="text-center">Enabled</span>
+            </div>
+            {providers.map((p) => (
+              <div key={p.key} className="grid grid-cols-5 gap-3 px-4 py-3 items-center" data-testid={`row-provider-${p.key}`}>
+                <div>
+                  <p className="text-sm font-medium">{p.name}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{p.key}</p>
+                </div>
+                <p className="text-sm text-center font-mono">#{p.priority}</p>
+                <div className="flex justify-center"><HealthBadge status={p.healthStatus} /></div>
+                <p className="text-xs text-center text-muted-foreground">
+                  {p.lastHealthCheck ? new Date(p.lastHealthCheck).toLocaleDateString() : "Never"}
+                </p>
+                <div className="flex justify-center">
+                  <Button
+                    size="sm"
+                    variant={p.enabled ? "default" : "outline"}
+                    className="h-7 text-xs"
+                    onClick={() => toggleProvider.mutate({ key: p.key, enabled: !p.enabled })}
+                    data-testid={`button-toggle-provider-${p.key}`}
+                  >
+                    {p.enabled ? <><Pause className="w-3 h-3 mr-1" />Enabled</> : <><Play className="w-3 h-3 mr-1" />Disabled</>}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* ── Routing Decisions ── */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <GitBranch className="w-5 h-5 text-violet-500" />
+            <h3 className="font-semibold text-base">Routing Decisions</h3>
+            {decisions && <Badge variant="secondary" className="text-xs">{decisions.length}</Badge>}
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => refetchDecisions()} data-testid="button-refresh-decisions">
+            <RefreshCw className="w-3 h-3 mr-1.5" />Refresh
+          </Button>
+        </div>
+        {decisionsLoading ? (
+          <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+        ) : !decisions || decisions.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <GitBranch className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No routing decisions yet. Decisions are logged when a purchase triggers the routing engine.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border rounded-lg border overflow-hidden">
+            <div className="grid grid-cols-4 gap-3 px-4 py-2 bg-muted/40 text-xs font-medium text-muted-foreground">
+              <span>Winner</span>
+              <span>Strategy</span>
+              <span>Scores</span>
+              <span className="text-right">Time</span>
+            </div>
+            {decisions.slice(0, 50).map((d) => {
+              const winnerScores = d.scores?.[d.selectedProviderKey];
+              return (
+                <div key={d.id} className="grid grid-cols-4 gap-3 px-4 py-3 items-start" data-testid={`row-decision-${d.id}`}>
+                  <div>
+                    <p className="text-sm font-medium font-mono">{d.selectedProviderKey}</p>
+                    <p className="text-xs text-muted-foreground font-mono truncate">{d.selectedProviderPlanCode}</p>
+                  </div>
+                  <div>
+                    <Badge variant="outline" className="text-xs">{d.strategy}</Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-0.5">
+                    {winnerScores ? (
+                      <>
+                        <p>cost: <span className="font-medium text-foreground">{winnerScores.cost_score}</span></p>
+                        <p>health: <span className="font-medium text-foreground">{winnerScores.health_score}</span></p>
+                      </>
+                    ) : (
+                      <p className="italic">—</p>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground text-right">
+                    {new Date(d.createdAt).toLocaleString()}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* ── Provider Attempts ── */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Clock className="w-5 h-5 text-violet-500" />
+            <h3 className="font-semibold text-base">Provider Attempts</h3>
+            {attempts && <Badge variant="secondary" className="text-xs">{attempts.length}</Badge>}
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => refetchAttempts()} data-testid="button-refresh-attempts">
+            <RefreshCw className="w-3 h-3 mr-1.5" />Refresh
+          </Button>
+        </div>
+        {attemptsLoading ? (
+          <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+        ) : !attempts || attempts.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <Clock className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No provider attempts yet. Attempts are logged during eSIM provisioning after payment.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border rounded-lg border overflow-hidden">
+            <div className="grid grid-cols-5 gap-3 px-4 py-2 bg-muted/40 text-xs font-medium text-muted-foreground">
+              <span>Order</span>
+              <span>Provider</span>
+              <span className="text-center">Attempt</span>
+              <span className="text-center">Result</span>
+              <span className="text-right">Duration</span>
+            </div>
+            {attempts.slice(0, 100).map((a, i) => (
+              <div key={`${a.orderId}-${a.attemptNumber}-${i}`} className="grid grid-cols-5 gap-3 px-4 py-2.5 items-center" data-testid={`row-attempt-${a.orderId}-${i}`}>
+                <p className="text-xs font-mono truncate text-muted-foreground" title={a.orderId}>
+                  {a.orderId.slice(0, 8)}…
+                </p>
+                <div>
+                  <p className="text-xs font-medium">{a.providerKey}</p>
+                  {a.providerPlanCode && (
+                    <p className="text-[10px] text-muted-foreground font-mono truncate">{a.providerPlanCode}</p>
+                  )}
+                </div>
+                <p className="text-xs text-center">#{a.attemptNumber}</p>
+                <div className="flex justify-center">
+                  <AttemptStatusBadge status={a.status} />
+                </div>
+                <div className="text-right">
+                  {a.durationMs != null ? (
+                    <span className="text-xs text-muted-foreground">{a.durationMs}ms</span>
+                  ) : <span className="text-xs text-muted-foreground">—</span>}
+                  {a.errorMessage && (
+                    <p className="text-[10px] text-red-500 dark:text-red-400 truncate mt-0.5" title={a.errorMessage}>{a.errorMessage}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 export default function Admin() {
   const { user, isLoading: authLoading, logout } = useAuth();
   const { toast } = useToast();
@@ -1041,6 +1312,10 @@ export default function Admin() {
             <BarChart3 className="w-4 h-4 mr-1.5" />
             Margins
           </TabsTrigger>
+          <TabsTrigger value="routing" className="flex-1" data-testid="tab-routing">
+            <Network className="w-4 h-4 mr-1.5" />
+            Routing
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard">
@@ -1057,6 +1332,9 @@ export default function Admin() {
         </TabsContent>
         <TabsContent value="margins">
           <MarginsTab />
+        </TabsContent>
+        <TabsContent value="routing">
+          <RoutingTab />
         </TabsContent>
       </Tabs>
     </div>

@@ -1127,6 +1127,141 @@ export async function registerRoutes(
     }
   });
 
+  // ── Provider management ─────────────────────────────────────────────────────
+  app.get("/api/admin/providers", requireAdmin, async (_req, res) => {
+    try {
+      const { getAllProviders } = await import('./services/providerRegistry');
+      res.json(await getAllProviders());
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to fetch providers" });
+    }
+  });
+
+  app.post("/api/admin/providers/seed", requireAdmin, async (_req, res) => {
+    try {
+      const { upsertProvider } = await import('./services/providerRegistry');
+      const seed = [
+        { key: 'esimgo', name: 'eSIMGo', enabled: true, priority: 1, healthStatus: 'unknown' as const },
+        { key: 'esimaccess', name: 'eSIM Access', enabled: true, priority: 2, healthStatus: 'unknown' as const },
+        { key: 'mock', name: 'Mock Provider', enabled: true, priority: 3, healthStatus: 'healthy' as const },
+      ];
+      const results = await Promise.all(seed.map(p => upsertProvider(p)));
+      res.json({ success: true, providers: results });
+    } catch (err: any) {
+      console.error("/api/admin/providers/seed error:", err.message);
+      res.status(500).json({ message: "Failed to seed providers" });
+    }
+  });
+
+  app.patch("/api/admin/providers/:key", requireAdmin, async (req, res) => {
+    try {
+      const { upsertProvider, getProviderByKey } = await import('./services/providerRegistry');
+      const existing = await getProviderByKey(req.params.key);
+      if (!existing) return res.status(404).json({ message: "Provider not found" });
+      const { enabled, priority, healthStatus, name } = req.body;
+      const updated = await upsertProvider({
+        ...existing,
+        ...(enabled !== undefined && { enabled }),
+        ...(priority !== undefined && { priority }),
+        ...(healthStatus !== undefined && { healthStatus }),
+        ...(name !== undefined && { name }),
+      });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to update provider" });
+    }
+  });
+
+  // ── Sync plans → routing tables ─────────────────────────────────────────────
+  // Reads all active plans in the DB and creates/updates normalized_plans +
+  // provider_offers so the routing engine has data to work with.
+  app.post("/api/admin/routing/sync-plans", requireAdmin, async (_req, res) => {
+    try {
+      const { plans: plansTable, destinations: destsTable } = await import("@shared/schema");
+      const {
+        createNormalizedPlan,
+        getAllNormalizedPlans,
+        upsertProviderOffer,
+      } = await import('./services/providerRegistry');
+
+      const rows = await db
+        .select({ plan: plansTable, dest: destsTable })
+        .from(plansTable)
+        .leftJoin(destsTable, eq(plansTable.destinationId, destsTable.id))
+        .where(eq(plansTable.isActive, true));
+
+      const existing = await getAllNormalizedPlans();
+      const normalizedMap = new Map(
+        existing.map(p => [`${p.regionCode}__${p.dataMb}__${p.validityDays}`, p]),
+      );
+
+      let createdPlans = 0;
+      let createdOffers = 0;
+      let skipped = 0;
+
+      for (const { plan, dest } of rows) {
+        const regionCode = dest?.countryCode ?? 'GLOBAL';
+        const dataMb = Math.round(plan.dataAmountGb * 1024);
+        const normKey = `${regionCode}__${dataMb}__${plan.validityDays}`;
+
+        let normalizedPlan = normalizedMap.get(normKey);
+        if (!normalizedPlan) {
+          normalizedPlan = await createNormalizedPlan({
+            destinationId: dest?.id ?? undefined,
+            regionCode,
+            name: plan.name,
+            dataMb,
+            validityDays: plan.validityDays,
+            isUnlimited: false,
+            planType: 'data',
+            retailPriceUsd: plan.price,
+            isActive: true,
+          });
+          normalizedMap.set(normKey, normalizedPlan);
+          createdPlans++;
+        }
+
+        // Skip if no provider plan code or wholesale cost
+        if (!plan.externalPlanCode || !plan.wholesaleCost || plan.wholesaleCost <= 0) {
+          skipped++;
+          continue;
+        }
+
+        const providerKey = (plan.provider === 'manual' || !plan.provider) ? 'mock' : plan.provider;
+        await upsertProviderOffer({
+          normalizedPlanId: normalizedPlan.id,
+          providerKey,
+          providerPlanCode: plan.externalPlanCode,
+          wholesalePriceUsd: plan.wholesaleCost,
+          currency: 'USD',
+          isActive: true,
+        });
+        createdOffers++;
+      }
+
+      res.json({ success: true, createdPlans, createdOffers, skipped });
+    } catch (err: any) {
+      console.error("/api/admin/routing/sync-plans error:", err.message);
+      res.status(500).json({ message: "Failed to sync plans to routing tables" });
+    }
+  });
+
+  // ── All provider attempts across orders (admin) ─────────────────────────────
+  app.get("/api/admin/routing/attempts", requireAdmin, async (req, res) => {
+    try {
+      const { providerAttempts } = await import("@shared/schema");
+      const limit = parseInt(req.query.limit as string || "100", 10);
+      const rows = await db
+        .select()
+        .from(providerAttempts)
+        .orderBy(sql`${providerAttempts.createdAt} desc`)
+        .limit(limit);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to fetch provider attempts" });
+    }
+  });
+
   // ── Routing decisions (admin) ───────────────────────────────────────────────
   app.get("/api/admin/routing-decisions", requireAdmin, async (req, res) => {
     try {

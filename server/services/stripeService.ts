@@ -121,7 +121,7 @@ export async function createPlanCheckoutSession(
     );
 
     if (normalizedPlan) {
-      const routing = await selectBestProviderForPlan(normalizedPlan.id, 'blended_score');
+      const routing = await selectBestProviderForPlan(normalizedPlan.id, 'cheapest_cost');
       const winner = routing.fallbackChain[0];
 
       // Compute server-side retail price from wholesale cost
