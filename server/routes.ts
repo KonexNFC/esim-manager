@@ -16,6 +16,7 @@ import {
 } from "./services/stripeService";
 import { syncEsimUsage, syncUserEsims, syncAllActiveEsims, runUsageSyncJob, findEsimsLowOnData, findEsimsExpiringSoon, findExpiredEsimsNeedingRenewal } from "./services/usageSync";
 import { getActiveProvider } from "./providers/adapters";
+import { calculateMargin } from "./services/marginEngine";
 
 // ─── Schemas ─────────────────────────────────────────
 const bestPlanSchema = z.object({
@@ -882,7 +883,7 @@ export async function registerRoutes(
 
       const avgMargin = allPlans.reduce((sum, p) => {
         if (p.wholesaleCost && p.price > 0) {
-          return sum + ((p.price - p.wholesaleCost) / p.price) * 100;
+          return sum + calculateMargin(p.price, p.wholesaleCost);
         }
         return sum;
       }, 0) / (allPlans.length || 1);

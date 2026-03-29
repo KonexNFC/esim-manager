@@ -26,6 +26,7 @@ import {
   getOffersForNormalizedPlan,
   getProviderByKey,
 } from "./providerRegistry";
+import { calculateMargin } from "./marginEngine";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -136,12 +137,9 @@ async function scoreCandidates(
         ? 100
         : Math.round(100 * (1 - (c.wholesalePriceUsd - minPrice) / priceRange));
 
-    // margin_score: (retail - wholesale) / retail × 100, clamped 0–100
-    const grossMarginRatio =
-      retailPriceUsd > 0
-        ? (retailPriceUsd - c.wholesalePriceUsd) / retailPriceUsd
-        : 0;
-    const margin_score = Math.max(0, Math.min(100, Math.round(grossMarginRatio * 100)));
+    // margin_score: shared gross margin formula → clamped 0–100
+    const rawMargin = calculateMargin(retailPriceUsd, c.wholesalePriceUsd);
+    const margin_score = Math.max(0, Math.min(100, Math.round(rawMargin)));
 
     const health_score = healthScore(c.providerHealthStatus);
     const latency_s = latencyScore(c.providerPriority);
