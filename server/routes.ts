@@ -1001,14 +1001,17 @@ export async function registerRoutes(
         marginPct: d.revenue > 0 ? (d.profit / d.revenue) * 100 : 0,
       })).sort((a, b) => b.profit - a.profit);
 
+      const totalCost = Math.round(profitEntries.reduce((s, e) => s + e.cost, 0) * 100) / 100;
+
       res.json({
-        totalRevenue,
+        totalRevenue: Math.round(totalRevenue * 100) / 100,
         totalOrders,
         livePlans,
         totalDestinations,
         avgMargin: Math.round(avgMargin),
         weightedMargin: Math.round(weightedMargin * 10) / 10,
         totalProfit: Math.round(totalProfit * 100) / 100,
+        totalCost,
         avgProfitPerOrder: Math.round(avgProfitPerOrder * 100) / 100,
         activeEsims: allOrders.filter(o =>
           o.esimStatus === "active" || o.esimStatus === "installed" || o.esimStatus === "issued"

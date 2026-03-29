@@ -50,6 +50,7 @@ type AdminStats = {
   avgMargin: number;
   weightedMargin: number;
   totalProfit: number;
+  totalCost: number;
   avgProfitPerOrder: number;
   activeEsims: number;
   providerBreakdown: ProviderBreakdownEntry[];
@@ -156,58 +157,72 @@ function DashboardTab() {
     );
   }
 
-  const weightedMarginColor =
-    (stats?.weightedMargin || 0) >= 50 ? "text-emerald-600 dark:text-emerald-400"
-    : (stats?.weightedMargin || 0) >= 30 ? "text-yellow-600 dark:text-yellow-400"
-    : "text-red-600 dark:text-red-400";
-
   return (
     <div className="space-y-6">
-      {/* ── 8 stat cards ── */}
+      {/* ── Primary profit metrics ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Revenue" value={`$${(stats?.totalRevenue || 0).toFixed(2)}`} icon={DollarSign} />
-        <StatCard title="Total Profit" value={`$${(stats?.totalProfit || 0).toFixed(2)}`} icon={TrendingUp} />
-        <StatCard title="Weighted Margin" value={`${(stats?.weightedMargin || 0).toFixed(1)}`} icon={BarChart3} suffix="%" />
+        <StatCard title="Revenue" value={`$${(stats?.totalRevenue || 0).toFixed(2)}`} icon={DollarSign} />
+        <StatCard title="Profit" value={`$${(stats?.totalProfit || 0).toFixed(2)}`} icon={TrendingUp} />
+        <StatCard title="Margin %" value={`${(stats?.weightedMargin || 0).toFixed(1)}`} icon={BarChart3} suffix="%" />
+        <StatCard title="Total Cost" value={`$${(stats?.totalCost || 0).toFixed(2)}`} icon={TrendingDown} />
+      </div>
+      {/* ── Operational metrics ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard title="Orders" value={stats?.totalOrders || 0} icon={ShoppingCart} />
         <StatCard title="Avg Profit / Order" value={`$${(stats?.avgProfitPerOrder || 0).toFixed(2)}`} icon={Target} />
-        <StatCard title="Total Orders" value={stats?.totalOrders || 0} icon={ShoppingCart} />
         <StatCard title="Live Plans" value={stats?.livePlans || 0} icon={Package} />
-        <StatCard title="Destinations" value={stats?.totalDestinations || 0} icon={Globe} />
         <StatCard title="Active eSIMs" value={stats?.activeEsims || 0} icon={Wifi} />
       </div>
 
-      {/* ── Provider cost breakdown ── */}
-      {stats?.providerBreakdown && stats.providerBreakdown.length > 0 && (
-        <Card className="p-5">
-          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-primary" />
-            Provider Cost Breakdown
-          </h3>
-          <div className="grid grid-cols-5 gap-2 text-xs font-medium text-muted-foreground mb-2 px-1">
-            <span>Provider</span>
-            <span className="text-right">Orders</span>
-            <span className="text-right">Revenue</span>
-            <span className="text-right">Cost</span>
-            <span className="text-right">Margin</span>
-          </div>
-          <div className="space-y-1">
-            {stats.providerBreakdown.map((row) => (
-              <div key={row.provider} className="grid grid-cols-5 gap-2 text-sm items-center px-1 py-1.5 rounded-md hover:bg-muted/50 transition-colors" data-testid={`row-provider-${row.provider}`}>
-                <span className="font-mono text-xs font-medium truncate">{row.provider}</span>
-                <span className="text-right text-muted-foreground">{row.orderCount}</span>
-                <span className="text-right">${row.revenue.toFixed(2)}</span>
-                <span className="text-right text-muted-foreground">${row.cost.toFixed(2)}</span>
-                <span className={`text-right font-semibold text-xs ${
+      {/* ── Provider Performance ── */}
+      <Card className="p-5">
+        <h3 className="font-semibold text-sm mb-4 flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-primary" />
+          Provider Performance
+        </h3>
+        {!stats?.providerBreakdown || stats.providerBreakdown.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No provider data yet — orders with cost tracking will appear here.</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-6 gap-2 text-xs font-medium text-muted-foreground mb-1 px-2">
+              <span className="col-span-2">Provider</span>
+              <span className="text-right">Orders</span>
+              <span className="text-right">Revenue</span>
+              <span className="text-right">Profit</span>
+              <span className="text-right">Avg Margin</span>
+            </div>
+            <div className="divide-y divide-border rounded-lg border overflow-hidden">
+              {stats.providerBreakdown.map((row) => {
+                const marginColor =
                   row.marginPct >= 50 ? "text-emerald-600 dark:text-emerald-400"
                   : row.marginPct >= 30 ? "text-yellow-600 dark:text-yellow-400"
-                  : "text-red-600 dark:text-red-400"
-                }`}>
-                  {row.marginPct.toFixed(1)}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+                  : "text-red-600 dark:text-red-400";
+                const profitColor = row.profit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400";
+                return (
+                  <div
+                    key={row.provider}
+                    className="grid grid-cols-6 gap-2 text-sm items-center px-2 py-2.5 hover:bg-muted/40 transition-colors"
+                    data-testid={`row-perf-${row.provider}`}
+                  >
+                    <div className="col-span-2 min-w-0">
+                      <p className="font-medium text-xs truncate">{row.provider}</p>
+                      <p className="text-[10px] text-muted-foreground">cost ${row.cost.toFixed(2)}</p>
+                    </div>
+                    <span className="text-right text-muted-foreground text-xs">{row.orderCount}</span>
+                    <span className="text-right text-xs">${row.revenue.toFixed(2)}</span>
+                    <span className={`text-right text-xs font-semibold ${profitColor}`}>
+                      ${row.profit.toFixed(2)}
+                    </span>
+                    <span className={`text-right text-xs font-bold ${marginColor}`}>
+                      {row.marginPct.toFixed(1)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </Card>
 
       {/* ── Pricing settings ── */}
       <Card className="p-5">
