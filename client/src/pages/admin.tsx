@@ -111,6 +111,21 @@ function DashboardTab() {
     },
   });
 
+  const backfillProfitMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/orders/backfill-profit", {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+      toast({ title: `Profit backfill complete`, description: `${data.updatedCount} order(s) updated` });
+    },
+    onError: () => {
+      toast({ title: "Backfill failed", variant: "destructive" });
+    },
+  });
+
   const currentMarginPct = adminSettings?.targetMarginPercent
     ? Math.round(parseFloat(adminSettings.targetMarginPercent) * 100)
     : 60;
@@ -244,6 +259,23 @@ function DashboardTab() {
             <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${applyAutoPricingMutation.isPending ? "animate-spin" : ""}`} />
             Reprice Auto Plans
           </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => backfillProfitMutation.mutate()}
+                disabled={backfillProfitMutation.isPending}
+                data-testid="button-backfill-profit"
+              >
+                <TrendingUp className={`w-3.5 h-3.5 mr-1.5 ${backfillProfitMutation.isPending ? "animate-spin" : ""}`} />
+                Backfill Profit
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Retroactively compute and store profit/margin on existing orders that are missing this data.
+            </TooltipContent>
+          </Tooltip>
         </div>
       </Card>
     </div>

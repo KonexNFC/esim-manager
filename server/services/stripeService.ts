@@ -8,7 +8,7 @@
 
 import { getUncachableStripeClient } from '../stripeClient';
 import { db } from '../storage';
-import { users, orders, topups, normalizedPlans } from '@shared/schema';
+import { users, orders, topups, normalizedPlans, plans } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { selectBestProviderForPlan } from './routingEngine';
 import { calculateRetailPrice } from './pricingEngine';
@@ -323,7 +323,32 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
     if (user) resolvedUserId = user.id;
   }
 
-  const totalPrice = (session.amount_total || 0) / 100;
+  const salePrice = (session.amount_total || 0) / 100; // totalPrice = retail sale price
+
+  // ── Resolve provider cost ─────────────────────────────────────────────────
+  // Priority: routing-engine metadata > plan.wholesaleCost > 0
+  const routingCost = metadata.wholesaleCostUsd ? parseFloat(metadata.wholesaleCostUsd) : null;
+
+  // Fetch plan from DB to get its provider cost and provider name as fallback
+  const [plan] = metadata.planId
+    ? await db.select().from(plans).where(eq(plans.id, metadata.planId))
+    : [];
+
+  const providerCost: number = routingCost ?? plan?.wholesaleCost ?? 0;
+
+  // ── Resolve provider used ─────────────────────────────────────────────────
+  // Priority: routing engine winner > plan.provider > 'manual'
+  const providerUsed: string =
+    metadata.selectedProviderKey || plan?.provider || 'manual';
+
+  // ── Compute profit & margin ───────────────────────────────────────────────
+  // Always compute — even when cost is 0 (profit = salePrice, margin = 100%)
+  const profit = providerCost > 0
+    ? parseFloat((salePrice - providerCost).toFixed(4))
+    : null; // null = cost unknown, do not claim 100% margin
+  const marginPercent = profit != null && salePrice > 0
+    ? parseFloat(((profit / salePrice) * 100).toFixed(2))
+    : metadata.marginPercent ? parseFloat(metadata.marginPercent) : null;
 
   // Parse routing fields from metadata
   let fallbackProvidersJson: any = null;
@@ -336,27 +361,30 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
     email,
     userId: resolvedUserId || null,
     status: 'paid',
-    totalPrice,
+    totalPrice: salePrice,
     currency: (session.currency || 'usd').toUpperCase(),
     stripeCheckoutSessionId: session.id,
     stripePaymentIntentId: session.payment_intent || null,
     stripeCustomerId: session.customer || null,
     purchaseType: 'initial_purchase',
-    providerName: metadata.selectedProviderKey || 'mock',
-    // Routing & pricing fields
+    // Provider tracking (always set)
+    providerName: providerUsed,
+    selectedProviderKey: metadata.selectedProviderKey || null,
+    // Routing metadata
     normalizedPlanId: metadata.normalizedPlanId || null,
     routingDecisionId: metadata.routingDecisionId || null,
-    selectedProviderKey: metadata.selectedProviderKey || null,
     fallbackProvidersJson,
-    wholesaleCostUsd: metadata.wholesaleCostUsd ? parseFloat(metadata.wholesaleCostUsd) : null,
-    marginPercent: metadata.marginPercent ? parseFloat(metadata.marginPercent) : null,
-    // Store profit at creation time so analytics never recompute against stale plan data
-    profit: metadata.wholesaleCostUsd
-      ? parseFloat((totalPrice - parseFloat(metadata.wholesaleCostUsd)).toFixed(4))
-      : null,
+    // Cost & profit (always populated — routing cost preferred, plan cost as fallback)
+    wholesaleCostUsd: providerCost > 0 ? providerCost : null,
+    profit,
+    marginPercent,
   }).returning();
 
-  console.log(`[Stripe] Created order ${order.id} for session ${session.id} | provider=${order.selectedProviderKey ?? 'default'}`);
+  console.log(
+    `[Stripe] Order ${order.id} created | provider=${providerUsed}` +
+    ` | sale=$${salePrice.toFixed(2)} cost=$${providerCost.toFixed(2)}` +
+    ` | profit=$${(profit ?? 0).toFixed(2)} margin=${(marginPercent ?? 0).toFixed(1)}%`
+  );
   await fulfillInitialPurchase(order.id);
 }
 

@@ -1080,6 +1080,53 @@ export async function registerRoutes(
     }
   });
 
+  // ── Backfill profit/margin on existing orders ───────────────────────────────
+  // Safe to call repeatedly — only updates orders that are missing profit data.
+  app.post("/api/admin/orders/backfill-profit", requireAdmin, async (_req, res) => {
+    try {
+      const { orders: ordersTable, plans: plansTable } = await import("@shared/schema");
+      const { isNull } = await import("drizzle-orm");
+
+      const allOrders = await storage.getAllOrders();
+      const allPlans = await storage.getAllPlans();
+      const planCostMap = Object.fromEntries(allPlans.map(p => [p.id, { cost: p.wholesaleCost ?? 0, provider: p.provider ?? 'manual' }]));
+
+      let updated = 0;
+      for (const order of allOrders) {
+        if (order.profit != null) continue; // already has profit stored
+
+        const salePrice = order.totalPrice;
+        const routingCost = order.wholesaleCostUsd ?? null;
+        const planFallback = planCostMap[order.planId];
+        const providerCost = routingCost ?? planFallback?.cost ?? 0;
+
+        if (providerCost <= 0) continue; // no cost info available — skip
+
+        const profit = parseFloat((salePrice - providerCost).toFixed(4));
+        const marginPercent = salePrice > 0
+          ? parseFloat(((profit / salePrice) * 100).toFixed(2))
+          : null;
+        const providerUsed = order.selectedProviderKey ?? order.providerName ?? planFallback?.provider ?? 'manual';
+
+        await db.update(ordersTable)
+          .set({
+            wholesaleCostUsd: routingCost ?? providerCost,
+            profit,
+            marginPercent,
+            providerName: providerUsed,
+            selectedProviderKey: order.selectedProviderKey ?? (routingCost ? order.selectedProviderKey : null),
+          })
+          .where(eq(ordersTable.id, order.id));
+
+        updated++;
+      }
+
+      res.json({ success: true, updatedCount: updated });
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to backfill profit data" });
+    }
+  });
+
   // ── Routing decisions (admin) ───────────────────────────────────────────────
   app.get("/api/admin/routing-decisions", requireAdmin, async (req, res) => {
     try {

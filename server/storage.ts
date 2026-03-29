@@ -112,6 +112,16 @@ const orderSelectFields = (_db: any) => ({
   daysRemaining: orders.daysRemaining,
   expiresAt: orders.expiresAt,
   lastSyncedAt: orders.lastSyncedAt,
+  // Routing & pricing fields (populated at checkout by routing engine)
+  normalizedPlanId: orders.normalizedPlanId,
+  routingDecisionId: orders.routingDecisionId,
+  selectedProviderKey: orders.selectedProviderKey,
+  fallbackProvidersJson: orders.fallbackProvidersJson,
+  // Order-level profit tracking (always populated on new orders; use backfill for old ones)
+  wholesaleCostUsd: orders.wholesaleCostUsd,
+  profit: orders.profit,
+  marginPercent: orders.marginPercent,
+  // Joined plan/destination fields
   planName: plans.name,
   dataAmount: plans.dataAmount,
   dataAmountGb: plans.dataAmountGb,
