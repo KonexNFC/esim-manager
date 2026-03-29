@@ -350,6 +350,10 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
     fallbackProvidersJson,
     wholesaleCostUsd: metadata.wholesaleCostUsd ? parseFloat(metadata.wholesaleCostUsd) : null,
     marginPercent: metadata.marginPercent ? parseFloat(metadata.marginPercent) : null,
+    // Store profit at creation time so analytics never recompute against stale plan data
+    profit: metadata.wholesaleCostUsd
+      ? parseFloat((totalPrice - parseFloat(metadata.wholesaleCostUsd)).toFixed(4))
+      : null,
   }).returning();
 
   console.log(`[Stripe] Created order ${order.id} for session ${session.id} | provider=${order.selectedProviderKey ?? 'default'}`);

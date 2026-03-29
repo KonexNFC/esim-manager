@@ -49,6 +49,9 @@ export const plans = pgTable("plans", {
   wholesaleCost: doublePrecision("wholesale_cost").default(0),
   provider: text("provider").notNull().default("manual"),
   pricingMode: text("pricing_mode").notNull().default("manual"), // 'manual' | 'auto'
+  // Per-plan target margin override (0–1). When set, takes precedence over the
+  // global targetMarginPercent setting for auto-priced plans.
+  targetMargin: doublePrecision("target_margin"),
   stripePriceId: text("stripe_price_id"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -94,6 +97,10 @@ export const orders = pgTable("orders", {
   fallbackProvidersJson: jsonb("fallback_providers_json"),
   wholesaleCostUsd: doublePrecision("wholesale_cost_usd"),
   marginPercent: doublePrecision("margin_percent"),
+  // Stored profit at time of fulfillment (totalPrice − wholesaleCostUsd).
+  // Computed and saved once at checkout/fulfillment so analytics never need
+  // to re-derive it from volatile plan data.
+  profit: doublePrecision("profit"),
 });
 
 // ─── SETTINGS ─────────────────────────────────────────

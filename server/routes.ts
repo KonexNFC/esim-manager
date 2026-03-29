@@ -322,10 +322,16 @@ export async function registerRoutes(
 
       // Auto-pricing: if pricingMode='auto' and wholesaleCost is set, compute
       // retail = wholesaleCost / (1 - targetMargin). Server controls this.
+      // Per-plan targetMargin takes precedence over global targetMarginPercent setting.
       let serverPrice = plan.price;
       if (plan.pricingMode === 'auto' && plan.wholesaleCost && plan.wholesaleCost > 0) {
-        const [marginRow] = await db.select().from(settings).where(eq(settings.key, 'targetMarginPercent'));
-        const targetMargin = parseFloat(marginRow?.value ?? '0.60');
+        let targetMargin: number;
+        if (plan.targetMargin && plan.targetMargin > 0 && plan.targetMargin < 1) {
+          targetMargin = plan.targetMargin; // per-plan override
+        } else {
+          const [marginRow] = await db.select().from(settings).where(eq(settings.key, 'targetMarginPercent'));
+          targetMargin = parseFloat(marginRow?.value ?? '0.60');
+        }
         if (targetMargin > 0 && targetMargin < 1) {
           // Ceiling to nearest cent to protect margin
           serverPrice = Math.ceil((plan.wholesaleCost / (1 - targetMargin)) * 100) / 100;
@@ -600,8 +606,15 @@ export async function registerRoutes(
       const effectiveCost = updates.wholesaleCost ?? existing?.wholesaleCost ?? 0;
 
       if (effectiveMode === 'auto' && effectiveCost > 0) {
-        const [marginRow] = await db.select().from(settings).where(eq(settings.key, 'targetMarginPercent'));
-        const targetMargin = parseFloat(marginRow?.value ?? '0.60');
+        // Per-plan targetMargin override takes precedence over global setting
+        const effectiveTargetMargin = updates.targetMargin ?? existing?.targetMargin ?? null;
+        let targetMargin: number;
+        if (effectiveTargetMargin && effectiveTargetMargin > 0 && effectiveTargetMargin < 1) {
+          targetMargin = effectiveTargetMargin;
+        } else {
+          const [marginRow] = await db.select().from(settings).where(eq(settings.key, 'targetMarginPercent'));
+          targetMargin = parseFloat(marginRow?.value ?? '0.60');
+        }
         if (targetMargin > 0 && targetMargin < 1) {
           updates.price = Math.ceil((effectiveCost / (1 - targetMargin)) * 100) / 100;
         }
@@ -930,10 +943,12 @@ export async function registerRoutes(
       const profitEntries: OrderProfit[] = revenueOrders.map(o => {
         const cost = o.wholesaleCostUsd ?? planCostMap[o.planId] ?? 0;
         const revenue = o.totalPrice;
+        // Prefer stored profit (set at checkout time); fall back to computed
+        const profit = o.profit ?? (revenue - cost);
         return {
           revenue,
           cost,
-          profit: revenue - cost,
+          profit,
           provider: o.selectedProviderKey ?? o.providerName ?? 'unknown',
         };
       });
@@ -1038,7 +1053,11 @@ export async function registerRoutes(
 
       let updated = 0;
       for (const plan of autoPans) {
-        const newPrice = Math.ceil((plan.wholesaleCost! / (1 - targetMargin)) * 100) / 100;
+        // Per-plan targetMargin takes precedence over the global setting
+        const effectiveMargin = (plan.targetMargin && plan.targetMargin > 0 && plan.targetMargin < 1)
+          ? plan.targetMargin
+          : targetMargin;
+        const newPrice = Math.ceil((plan.wholesaleCost! / (1 - effectiveMargin)) * 100) / 100;
         if (Math.abs(newPrice - plan.price) > 0.001) {
           await storage.updatePlan(plan.id, { price: newPrice });
           updated++;
