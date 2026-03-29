@@ -259,6 +259,24 @@ export const providerOffers = pgTable("provider_offers", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ─── ROUTING DECISIONS ───────────────────────────────
+// Persists every routing engine decision for auditability and analytics.
+// strategy: cheapest_cost | highest_margin | best_health | blended_score
+// fallback_chain: JSON array of RankedProvider objects (all candidates ranked)
+// scores: JSON object keyed by providerKey → ProviderScores
+export const routingDecisions = pgTable("routing_decisions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  normalizedPlanId: varchar("normalized_plan_id").notNull().references(() => normalizedPlans.id),
+  strategy: text("strategy").notNull().default("blended_score"),
+  selectedProviderKey: text("selected_provider_key").notNull(),
+  selectedProviderPlanCode: text("selected_provider_plan_code").notNull(),
+  fallbackChain: jsonb("fallback_chain").notNull(),     // RankedProvider[]
+  scores: jsonb("scores").notNull(),                    // Record<providerKey, ProviderScores>
+  decisionReason: text("decision_reason").notNull(),
+  retailPriceUsdSnapshot: doublePrecision("retail_price_usd_snapshot"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // ─── INSERT SCHEMAS ───────────────────────────────────
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertDestinationSchema = createInsertSchema(destinations).omit({ id: true });
@@ -272,6 +290,7 @@ export const insertGiftOrderSchema = createInsertSchema(giftOrders).omit({ id: t
 export const insertProviderSchema = createInsertSchema(providers).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertNormalizedPlanSchema = createInsertSchema(normalizedPlans).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertProviderOfferSchema = createInsertSchema(providerOffers).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertRoutingDecisionSchema = createInsertSchema(routingDecisions).omit({ id: true, createdAt: true });
 
 // ─── TYPES ────────────────────────────────────────────
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -300,3 +319,5 @@ export type NormalizedPlan = typeof normalizedPlans.$inferSelect;
 export type InsertNormalizedPlan = z.infer<typeof insertNormalizedPlanSchema>;
 export type ProviderOffer = typeof providerOffers.$inferSelect;
 export type InsertProviderOffer = z.infer<typeof insertProviderOfferSchema>;
+export type RoutingDecision = typeof routingDecisions.$inferSelect;
+export type InsertRoutingDecision = z.infer<typeof insertRoutingDecisionSchema>;
