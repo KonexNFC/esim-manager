@@ -48,6 +48,7 @@ export const plans = pgTable("plans", {
   isActive: boolean("is_active").notNull().default(true),
   wholesaleCost: doublePrecision("wholesale_cost").default(0),
   provider: text("provider").notNull().default("manual"),
+  pricingMode: text("pricing_mode").notNull().default("manual"), // 'manual' | 'auto'
   stripePriceId: text("stripe_price_id"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -93,6 +94,15 @@ export const orders = pgTable("orders", {
   fallbackProvidersJson: jsonb("fallback_providers_json"),
   wholesaleCostUsd: doublePrecision("wholesale_cost_usd"),
   marginPercent: doublePrecision("margin_percent"),
+});
+
+// ─── SETTINGS ─────────────────────────────────────────
+// Global key-value store for admin-configurable settings.
+// Known keys: targetMarginPercent (decimal 0-1, default 0.60)
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // ─── PROVIDER ATTEMPTS ────────────────────────────────
@@ -314,6 +324,7 @@ export const insertNormalizedPlanSchema = createInsertSchema(normalizedPlans).om
 export const insertProviderOfferSchema = createInsertSchema(providerOffers).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertRoutingDecisionSchema = createInsertSchema(routingDecisions).omit({ id: true, createdAt: true });
 export const insertProviderAttemptSchema = createInsertSchema(providerAttempts).omit({ id: true, createdAt: true });
+export const insertSettingsSchema = createInsertSchema(settings).omit({ updatedAt: true });
 
 // ─── TYPES ────────────────────────────────────────────
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -346,3 +357,5 @@ export type RoutingDecision = typeof routingDecisions.$inferSelect;
 export type InsertRoutingDecision = z.infer<typeof insertRoutingDecisionSchema>;
 export type ProviderAttempt = typeof providerAttempts.$inferSelect;
 export type InsertProviderAttempt = z.infer<typeof insertProviderAttemptSchema>;
+export type Setting = typeof settings.$inferSelect;
+export type InsertSetting = z.infer<typeof insertSettingsSchema>;

@@ -22,7 +22,11 @@ GlobeSIM is built with a modern web stack. The **frontend** uses React with Type
 -   **Fulfillment System:** Payment completion triggers automated eSIM provisioning and email delivery. The system includes idempotency via a `paymentEvents` table to prevent duplicate fulfillment and incorporates retry mechanisms for transient provider errors.
 -   **Usage Synchronization:** Scheduled processes (`usageSync`) pull live data from providers, updating user dashboards and triggering low-data or expiry notifications.
 -   **Customer Dashboard:** Provides users with a centralized view of their active eSIMs (with usage bars, QR codes, and top-up options), order history, and profile settings.
--   **Admin Dashboard:** Offers comprehensive administrative capabilities including statistics, plan management, order oversight, eSIM inventory, and margin analysis.
+-   **Admin Dashboard:** Offers comprehensive administrative capabilities including:
+    -   **Profit Stats**: 8 live stat cards — Total Revenue, Total Profit, Weighted Margin, Avg Profit/Order, Orders, Live Plans, Destinations, Active eSIMs.
+    -   **Provider Cost Breakdown**: Per-provider table showing revenue, cost, profit, and margin % (sorted by profit), built from order-level `wholesaleCostUsd` with plan-level fallback.
+    -   **Global Pricing Settings Panel**: Live target margin input + "Reprice Auto Plans" button to batch-recompute all auto-mode plan prices.
+    -   Plan management with **per-plan pricing mode toggle** (Auto ⚡ / Manual 🔧), profit % badge, and color-coded margin indicators.
 
 **UI/UX Design:**
 -   The application features a premium landing page with various sections showcasing features and benefits.

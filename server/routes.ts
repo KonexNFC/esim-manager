@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./storage";
 import { sql, eq } from "drizzle-orm";
-import { insertOrderSchema, insertPlanSchema } from "@shared/schema";
+import { insertOrderSchema, insertPlanSchema, settings } from "@shared/schema";
 import { fetchProviderPlans, getBestPlan } from "./providers";
 import { purchaseEsim as providerPurchase, getAvailableProviders } from "./providers/providerManager";
 import { z } from "zod";
@@ -320,6 +320,18 @@ export async function registerRoutes(
       };
       const upsell = upsellOptionId ? upsellMap[upsellOptionId] : undefined;
 
+      // Auto-pricing: if pricingMode='auto' and wholesaleCost is set, compute
+      // retail = wholesaleCost / (1 - targetMargin). Server controls this.
+      let serverPrice = plan.price;
+      if (plan.pricingMode === 'auto' && plan.wholesaleCost && plan.wholesaleCost > 0) {
+        const [marginRow] = await db.select().from(settings).where(eq(settings.key, 'targetMarginPercent'));
+        const targetMargin = parseFloat(marginRow?.value ?? '0.60');
+        if (targetMargin > 0 && targetMargin < 1) {
+          // Ceiling to nearest cent to protect margin
+          serverPrice = Math.ceil((plan.wholesaleCost / (1 - targetMargin)) * 100) / 100;
+        }
+      }
+
       const { url, sessionId } = await createPlanCheckoutSession({
         planId: plan.id,
         planName: plan.name,
@@ -330,7 +342,7 @@ export async function registerRoutes(
         validity: plan.validity,
         dataAmountGb: plan.dataAmountGb,
         validityDays: plan.validityDays,
-        price: plan.price,          // server-controlled fallback price
+        price: serverPrice,   // server-controlled: auto-formula or DB price
         currency: plan.currency,
         email,
         userId,
@@ -577,9 +589,25 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/plans/:id", async (req, res) => {
+  app.patch("/api/plans/:id", requireAdmin, async (req, res) => {
     try {
-      const updated = await storage.updatePlan(req.params.id, req.body);
+      const updates = { ...req.body };
+
+      // Auto-pricing: recompute retail price when pricingMode='auto' or
+      // when wholesaleCost changes on an already-auto plan.
+      const existing = await storage.getPlan(req.params.id);
+      const effectiveMode = updates.pricingMode ?? existing?.pricingMode ?? 'manual';
+      const effectiveCost = updates.wholesaleCost ?? existing?.wholesaleCost ?? 0;
+
+      if (effectiveMode === 'auto' && effectiveCost > 0) {
+        const [marginRow] = await db.select().from(settings).where(eq(settings.key, 'targetMarginPercent'));
+        const targetMargin = parseFloat(marginRow?.value ?? '0.60');
+        if (targetMargin > 0 && targetMargin < 1) {
+          updates.price = Math.ceil((effectiveCost / (1 - targetMargin)) * 100) / 100;
+        }
+      }
+
+      const updated = await storage.updatePlan(req.params.id, updates);
       if (!updated) return res.status(404).json({ message: "Plan not found" });
       res.json(updated);
     } catch (error) {
@@ -883,12 +911,70 @@ export async function registerRoutes(
       const livePlans = allPlans.filter(p => p.planStatus === "live").length;
       const totalDestinations = allDestinations.length;
 
+      // ── Profit & weighted margin (routing-aware orders only) ────────────────
+      // For orders without wholesaleCostUsd, fall back to the plan's wholesaleCost
+      const planCostMap = Object.fromEntries(allPlans.map(p => [p.id, p.wholesaleCost ?? 0]));
+
+      // Only fulfilled / completed orders contribute to profit stats
+      const revenueOrders = allOrders.filter(o =>
+        o.status === 'fulfilled' || o.status === 'completed' || o.status === 'paid'
+      );
+
+      // Build per-order profit entries
+      interface OrderProfit {
+        revenue: number;
+        cost: number;
+        profit: number;
+        provider: string;
+      }
+      const profitEntries: OrderProfit[] = revenueOrders.map(o => {
+        const cost = o.wholesaleCostUsd ?? planCostMap[o.planId] ?? 0;
+        const revenue = o.totalPrice;
+        return {
+          revenue,
+          cost,
+          profit: revenue - cost,
+          provider: o.selectedProviderKey ?? o.providerName ?? 'unknown',
+        };
+      });
+
+      const totalProfit = profitEntries.reduce((s, e) => s + e.profit, 0);
+      const revenueWithCost = profitEntries.filter(e => e.cost > 0);
+      const totalRevenueWithCost = revenueWithCost.reduce((s, e) => s + e.revenue, 0);
+      const weightedMargin = totalRevenueWithCost > 0
+        ? (revenueWithCost.reduce((s, e) => s + e.profit, 0) / totalRevenueWithCost) * 100
+        : 0;
+      const avgProfitPerOrder = profitEntries.length > 0
+        ? totalProfit / profitEntries.length
+        : 0;
+
+      // Simple unweighted avg margin on plans (backward compat)
       const avgMargin = allPlans.reduce((sum, p) => {
         if (p.wholesaleCost && p.price > 0) {
           return sum + calculateMargin(p.price, p.wholesaleCost);
         }
         return sum;
-      }, 0) / (allPlans.length || 1);
+      }, 0) / (allPlans.filter(p => p.wholesaleCost && p.wholesaleCost > 0).length || 1);
+
+      // ── Provider cost breakdown ─────────────────────────────────────────────
+      const breakdownMap: Record<string, { orderCount: number; revenue: number; cost: number; profit: number }> = {};
+      for (const e of profitEntries) {
+        if (!breakdownMap[e.provider]) {
+          breakdownMap[e.provider] = { orderCount: 0, revenue: 0, cost: 0, profit: 0 };
+        }
+        breakdownMap[e.provider].orderCount++;
+        breakdownMap[e.provider].revenue += e.revenue;
+        breakdownMap[e.provider].cost += e.cost;
+        breakdownMap[e.provider].profit += e.profit;
+      }
+      const providerBreakdown = Object.entries(breakdownMap).map(([provider, d]) => ({
+        provider,
+        orderCount: d.orderCount,
+        revenue: d.revenue,
+        cost: d.cost,
+        profit: d.profit,
+        marginPct: d.revenue > 0 ? (d.profit / d.revenue) * 100 : 0,
+      })).sort((a, b) => b.profit - a.profit);
 
       res.json({
         totalRevenue,
@@ -896,12 +982,72 @@ export async function registerRoutes(
         livePlans,
         totalDestinations,
         avgMargin: Math.round(avgMargin),
+        weightedMargin: Math.round(weightedMargin * 10) / 10,
+        totalProfit: Math.round(totalProfit * 100) / 100,
+        avgProfitPerOrder: Math.round(avgProfitPerOrder * 100) / 100,
         activeEsims: allOrders.filter(o =>
           o.esimStatus === "active" || o.esimStatus === "installed" || o.esimStatus === "issued"
         ).length,
+        providerBreakdown,
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch stats" });
+    }
+  });
+
+  // ── Settings (admin) ────────────────────────────────────────────────────────
+  app.get("/api/admin/settings", requireAdmin, async (_req, res) => {
+    try {
+      const rows = await db.select().from(settings);
+      const result: Record<string, string> = { targetMarginPercent: '0.60' }; // defaults
+      for (const row of rows) result[row.key] = row.value;
+      res.json(result);
+    } catch {
+      res.status(500).json({ message: "Failed to fetch settings" });
+    }
+  });
+
+  app.put("/api/admin/settings", requireAdmin, async (req, res) => {
+    try {
+      const allowed = ['targetMarginPercent'];
+      for (const key of allowed) {
+        if (req.body[key] !== undefined) {
+          const value = String(req.body[key]);
+          await db.insert(settings)
+            .values({ key, value })
+            .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt: new Date() } });
+        }
+      }
+      res.json({ success: true });
+    } catch {
+      res.status(500).json({ message: "Failed to update settings" });
+    }
+  });
+
+  // ── Apply auto-pricing to all auto-mode plans ──────────────────────────────
+  app.post("/api/admin/settings/apply-auto-pricing", requireAdmin, async (_req, res) => {
+    try {
+      const [marginRow] = await db.select().from(settings).where(eq(settings.key, 'targetMarginPercent'));
+      const targetMargin = parseFloat(marginRow?.value ?? '0.60');
+      if (targetMargin <= 0 || targetMargin >= 1) {
+        return res.status(400).json({ message: "Invalid targetMarginPercent in settings" });
+      }
+
+      const allPlans = await storage.getAllPlans();
+      const autoPans = allPlans.filter(p => p.pricingMode === 'auto' && p.wholesaleCost && p.wholesaleCost > 0);
+
+      let updated = 0;
+      for (const plan of autoPans) {
+        const newPrice = Math.ceil((plan.wholesaleCost! / (1 - targetMargin)) * 100) / 100;
+        if (Math.abs(newPrice - plan.price) > 0.001) {
+          await storage.updatePlan(plan.id, { price: newPrice });
+          updated++;
+        }
+      }
+
+      res.json({ success: true, updatedCount: updated, targetMargin });
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to apply auto-pricing" });
     }
   });
 
