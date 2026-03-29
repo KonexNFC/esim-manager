@@ -103,6 +103,24 @@ export const orders = pgTable("orders", {
   profit: doublePrecision("profit"),
 });
 
+// ─── PROVIDER SYNC RUNS ───────────────────────────────
+// One row per catalogue sync run (fetching live plans from providers).
+// Distinct from providerSyncLogs which tracks per-eSIM usage sync events.
+export const providerSyncRuns = pgTable("provider_sync_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  triggeredBy: text("triggered_by").notNull().default("auto"), // "auto" | "manual"
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+  status: text("status").notNull().default("running"), // running | success | partial | failed
+  providersAttempted: integer("providers_attempted").notNull().default(0),
+  providersSucceeded: integer("providers_succeeded").notNull().default(0),
+  failedProviders: jsonb("failed_providers").$type<string[]>(),
+  offersUpserted: integer("offers_upserted").notNull().default(0),
+  plansUpdated: integer("plans_updated").notNull().default(0),
+  priceChanges: integer("price_changes").notNull().default(0),
+  errorMessage: text("error_message"),
+});
+
 // ─── SETTINGS ─────────────────────────────────────────
 // Global key-value store for admin-configurable settings.
 // Known keys: targetMarginPercent (decimal 0-1, default 0.60)
@@ -354,6 +372,7 @@ export type GiftOrder = typeof giftOrders.$inferSelect;
 export type InsertGiftOrder = typeof giftOrders.$inferInsert;
 export type PaymentEvent = typeof paymentEvents.$inferSelect;
 export type ProviderSyncLog = typeof providerSyncLogs.$inferSelect;
+export type ProviderSyncRun = typeof providerSyncRuns.$inferSelect;
 export type Provider = typeof providers.$inferSelect;
 export type InsertProvider = z.infer<typeof insertProviderSchema>;
 export type NormalizedPlan = typeof normalizedPlans.$inferSelect;

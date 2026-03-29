@@ -1278,6 +1278,27 @@ function RoutingTab() {
     onError: () => toast({ title: "Sync failed", variant: "destructive" }),
   });
 
+  const { data: syncRuns, refetch: refetchSyncRuns } = useQuery<any[]>({
+    queryKey: ["/api/admin/sync/runs"],
+  });
+
+  const catalogueSyncMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/providers/sync", {}),
+    onSuccess: async (res: any) => {
+      const data = await res.json();
+      const succeeded = data.results?.filter((r: any) => r.success).length ?? 0;
+      toast({
+        title: data.status === "success" ? "Provider sync complete" : data.status === "partial" ? "Sync partially complete" : "Sync failed",
+        description: `${data.totalOffersUpserted ?? 0} offers upserted · ${data.internalPlansUpdated ?? 0} plans updated · ${data.priceChanges ?? 0} price changes · ${succeeded}/${data.results?.length ?? 0} providers`,
+        variant: data.status === "failed" ? "destructive" : "default",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/sync/runs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/providers"] });
+    },
+    onError: () => toast({ title: "Provider sync failed", variant: "destructive" }),
+  });
+
   const toggleProvider = useMutation({
     mutationFn: ({ key, enabled }: { key: string; enabled: boolean }) =>
       apiRequest("PATCH", `/api/admin/providers/${key}`, { enabled }),
@@ -1361,6 +1382,71 @@ function RoutingTab() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </Card>
+
+      {/* ── Live Provider Catalogue Sync ── */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="w-5 h-5 text-violet-500" />
+            <h3 className="font-semibold text-base">Live Catalogue Sync</h3>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => catalogueSyncMutation.mutate()}
+            disabled={catalogueSyncMutation.isPending}
+            data-testid="button-catalogue-sync"
+          >
+            {catalogueSyncMutation.isPending
+              ? <><RefreshCw className="w-3 h-3 mr-1.5 animate-spin" />Syncing…</>
+              : <><RefreshCw className="w-3 h-3 mr-1.5" />Sync Providers Now</>}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Fetches live plan catalogues from eSIMGo and eSIM Access, normalises offers into the routing engine, and auto-updates wholesale costs on matching internal plans. Runs automatically every 6 hours.
+        </p>
+        {!syncRuns || syncRuns.length === 0 ? (
+          <div className="text-center py-6 text-muted-foreground">
+            <RefreshCw className="w-7 h-7 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No sync runs yet. Click "Sync Providers Now" to run the first sync.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border rounded-lg border overflow-hidden">
+            <div className="grid grid-cols-7 gap-2 px-4 py-2 bg-muted/40 text-xs font-medium text-muted-foreground">
+              <span className="col-span-2">Started</span>
+              <span className="text-center">Status</span>
+              <span className="text-center">Offers</span>
+              <span className="text-center">Plans Updated</span>
+              <span className="text-center">Price Changes</span>
+              <span className="text-center">Duration</span>
+            </div>
+            {[...syncRuns].reverse().map((run) => {
+              const durationMs = run.completedAt
+                ? new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime()
+                : null;
+              const statusColor =
+                run.status === "success" ? "text-green-600 dark:text-green-400"
+                : run.status === "partial" ? "text-yellow-600 dark:text-yellow-400"
+                : run.status === "running" ? "text-blue-600 dark:text-blue-400"
+                : "text-red-600 dark:text-red-400";
+              return (
+                <div key={run.id} className="grid grid-cols-7 gap-2 px-4 py-2.5 items-center text-sm" data-testid={`row-sync-run-${run.id}`}>
+                  <span className="col-span-2 text-xs text-muted-foreground">
+                    {new Date(run.startedAt).toLocaleString()}
+                    <span className="ml-2 opacity-60">{run.triggeredBy}</span>
+                  </span>
+                  <span className={`text-center text-xs font-medium capitalize ${statusColor}`}>{run.status}</span>
+                  <span className="text-center text-xs font-mono">{run.offersUpserted ?? 0}</span>
+                  <span className="text-center text-xs font-mono">{run.plansUpdated ?? 0}</span>
+                  <span className="text-center text-xs font-mono">{run.priceChanges ?? 0}</span>
+                  <span className="text-center text-xs text-muted-foreground font-mono">
+                    {durationMs != null ? `${(durationMs / 1000).toFixed(1)}s` : "—"}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </Card>

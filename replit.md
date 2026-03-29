@@ -28,6 +28,7 @@ GlobeSIM is built with a modern web stack. The **frontend** uses React with Type
     -   **Provider Cost Breakdown**: Per-provider table showing revenue, cost, profit, and margin % (sorted by profit), built from order-level `wholesaleCostUsd` with plan-level fallback.
     -   **Profit Optimisation Mode**: Three preset modes (Growth 30%, Balanced 50%, Profit 70%) plus a custom margin input. Selecting a preset atomically updates both `profitMode` and `targetMarginPercent` in the settings table. Stored as `profitMode` setting key; auto-detected when manually entering a margin that matches a preset.
     -   Plan management with **per-plan pricing mode toggle** (Auto ⚡ / Manual 🔧), profit % badge, and color-coded margin indicators.
+    -   **Live Catalogue Sync** (`POST /api/admin/providers/sync`): Fetches live plans from all configured providers (eSIMGo, eSIM Access), upserts `normalizedPlans` + `providerOffers`, and auto-updates `wholesaleCost` + `provider` on internal plans to always reflect the cheapest available offer. Scheduler starts 60s after boot then runs every 6 hours. Results tracked in `provider_sync_runs` table. Manual trigger via "Sync Providers Now" button in admin Routing tab.
 
 **UI/UX Design:**
 -   The application features a premium landing page with various sections showcasing features and benefits.

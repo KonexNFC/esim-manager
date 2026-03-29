@@ -113,6 +113,28 @@ export class EsimAccessProvider implements EsimProvider {
     return data as T;
   }
 
+  /** Fetch all packages across multiple country codes. */
+  async getAllPackages(countryCodes: string[]): Promise<ProviderPlan[]> {
+    if (!this.isConfigured()) {
+      console.log("[esimAccess] Not configured — skipping full package fetch");
+      return [];
+    }
+    const all: ProviderPlan[] = [];
+    const seen = new Set<string>(); // deduplicate by packageCode+country
+    for (const code of countryCodes) {
+      try {
+        const plans = await this.getPlans(code);
+        for (const p of plans) {
+          const key = `${p.providerRef}__${code}`;
+          if (!seen.has(key)) { seen.add(key); all.push(p); }
+        }
+      } catch {
+        // Silently skip failed countries — logged inside getPlans
+      }
+    }
+    return all;
+  }
+
   async getPlans(countryCode: string): Promise<ProviderPlan[]> {
     if (!this.isConfigured()) {
       console.log("[esimAccess] Not configured — skipping plan fetch");

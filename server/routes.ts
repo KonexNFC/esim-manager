@@ -1358,5 +1358,29 @@ export async function registerRoutes(
     }
   });
 
+  // ── Provider Catalogue Sync ──────────────────────────────────────────────────
+
+  app.post("/api/admin/providers/sync", requireAdmin, async (_req, res) => {
+    try {
+      const { syncAllProviders } = await import("./services/providerSync");
+      const summary = await syncAllProviders("manual");
+      res.json(summary);
+    } catch (err: any) {
+      console.error("/api/admin/providers/sync error:", err.message);
+      res.status(500).json({ message: "Provider sync failed", error: err.message });
+    }
+  });
+
+  app.get("/api/admin/sync/runs", requireAdmin, async (req, res) => {
+    try {
+      const { getRecentSyncRuns } = await import("./services/providerSync");
+      const limit = Math.min(parseInt(String(req.query.limit ?? "10")), 50);
+      const runs = await getRecentSyncRuns(limit);
+      res.json(runs);
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to fetch sync runs" });
+    }
+  });
+
   return httpServer;
 }

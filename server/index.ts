@@ -251,6 +251,10 @@ async function initStripe() {
   await initStripe();
   await registerRoutes(httpServer, app);
 
+  // Start provider catalogue sync scheduler (60s delay, then every 6h)
+  const { startProviderSyncScheduler } = await import("./services/providerSync");
+  startProviderSyncScheduler();
+
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";

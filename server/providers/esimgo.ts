@@ -77,6 +77,62 @@ export class EsimGoProvider implements EsimProvider {
     return res.json() as Promise<T>;
   }
 
+  /** Fetch the FULL catalogue (all countries). Returns one ProviderPlan per bundle×country. */
+  async getAllCataloguePlans(): Promise<ProviderPlan[]> {
+    if (!this.apiKey) {
+      console.log("[esimgo] Not configured — skipping full catalogue fetch");
+      return [];
+    }
+    try {
+      const response = await this.request<{ bundles: EsimGoCatalogueItem[] }>("/catalogue");
+      const catalogue = response.bundles || [];
+      const plans: ProviderPlan[] = [];
+      for (const item of catalogue) {
+        const countryCodes = item.countries.length > 0
+          ? item.countries.map(c => c.iso.toUpperCase())
+          : ["GLOBAL"];
+        for (const iso of countryCodes) {
+          plans.push(this.mapItemToProviderPlan(item, iso));
+        }
+      }
+      return plans;
+    } catch (err) {
+      console.error("[esimgo] Failed to fetch full catalogue:", err);
+      return [];
+    }
+  }
+
+  private mapItemToProviderPlan(item: EsimGoCatalogueItem, countryCode: string): ProviderPlan {
+    const rawMb = item.dataAmount > 0 ? item.dataAmount : 0;
+    const dataGb = rawMb / 1024;
+    const roundedGb = rawMb >= 1000 ? Math.round(rawMb / 1000) : Math.round(dataGb * 10) / 10;
+    const dataLabel = item.unlimited
+      ? "Unlimited"
+      : rawMb >= 1000
+        ? `${roundedGb} GB`
+        : `${rawMb} MB`;
+    const coverageCountries = item.countries.map((c) => c.name).join(", ");
+    const speeds = item.speed.length > 0 ? item.speed.join("/") : "4G/LTE";
+    const features: string[] = ["Data only", "Instant activation"];
+    if (item.speed.some((s) => s.toLowerCase().includes("5g"))) features.push("5G where available");
+    if (item.roamingEnabled && item.roamingEnabled.length > 0) features.push(`Roaming in ${item.roamingEnabled.length} countries`);
+    return {
+      provider: this.name,
+      providerRef: item.name,
+      countryCode,
+      dataAmountGb: item.unlimited ? 999 : dataGb,
+      validityDays: item.duration,
+      wholesaleCost: item.price,
+      currency: "USD",
+      name: item.description || `${dataLabel} - ${item.duration} Days`,
+      dataAmount: dataLabel,
+      validity: `${item.duration} Days`,
+      speedInfo: speeds,
+      coverage: coverageCountries || countryCode,
+      features,
+    };
+  }
+
   async getPlans(countryCode: string): Promise<ProviderPlan[]> {
     if (!this.apiKey) {
       console.log("[esimgo] Not configured — skipping plan fetch");
