@@ -1358,6 +1358,41 @@ export async function registerRoutes(
     }
   });
 
+  // ── Admin: Manual Re-fulfillment ─────────────────────────────────────────────
+  // Re-trigger fulfillment for a failed or stuck order without issuing a refund.
+
+  app.post("/api/admin/orders/:id/refulfill", requireAdmin, async (req, res) => {
+    const orderId = req.params.id;
+    try {
+      const { db } = await import("./storage");
+      const { orders } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      const [order] = await db.select({ id: orders.id, status: orders.status })
+        .from(orders).where(eq(orders.id, orderId));
+
+      if (!order) return res.status(404).json({ message: "Order not found" });
+
+      if (order.status === "fulfilled") {
+        return res.status(409).json({ message: "Order is already fulfilled" });
+      }
+
+      // Reset to paid so fulfillment picks it up
+      await db.update(orders).set({ status: "paid" }).where(eq(orders.id, orderId));
+
+      const { fulfillInitialPurchase } = await import("./services/fulfillment");
+      // Fire async — don't block the HTTP response
+      fulfillInitialPurchase(orderId).catch(err =>
+        console.error(`[Admin] Manual re-fulfillment failed for ${orderId}:`, err.message)
+      );
+
+      res.json({ message: "Re-fulfillment triggered", orderId });
+    } catch (err: any) {
+      console.error("/api/admin/orders/:id/refulfill error:", err.message);
+      res.status(500).json({ message: "Failed to trigger re-fulfillment" });
+    }
+  });
+
   // ── Provider Catalogue Sync ──────────────────────────────────────────────────
 
   app.post("/api/admin/providers/sync", requireAdmin, async (_req, res) => {

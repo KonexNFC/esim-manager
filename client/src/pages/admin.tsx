@@ -902,11 +902,33 @@ function OrdersTab() {
     },
   });
 
+  const [refulfillPending, setRefulfillPending] = useState<Record<string, boolean>>({});
+  const refulfillOrder = async (orderId: string) => {
+    setRefulfillPending(p => ({ ...p, [orderId]: true }));
+    try {
+      const res = await apiRequest("POST", `/api/admin/orders/${orderId}/refulfill`, {});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed");
+      toast({ title: "Re-fulfillment triggered", description: "The order will be provisioned again shortly." });
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+      }, 3000);
+    } catch (err: any) {
+      toast({ title: "Re-fulfillment failed", description: err.message, variant: "destructive" });
+    } finally {
+      setRefulfillPending(p => ({ ...p, [orderId]: false }));
+    }
+  };
+
   const getOrderStatusBadge = (status: string) => {
     switch (status) {
       case "completed": return <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">Paid</Badge>;
       case "pending": return <Badge className="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">Pending</Badge>;
-      case "fulfilled": return <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400">Fulfilled</Badge>;
+      case "paid": return <Badge className="bg-blue-500/10 text-blue-600 dark:text-blue-400">Paid</Badge>;
+      case "fulfilling": return <Badge className="bg-violet-500/10 text-violet-600 dark:text-violet-400">Fulfilling…</Badge>;
+      case "fulfilled": return <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">Fulfilled</Badge>;
+      case "fulfillment_failed": return <Badge className="bg-red-500/10 text-red-600 dark:text-red-400">Failed</Badge>;
       case "refunded": return <Badge className="bg-red-500/10 text-red-600 dark:text-red-400">Refunded</Badge>;
       default: return <Badge variant="outline">{status}</Badge>;
     }
@@ -1064,6 +1086,21 @@ function OrdersTab() {
                   <SelectItem value="refunded">Refunded</SelectItem>
                 </SelectContent>
               </Select>
+              {/* Re-fulfill: show for failed/stuck orders */}
+              {(order.status === "fulfillment_failed" || order.status === "paid" || order.status === "fulfilling") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20"
+                  onClick={() => refulfillOrder(order.id)}
+                  disabled={refulfillPending[order.id]}
+                  data-testid={`button-refulfill-${order.id}`}
+                >
+                  {refulfillPending[order.id]
+                    ? <><RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" />Retrying…</>
+                    : <><RefreshCw className="w-3.5 h-3.5 mr-1" />Re-fulfill</>}
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"

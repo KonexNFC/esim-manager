@@ -12,25 +12,34 @@ import type { ProviderAdapter } from './base';
 //   • Neither           → Mock (dev/test only)
 const PROVIDER_NAME = process.env.PROVIDER_NAME;
 
-/** Return a specific provider adapter by its registry key, or null if unavailable. */
+/** Return a specific provider adapter by its registry key, or null if unavailable.
+ *  Accepts both canonical and lowercase variants for resilience:
+ *    esimgo / esimGo / ESIMGO      → EsimGoAdapter
+ *    esimAccess / esimaccess / ...  → EsimAccessAdapter
+ */
 export function getProviderAdapterByKey(key: string): ProviderAdapter | null {
   const esimgoKey = process.env.ESIMGO_API_KEY;
   const eaCode = process.env.ESIM_ACCESS_API_KEY;
   const eaSecret = process.env.ESIM_ACCESS_SECRET_KEY;
 
-  switch (key) {
-    case 'esimgo':
-      if (!esimgoKey) { console.warn(`[Provider] getProviderAdapterByKey: ESIMGO_API_KEY missing`); return null; }
-      return new EsimGoAdapter(esimgoKey);
-    case 'esimAccess':
-      if (!eaCode || !eaSecret) { console.warn(`[Provider] getProviderAdapterByKey: eSIM Access keys missing`); return null; }
-      return new EsimAccessAdapter(eaCode, eaSecret);
-    case 'mock':
-      return new MockProviderAdapter();
-    default:
-      console.warn(`[Provider] getProviderAdapterByKey: unknown key "${key}"`);
-      return null;
+  const norm = key.toLowerCase().replace(/[_\-\s]/g, '');
+
+  if (norm === 'esimgo') {
+    if (!esimgoKey) { console.warn(`[Provider] getProviderAdapterByKey: ESIMGO_API_KEY missing`); return null; }
+    return new EsimGoAdapter(esimgoKey);
   }
+
+  if (norm === 'esimaccess') {
+    if (!eaCode || !eaSecret) { console.warn(`[Provider] getProviderAdapterByKey: eSIM Access keys missing`); return null; }
+    return new EsimAccessAdapter(eaCode, eaSecret);
+  }
+
+  if (norm === 'mock') {
+    return new MockProviderAdapter();
+  }
+
+  console.warn(`[Provider] getProviderAdapterByKey: unknown key "${key}" (normalised: "${norm}")`);
+  return null;
 }
 
 export function getActiveProvider(): ProviderAdapter {
