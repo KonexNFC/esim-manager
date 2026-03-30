@@ -22,6 +22,7 @@ import {
   sendFulfillmentFailedEmail,
 } from './notifications';
 import { recordFulfillmentOutcome } from './destinationStats';
+import { evaluateProviderForAutoPause } from './autoProviderPause';
 import type { FallbackEntry } from './stripeService';
 
 const TRANSIENT_RETRY_DELAY_MS = 1500;
@@ -124,6 +125,9 @@ async function fulfillWithFallbackChain(
         providerKey: entry.k, destination, outcome: 'failure', isPrimary,
         latencyMs: durationMs,
       }).catch(() => {});
+      // After recording a failure, evaluate whether this provider should be auto-paused.
+      // Fire-and-forget: must never block the fulfillment retry loop.
+      evaluateProviderForAutoPause(entry.k).catch(() => {});
       console.warn(`[Fulfillment] ✗ ${entry.k} failed in ${durationMs}ms: ${err.message}`);
       lastError = err;
     }
@@ -228,6 +232,7 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
           providerKey: provider.name, destination: countryCode,
           outcome: 'failure', isPrimary: true, latencyMs: durationMs,
         }).catch(() => {});
+        evaluateProviderForAutoPause(provider.name).catch(() => {});
         throw err;
       }
       resolvedProviderName = provider.name;

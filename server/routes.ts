@@ -1235,6 +1235,27 @@ export async function registerRoutes(
     }
   });
 
+  // ── Resume an auto-paused provider (manual override) ─────────────────────
+  // Clears the auto_paused flag so the provider re-enters routing.
+  // Does NOT affect the manual enabled/disabled field.
+  app.post("/api/admin/providers/:key/resume", requireAdmin, async (req, res) => {
+    try {
+      const { getProviderByKey } = await import('./services/providerRegistry');
+      const { resumeAutoPausedProvider } = await import('./services/autoProviderPause');
+      const provider = await getProviderByKey(req.params.key);
+      if (!provider) return res.status(404).json({ message: "Provider not found" });
+      if (!provider.autoPaused) {
+        return res.status(400).json({ message: "Provider is not auto-paused" });
+      }
+      await resumeAutoPausedProvider(req.params.key);
+      const updated = await getProviderByKey(req.params.key);
+      res.json({ message: `Provider "${req.params.key}" resumed`, provider: updated });
+    } catch (err: any) {
+      console.error("/api/admin/providers/:key/resume error:", err.message);
+      res.status(500).json({ message: "Failed to resume provider" });
+    }
+  });
+
   // ── Sync plans → routing tables ─────────────────────────────────────────────
   // Reads all active plans in the DB and creates/updates normalized_plans +
   // provider_offers so the routing engine has data to work with.

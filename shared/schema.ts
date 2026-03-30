@@ -277,6 +277,11 @@ export const providers = pgTable("providers", {
   priority: integer("priority").notNull().default(10), // lower = higher priority
   healthStatus: text("health_status").notNull().default("unknown"),
   lastHealthCheck: timestamp("last_health_check"),
+  // Auto-pause — system-managed, separate from manual enabled/disabled.
+  // autoPaused=true excludes the provider from routing until manually cleared.
+  autoPaused: boolean("auto_paused").notNull().default(false),
+  autoPauseReason: text("auto_pause_reason"),    // human-readable trigger description
+  autoPausedAt: timestamp("auto_paused_at"),     // when the system paused it
   metadata: jsonb("metadata"),                   // arbitrary config / notes
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

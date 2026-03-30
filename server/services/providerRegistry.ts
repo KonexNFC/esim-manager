@@ -124,9 +124,11 @@ export async function getOffersForNormalizedPlan(
         ...offer,
         providerPriority: p?.priority ?? 999,
         providerEnabled: p?.enabled ?? false,
+        providerAutoPaused: p?.autoPaused ?? false,
       };
     })
-    .filter(o => o.providerEnabled)
+    // Exclude manually disabled providers AND system-auto-paused providers
+    .filter(o => o.providerEnabled && !o.providerAutoPaused)
     .sort((a, b) => a.providerPriority - b.providerPriority);
 }
 
