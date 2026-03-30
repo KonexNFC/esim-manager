@@ -8,10 +8,22 @@
 
 import { getUncachableStripeClient } from '../stripeClient';
 import { db } from '../storage';
-import { users, orders, topups, normalizedPlans, plans } from '@shared/schema';
+import { users, orders, topups, normalizedPlans, plans, settings } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { selectBestProviderForPlan } from './routingEngine';
 import { calculateRetailPrice } from './pricingEngine';
+
+// Read targetMarginPercent from settings, defaulting to 0.50 (50%)
+async function getTargetMarginPercent(): Promise<number> {
+  try {
+    const [row] = await db.select().from(settings).where(eq(settings.key, 'targetMarginPercent'));
+    if (row?.value) {
+      const val = parseFloat(row.value);
+      if (!isNaN(val) && val > 0 && val < 1) return val;
+    }
+  } catch { /* non-critical */ }
+  return 0.50;
+}
 
 const BASE_URL = process.env.APP_BASE_URL ||
   (process.env.REPLIT_DOMAINS
@@ -121,13 +133,20 @@ export async function createPlanCheckoutSession(
     );
 
     if (normalizedPlan) {
-      const routing = await selectBestProviderForPlan(normalizedPlan.id, 'cheapest_cost');
+      // Use blended_score strategy so the active routing mode weights (profit_first /
+      // balanced / reliability_first) are respected when selecting the winner.
+      const [routing, targetMargin] = await Promise.all([
+        selectBestProviderForPlan(normalizedPlan.id, 'blended_score'),
+        getTargetMarginPercent(),
+      ]);
       const winner = routing.fallbackChain[0];
 
-      // Compute server-side retail price from wholesale cost
+      // Compute server-side retail price from wholesale cost using the admin's
+      // configured target margin (not a hardcoded constant).
+      const minimumMarginPercent = Math.round(targetMargin * 100); // e.g. 0.50 → 50
       const pricing = calculateRetailPrice(winner.wholesalePriceUsd, {
-        markupPercent: 40,
-        minimumMarginPercent: 30,
+        markupPercent: Math.round(minimumMarginPercent * 1.2), // slight markup headroom over floor margin
+        minimumMarginPercent,
         charmPricing: true,
         floorPriceUsd: 0.99,
       });
@@ -149,10 +168,14 @@ export async function createPlanCheckoutSession(
       routingMetadata.fallbackChainJson = JSON.stringify(compactChain);
       routingMetadata.wholesaleCostUsd = winner.wholesalePriceUsd.toFixed(4);
       routingMetadata.marginPercent = pricing.marginPercent.toFixed(2);
+      routingMetadata.confidenceScore = String(routing.confidenceScore);
+      routingMetadata.confidenceLabel = routing.confidenceLabel;
 
       console.log(
         `[Stripe] Routing: plan "${params.planName}" → ${routing.selectedProviderKey}` +
-        ` | retail $${finalPriceUsd} (was $${params.price}) | margin ${pricing.marginPercent.toFixed(1)}%`,
+        ` [confidence=${routing.confidenceScore} ${routing.confidenceLabel}]` +
+        ` | retail $${finalPriceUsd} (was $${params.price}) | margin ${pricing.marginPercent.toFixed(1)}%` +
+        ` | targetMargin=${minimumMarginPercent}%`,
       );
     } else {
       // No normalized plan → log and use DB price, which is still server-controlled
@@ -380,8 +403,11 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
     marginPercent,
   }).returning();
 
+  const confStr = metadata.confidenceScore
+    ? ` confidence=${metadata.confidenceScore} (${metadata.confidenceLabel ?? '?'})`
+    : '';
   console.log(
-    `[Stripe] Order ${order.id} created | provider=${providerUsed}` +
+    `[Stripe] Order ${order.id} created | provider=${providerUsed}${confStr}` +
     ` | sale=$${salePrice.toFixed(2)} cost=$${providerCost.toFixed(2)}` +
     ` | profit=$${(profit ?? 0).toFixed(2)} margin=${(marginPercent ?? 0).toFixed(1)}%`
   );
