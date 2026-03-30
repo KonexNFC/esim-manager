@@ -534,6 +534,198 @@ export async function registerRoutes(
     }
   });
 
+  // ─── COUNTRIES (dynamic from provider_offers) ────────
+  app.get("/api/countries", async (req, res) => {
+    try {
+      const countries = await storage.getAvailableCountries();
+
+      // Optional filters
+      const regionFilter = (req.query.region as string | undefined)?.toLowerCase();
+      const q = (req.query.q as string | undefined)?.toLowerCase();
+
+      let filtered = countries;
+      if (regionFilter && regionFilter !== "all") {
+        filtered = filtered.filter(c => c.region.toLowerCase() === regionFilter);
+      }
+      if (q) {
+        filtered = filtered.filter(
+          c =>
+            c.name.toLowerCase().includes(q) ||
+            c.countryCode.toLowerCase().includes(q),
+        );
+      }
+
+      // Group by region
+      const grouped: Record<string, typeof filtered> = {};
+      for (const c of filtered) {
+        if (!grouped[c.region]) grouped[c.region] = [];
+        grouped[c.region].push(c);
+      }
+
+      // Sorted list of regions that have results
+      const regions = Object.keys(grouped).sort();
+
+      res.json({ countries: filtered, grouped, regions, total: filtered.length });
+    } catch (err: any) {
+      console.error("[/api/countries]", err);
+      res.status(500).json({ message: "Failed to fetch countries" });
+    }
+  });
+
+  app.get("/api/countries/:code", async (req, res) => {
+    try {
+      const { getCountryInfo, iso2ToFlag, normaliseCode } = await import("./services/countryData");
+      const code = normaliseCode(req.params.code);
+      const meta = getCountryInfo(code);
+      if (!meta) return res.status(404).json({ message: "Country not found" });
+
+      // Count active plans for this code
+      const countries = await storage.getAvailableCountries();
+      const match = countries.find(c => c.countryCode === code);
+
+      res.json({
+        countryCode: code,
+        name: meta.name,
+        flagEmoji: iso2ToFlag(code),
+        region: meta.region,
+        planCount: match?.planCount ?? 0,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: "Failed to fetch country" });
+    }
+  });
+
+  app.get("/api/countries/:code/plans", async (req, res) => {
+    try {
+      const { normaliseCode } = await import("./services/countryData");
+      const { db } = await import("./storage");
+      const { sql, eq } = await import("drizzle-orm");
+      const { settings } = await import("@shared/schema");
+
+      const code = normaliseCode(req.params.code);
+
+      // Get all normalized plans for this country that have active offers
+      // GROUP BY (dataMb, validityDays) to deduplicate — pick cheapest wholesale
+      const rows = await db.execute<{
+        normalized_plan_id: string;
+        data_mb: string;
+        validity_days: string;
+        is_unlimited: boolean;
+        min_wholesale: string;
+        offer_count: string;
+      }>(sql`
+        SELECT
+          np.id          AS normalized_plan_id,
+          np.data_mb,
+          np.validity_days,
+          np.is_unlimited,
+          MIN(po.wholesale_price_usd) AS min_wholesale,
+          COUNT(po.id)::int           AS offer_count
+        FROM   normalized_plans np
+        JOIN   provider_offers po ON po.normalized_plan_id = np.id
+        WHERE  np.region_code = ${code}
+          AND  po.is_active   = true
+          AND  np.is_active   = true
+        GROUP BY np.id, np.data_mb, np.validity_days, np.is_unlimited
+        ORDER BY np.data_mb ASC, np.validity_days ASC
+      `);
+
+      const { calculateRetailPrice } = await import("./services/pricingEngine");
+      const [settingRow] = await db.select().from(settings).where(eq(settings.key, "targetMarginPercent"));
+      const targetMargin = settingRow?.value ? parseFloat(settingRow.value) : 0.50;
+      const minimumMarginPercent = Math.round(targetMargin * 100);
+
+      const planOptions = rows.rows.map(row => {
+        const dataMb = Number(row.data_mb);
+        const validityDays = Number(row.validity_days);
+        const isUnlimited = row.is_unlimited;
+        const wholesaleCost = Number(row.min_wholesale);
+        const dataAmountGb = isUnlimited ? 999 : dataMb / 1024;
+
+        const pricing = calculateRetailPrice(wholesaleCost, {
+          markupPercent: Math.round(minimumMarginPercent * 1.2),
+          minimumMarginPercent,
+          charmPricing: true,
+          floorPriceUsd: 0.99,
+        });
+
+        const dataLabel = isUnlimited
+          ? "Unlimited"
+          : dataAmountGb >= 1
+            ? `${Math.round(dataAmountGb * 10) / 10} GB`
+            : `${dataMb} MB`;
+
+        return {
+          normalizedPlanId: row.normalized_plan_id,
+          dataMb,
+          validityDays,
+          dataAmountGb,
+          isUnlimited,
+          dataLabel,
+          validityLabel: `${validityDays} Days`,
+          estimatedPriceUsd: pricing.retailPriceUsd,
+          wholesaleCostUsd: wholesaleCost,
+          providerCount: Number(row.offer_count),
+        };
+      });
+
+      res.json({ countryCode: code, plans: planOptions });
+    } catch (err: any) {
+      console.error("[/api/countries/:code/plans]", err);
+      res.status(500).json({ message: "Failed to fetch country plans" });
+    }
+  });
+
+  // POST /api/checkout/country-plan  ── normalized-plan checkout (no legacy planId)
+  app.post("/api/checkout/country-plan", async (req, res) => {
+    try {
+      const { createCountryPlanCheckoutSession } = await import("./services/stripeService");
+      const { getCountryInfo, iso2ToFlag, normaliseCode } = await import("./services/countryData");
+
+      const {
+        normalizedPlanId,
+        countryCode: rawCode,
+        dataLabel,
+        validityLabel,
+        dataAmountGb,
+        validityDays,
+        email,
+        name,
+      } = req.body;
+
+      if (!normalizedPlanId || !rawCode || !email || !dataLabel || !validityLabel) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      const code = normaliseCode(rawCode);
+      const meta = getCountryInfo(code);
+      if (!meta) return res.status(400).json({ message: "Unknown country code" });
+
+      // Optionally attach userId from session
+      const userId = (req as any).user?.id as string | undefined;
+      const userName = ((req as any).user?.name as string | undefined) || name;
+
+      const result = await createCountryPlanCheckoutSession({
+        normalizedPlanId,
+        countryCode: code,
+        countryName: meta.name,
+        region: meta.region,
+        dataLabel,
+        validityLabel,
+        dataAmountGb: Number(dataAmountGb),
+        validityDays: Number(validityDays),
+        email,
+        userId,
+        userName,
+      });
+
+      res.json(result);
+    } catch (err: any) {
+      console.error("[/api/checkout/country-plan]", err);
+      res.status(500).json({ message: err.message || "Checkout failed" });
+    }
+  });
+
   // ─── DESTINATIONS ────────────────────────────────────
   app.get("/api/destinations", async (req, res) => {
     try {

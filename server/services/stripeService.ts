@@ -250,6 +250,107 @@ export async function createPlanCheckoutSession(
   return { url: session.url!, sessionId: session.id };
 }
 
+// ─── Country-plan checkout (uses normalizedPlanId directly) ──────────────────
+
+export interface CountryPlanCheckoutParams {
+  normalizedPlanId: string;
+  countryCode: string;
+  countryName: string;
+  region: string;
+  dataLabel: string;
+  validityLabel: string;
+  dataAmountGb: number;
+  validityDays: number;
+  email: string;
+  userId?: string;
+  userName?: string;
+}
+
+export async function createCountryPlanCheckoutSession(
+  params: CountryPlanCheckoutParams,
+): Promise<{ url: string; sessionId: string }> {
+  const stripe = await getUncachableStripeClient();
+  const customerId = await getOrCreateStripeCustomer(params.email, params.userId, params.userName);
+
+  // Load the normalized plan to confirm it exists and get data
+  const [np] = await db.select().from(normalizedPlans).where(eq(normalizedPlans.id, params.normalizedPlanId));
+  if (!np) throw new Error(`Normalized plan ${params.normalizedPlanId} not found`);
+
+  // Run routing engine to get best provider + compute price
+  const [routing, targetMargin] = await Promise.all([
+    selectBestProviderForPlan(np.id, 'blended_score'),
+    getTargetMarginPercent(),
+  ]);
+  const winner = routing.fallbackChain[0];
+  const minimumMarginPercent = Math.round(targetMargin * 100);
+  const pricing = calculateRetailPrice(winner.wholesalePriceUsd, {
+    markupPercent: Math.round(minimumMarginPercent * 1.2),
+    minimumMarginPercent,
+    charmPricing: true,
+    floorPriceUsd: 0.99,
+  });
+
+  const compactChain: FallbackEntry[] = routing.fallbackChain.map(p => ({
+    r: p.rank,
+    k: p.providerKey,
+    c: p.providerPlanCode,
+    w: p.wholesalePriceUsd,
+  }));
+
+  const productName = `${params.countryName} eSIM — ${params.dataLabel} · ${params.validityLabel}`;
+
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    payment_method_types: ['card'],
+    line_items: [
+      {
+        price_data: {
+          currency: 'usd',
+          unit_amount: Math.round(pricing.retailPriceUsd * 100),
+          product_data: {
+            name: productName,
+            description: `GlobeSIM eSIM plan for ${params.countryName}. ${params.dataLabel} data valid for ${params.validityLabel}.`,
+            metadata: {
+              normalizedPlanId: np.id,
+              destination: params.countryName,
+              dataAmount: params.dataLabel,
+              validity: params.validityLabel,
+            },
+          },
+        },
+        quantity: 1,
+      },
+    ],
+    mode: 'payment',
+    success_url: `${BASE_URL}/checkout-success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${BASE_URL}/destinations/${params.countryCode}`,
+    customer_email: customerId ? undefined : params.email,
+    metadata: {
+      planId: '',   // no legacy planId for normalized-plan purchases
+      email: params.email,
+      userId: params.userId || '',
+      userName: params.userName || '',
+      destination: params.countryName,
+      region: params.region,
+      dataAmountGb: String(params.dataAmountGb),
+      validityDays: String(params.validityDays),
+      purchaseType: 'initial_purchase',
+      normalizedPlanId: np.id,
+      routingDecisionId: routing.decisionId,
+      selectedProviderKey: routing.selectedProviderKey,
+      selectedProviderPlanCode: routing.selectedProviderPlanCode,
+      fallbackChainJson: JSON.stringify(compactChain),
+      wholesaleCostUsd: winner.wholesalePriceUsd.toFixed(4),
+      marginPercent: pricing.marginPercent.toFixed(2),
+      confidenceScore: String(routing.confidenceScore),
+      confidenceLabel: routing.confidenceLabel,
+    },
+    allow_promotion_codes: true,
+  });
+
+  return { url: session.url!, sessionId: session.id };
+}
+
 // ─── Topup checkout ───────────────────────────────────────────────────────────
 
 export interface TopupCheckoutParams {

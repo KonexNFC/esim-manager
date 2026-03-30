@@ -1,4 +1,4 @@
-import { eq, and, or, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, or, isNull, isNotNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import {
@@ -14,6 +14,15 @@ import {
   type Notification, type InsertNotification,
   type PaymentEvent, type ProviderSyncLog,
 } from "@shared/schema";
+import { getCountryInfo, iso2ToFlag, normaliseCode } from "./services/countryData";
+
+export interface AvailableCountry {
+  countryCode: string;   // canonical ISO-2 code
+  name: string;
+  flagEmoji: string;
+  region: string;
+  planCount: number;     // distinct normalized plans with active offers
+}
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -34,6 +43,7 @@ export interface IStorage {
   getPopularDestinations(): Promise<Destination[]>;
   getDestination(id: string): Promise<Destination | undefined>;
   createDestination(dest: InsertDestination): Promise<Destination>;
+  getAvailableCountries(): Promise<AvailableCountry[]>;
 
   // Plans
   getAllPlans(): Promise<Plan[]>;
@@ -198,6 +208,40 @@ export class DatabaseStorage implements IStorage {
   async createDestination(dest: InsertDestination): Promise<Destination> {
     const [created] = await db.insert(destinations).values(dest).returning();
     return created;
+  }
+
+  async getAvailableCountries(): Promise<AvailableCountry[]> {
+    // Raw GROUP BY to avoid Drizzle's broken selectDistinct in v0.39.x
+    const rows = await db.execute<{ country_code: string; plan_count: string }>(sql`
+      SELECT np.region_code AS country_code,
+             COUNT(DISTINCT np.id)::int AS plan_count
+      FROM   provider_offers po
+      JOIN   normalized_plans np ON po.normalized_plan_id = np.id
+      WHERE  po.is_active = true
+        AND  np.region_code != ''
+        AND  length(np.region_code) <= 3
+      GROUP BY np.region_code
+      ORDER BY np.region_code
+    `);
+
+    const countries: AvailableCountry[] = [];
+    for (const row of rows.rows) {
+      const raw = row.country_code ?? "";
+      if (!raw) continue;
+      const canonical = normaliseCode(raw);
+      const meta = getCountryInfo(canonical);
+      if (!meta) continue; // skip unrecognised codes
+      countries.push({
+        countryCode: canonical,
+        name: meta.name,
+        flagEmoji: iso2ToFlag(canonical),
+        region: meta.region,
+        planCount: Number(row.plan_count),
+      });
+    }
+
+    // Sort alphabetically by country name
+    return countries.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   // ─── Plans ────────────────────────────────────────
