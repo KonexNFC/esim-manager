@@ -1,0 +1,479 @@
+Optimise GlobeSIM routing for profit + performance.
+
+Do not rebuild the existing provider registry, normalized plans, routing engine, pricing engine, checkout flow, or admin panel.
+Improve the current routing layer in place.
+
+PRIMARY GOAL
+Make provider selection smarter so GlobeSIM maximises:
+1. gross margin
+2. fulfilment success rate
+3. speed / reliability
+4. destination-specific performance
+5. fallback quality
+
+The engine should stop acting like a simple selector and start acting like a true optimisation system.
+
+==================================================
+1. ADD PROFIT + PERFORMANCE OPTIMISATION LAYER
+==================================================
+
+Create a higher-level optimisation service on top of the current routing engine.
+
+Core function:
+optimizeProviderSelection(normalizedPlanId, customerContext, orderContext)
+
+This service should evaluate:
+- provider cost
+- projected margin
+- provider health
+- recent success rate
+- recent latency
+- destination performance
+- failover quality
+- manual rules / exclusions
+
+Return:
+- selected provider
+- ranked provider list
+- fallback chain
+- optimisation explanation
+- confidence score
+
+==================================================
+2. ADD DESTINATION PERFORMANCE MEMORY
+==================================================
+
+Track provider performance by destination and region.
+
+Create destination-level stats such as:
+- provider_id
+- destination
+- region
+- recent_orders_count
+- fulfilment_success_rate
+- topup_success_rate
+- average_latency_ms
+- average_margin_percent
+- failover_rate
+- last_updated_at
+
+Use this data in routing decisions.
+
+Examples:
+- Zendit may outperform in UAE
+- eSIMGo may be cheaper for UK
+- eSIM Access may be stronger for Africa bundles
+
+The routing engine should learn from recent destination-specific outcomes.
+
+==================================================
+3. ADD WEIGHTED PROFITABILITY STRATEGY
+==================================================
+
+Create a new routing strategy:
+profit_performance_optimized
+
+This should score providers using a weighted combination of:
+- projected gross margin
+- success rate
+- latency
+- destination win rate
+- failover risk
+- health score
+
+Suggested default weights:
+- projected margin: 35
+- success rate: 25
+- destination performance: 15
+- health score: 10
+- latency: 5
+- failover quality: 10
+
+Make weights configurable.
+
+==================================================
+4. ADD CONFIDENCE SCORING
+==================================================
+
+Each routing decision should return a confidence score 0–100.
+
+Examples:
+- 95 = strong choice, healthy provider, strong destination history, high margin
+- 62 = acceptable but weaker confidence
+- 40 = risky choice, limited data or degraded provider
+
+If confidence is low:
+- prefer safer provider if margin difference is small
+- surface a warning in admin
+
+==================================================
+5. ADD MARGIN PROTECTION LOGIC
+==================================================
+
+Protect the business from weak-routing decisions.
+
+Rules:
+- do not auto-select offers below minimum margin unless no better option exists
+- if margin difference between providers is small, prefer higher success provider
+- if health is degraded, margin alone should not win
+- if provider has repeated recent failures, exclude temporarily
+
+Add configurable thresholds:
+- minimum acceptable margin %
+- minimum health score
+- maximum acceptable recent failure rate
+- maximum acceptable latency
+
+==================================================
+6. ADD SMART FAILOVER QUALITY SCORING
+==================================================
+
+Not all primary selections are equal.
+A provider with strong fallback options may be better than one with no good backup path.
+
+Create fallback quality score using:
+- number of valid fallback providers
+- average fallback health
+- average fallback margin
+- expected fallback success rate
+
+Use this in optimisation scoring.
+
+==================================================
+7. ADD PRICE COMPETITIVENESS CONTROL
+==================================================
+
+Do not optimise for margin so aggressively that pricing becomes uncompetitive.
+
+Create pricing competitiveness rules:
+- compare current retail against comparable provider-backed offers
+- enforce max spread from your internal recommended price
+- allow destination-specific competitive pricing bands
+
+Example:
+If UAE 5GB plans should remain around a target band, do not push markup beyond acceptable threshold.
+
+Support:
+- aggressive pricing mode
+- balanced pricing mode
+- premium margin mode
+
+==================================================
+8. ADD ROUTING MODES
+==================================================
+
+Create selectable routing modes:
+
+1. Profit First
+- prioritise maximum margin within acceptable risk
+
+2. Balanced
+- optimise for a mix of margin + reliability
+- recommended default
+
+3. Reliability First
+- prioritise best success rate / health
+- margin is secondary
+
+4. Growth Mode
+- prioritise attractive pricing and good enough performance for acquisition-heavy markets
+
+Allow admin to set:
+- global default mode
+- destination-specific mode
+- temporary promotional mode
+
+==================================================
+9. ADD DESTINATION OVERRIDES WITH EXPIRY
+==================================================
+
+Improve override logic.
+
+Support:
+- force provider for a destination
+- exclude provider for a destination
+- prefer provider temporarily
+- apply override until expiration date/time
+- add operator notes
+
+Example:
+- Force Zendit for Nigeria for 7 days
+- Exclude eSIMGo for UAE while degraded
+- Prefer eSIM Access for Africa regional plans during promo period
+
+==================================================
+10. ADD TEMPORARY AUTO-PAUSE RULES
+==================================================
+
+If provider performance drops below threshold, automatically pause it from routing.
+
+Examples:
+- if fulfilment success < 80% over recent window
+- if latency exceeds threshold repeatedly
+- if health endpoint fails repeatedly
+
+Statuses:
+- healthy
+- degraded
+- auto_paused
+- manually_paused
+- offline
+
+Allow admin to manually unpause.
+
+==================================================
+11. ADD ORDER OUTCOME FEEDBACK LOOP
+==================================================
+
+Feed real order outcomes back into the optimisation system.
+
+For each fulfilled or failed order, update:
+- provider success metrics
+- destination success metrics
+- failover statistics
+- realised margin
+- time-to-fulfil metrics
+
+This turns routing into a feedback system rather than a static rules engine.
+
+==================================================
+12. ADD REALISED VS PROJECTED MARGIN TRACKING
+==================================================
+
+Track both:
+- projected margin at selection time
+- realised margin after fulfilment
+
+Why:
+- some provider fees or conversion costs may affect true economics
+- helps refine pricing and routing accuracy
+
+Add fields:
+- projected_cost_minor
+- projected_margin_percent
+- realised_cost_minor
+- realised_margin_percent
+
+Expose in admin analytics.
+
+==================================================
+13. ADD ORDER PRIORITY LOGIC
+==================================================
+
+Support different routing behaviour depending on order context.
+
+Examples:
+- high-value order -> prefer more reliable provider
+- first-time customer -> safer provider
+- returning customer -> allow balanced or profit-first routing
+- urgent / premium product -> reliability first
+
+Use orderContext and customerContext in optimisation logic.
+
+==================================================
+14. ADD ADMIN OPTIMISATION DASHBOARD
+==================================================
+
+Extend admin with an optimisation view.
+
+Show:
+- current routing mode
+- provider ranking by score
+- avg realised margin by provider
+- avg fulfilment success by provider
+- failover save rate
+- destination-specific leaderboards
+- providers auto-paused
+- plans below target margin
+- low confidence routes
+
+Add widgets:
+- "Best provider by margin"
+- "Best provider by reliability"
+- "Best provider by destination"
+- "Orders saved by failover"
+
+==================================================
+15. ADD ROUTING EXPLANATION PANEL
+==================================================
+
+For each order and each plan comparison, show explainable reasoning.
+
+Example:
+Selected Zendit
+Reason:
+- 91.2% projected margin
+- 97 health score
+- 94% UAE fulfilment success last 7 days
+- better fallback chain than eSIMGo
+- confidence score 89
+
+Make routing fully explainable for ops.
+
+==================================================
+16. ADD TEST / SIMULATION TOOL
+==================================================
+
+Build an internal routing simulation utility.
+
+Admin/internal tool:
+simulateRouting(normalizedPlanId, destination, routingMode)
+
+Return:
+- all eligible providers
+- scores by category
+- chosen provider
+- fallback chain
+- pricing result
+- projected margin
+- decision reason
+
+This will help tune weights without affecting live orders.
+
+==================================================
+17. ADD A/B STRATEGY TESTING READINESS
+==================================================
+
+Prepare architecture for testing routing strategies on traffic slices later.
+
+For now, support optional config:
+- percentage of orders use Balanced
+- percentage use Profit First
+- percentage use Reliability First
+
+Track outcomes by strategy so GlobeSIM can learn which mode works best.
+
+No need for full experimentation UI yet, but structure the backend for it.
+
+==================================================
+18. ADD ALERTS FOR ROUTING QUALITY
+==================================================
+
+Create alerts when:
+- provider margin drops below target
+- provider failover rate spikes
+- destination success rate drops sharply
+- confidence scores trend low
+- routing mode underperforms in a destination
+
+These should surface in admin and logs.
+
+==================================================
+19. ADD PERFORMANCE WINDOWS
+==================================================
+
+Use recent time windows for routing stats.
+
+Support:
+- last 24h
+- last 7d
+- last 30d
+
+Weight recent outcomes more heavily than old outcomes.
+Recent performance should influence live routing more than historic averages.
+
+==================================================
+20. ADD CONFIGURABLE SCORE CAPS / GUARDRAILS
+==================================================
+
+Examples:
+- never choose provider if health < 60
+- never choose provider if recent destination success < 75
+- never choose provider if projected margin < target and at least one valid alternative exists
+- prefer reliability when price difference < configured threshold
+
+These should be easy to tune.
+
+==================================================
+21. UPDATE CHECKOUT / FULFILMENT INTEGRATION
+==================================================
+
+Ensure live checkout uses the optimised routing layer, not just basic routing.
+
+Flow:
+1. frontend requests normalized plan
+2. backend calculates retail
+3. optimisation layer chooses provider + fallback chain
+4. Stripe session created with routing metadata
+5. fulfilment uses ranked provider order
+6. order outcome feeds performance memory
+
+Ensure pricing remains server-side authoritative.
+
+==================================================
+22. DATA / MODEL ADDITIONS
+==================================================
+
+Add or refine models such as:
+
+DESTINATION_PROVIDER_STATS
+- id
+- provider_id
+- destination
+- region
+- recent_orders_count
+- fulfilment_success_rate
+- avg_latency_ms
+- avg_margin_percent
+- failover_rate
+- score_snapshot
+- updated_at
+
+ROUTING_MODE_CONFIG
+- id
+- mode_name
+- weights_json
+- min_margin_percent
+- min_health_score
+- max_failure_rate_percent
+- max_latency_ms
+- enabled
+- updated_at
+
+ROUTING_OPTIMISATION_LOGS
+- id
+- normalized_plan_id
+- destination
+- selected_provider_id
+- ranked_provider_json
+- confidence_score
+- projected_margin_percent
+- decision_reason
+- mode_used
+- created_at
+
+==================================================
+23. KEEP IMPLEMENTATION CLEAN
+==================================================
+
+Do not bury optimisation rules inside controllers.
+Keep modules separate:
+- routing
+- optimisation
+- pricing
+- health
+- analytics
+- overrides
+- simulation
+
+The system must remain explainable, auditable, and easy to tune.
+
+==================================================
+24. DELIVERABLE
+==================================================
+
+Return an in-place optimisation upgrade that makes GlobeSIM routing smarter for both profit and performance, including:
+- destination-aware provider memory
+- profit/performance scoring
+- routing modes
+- confidence scores
+- margin protection
+- fallback quality scoring
+- auto-pause logic
+- order outcome feedback loop
+- realised vs projected margin tracking
+- admin optimisation dashboard
+- routing explanation tools
+- simulation support
+
+The end result should make GlobeSIM behave like a serious orchestrated multi-provider platform, not a simple reseller switcher.

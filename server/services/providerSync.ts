@@ -253,8 +253,7 @@ export async function syncAllProviders(
   // Collect country codes for batch providers (eSIM Access)
   const destRows = await db
     .select({ countryCode: destinations.countryCode })
-    .from(destinations)
-    .where(eq(destinations.isActive, true));
+    .from(destinations);
   const countryCodes = [...new Set(destRows.map(r => r.countryCode.toUpperCase()))];
 
   // ── eSIMGo (single full-catalogue call) ───────────────────────────────────
