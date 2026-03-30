@@ -22,7 +22,7 @@
 
 import { eq } from "drizzle-orm";
 import { db } from "../storage";
-import { routingDecisions } from "@shared/schema";
+import { routingDecisions, settings } from "@shared/schema";
 import {
   getNormalizedPlan,
   getOffersForNormalizedPlan,
@@ -30,6 +30,50 @@ import {
 } from "./providerRegistry";
 import { calculateMargin } from "./marginEngine";
 import { getDestinationStats } from "./destinationStats";
+
+// ─── Margin protection config ─────────────────────────────────────────────────
+//
+// MIN_MARGIN_PERCENT is the minimum acceptable gross margin (%) a provider
+// offer must have before the routing engine will select it as a winner.
+// Candidates below this threshold are demoted to a "last-resort" fallback pool.
+//
+// Stored as settings key "routingMinMarginPercent". Falls back to this default
+// when the key is absent so the system works before any admin configuration.
+
+const DEFAULT_MIN_MARGIN_PERCENT = 15;
+
+async function getMinMarginPercent(): Promise<number> {
+  try {
+    const [row] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, "routingMinMarginPercent"));
+    if (row?.value) {
+      const parsed = parseFloat(row.value);
+      if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) return parsed;
+    }
+  } catch {
+    // Non-critical — fall back to default
+  }
+  return DEFAULT_MIN_MARGIN_PERCENT;
+}
+
+// ─── Health dampening multipliers ────────────────────────────────────────────
+//
+// Applied to blended_score AFTER it is computed, so poor-health providers are
+// pushed down the ranking even when their margin is high.
+//
+// healthy  → 1.00 (no change)
+// unknown  → 0.90 (−10% — slight caution for unverified status)
+// degraded → 0.65 (−35% — significant deprioritisation)
+// down     → 0.30 (−70% — last resort only)
+
+const HEALTH_DAMPENING: Record<string, number> = {
+  healthy: 1.00,
+  unknown: 0.90,
+  degraded: 0.65,
+  down: 0.30,
+};
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -101,7 +145,8 @@ interface ScoredCandidate {
   wholesalePriceUsd: number;
   providerPriority: number;
   providerHealthStatus: string;
-  dataOrdersCount: number;  // orders in destination_provider_stats for this provider+region
+  dataOrdersCount: number;       // orders in destination_provider_stats for this provider+region
+  belowMarginThreshold: boolean; // true when margin_score < minMarginPercent
   scores: ProviderScores;
 }
 
@@ -145,6 +190,7 @@ async function scoreCandidates(
   normalizedPlanId: string,
   retailPriceUsd: number,
   regionCode: string,
+  minMarginPercent: number,
 ): Promise<ScoredCandidate[]> {
   const enrichedOffers = await getOffersForNormalizedPlan(normalizedPlanId);
   if (enrichedOffers.length === 0) return [];
@@ -196,16 +242,23 @@ async function scoreCandidates(
     const { success_score, destination_score, dataOrdersCount } = destScoresPerProvider[i];
 
     // blended: margin 35% · success 25% · destination 15% · health 15% · latency 10%
-    const blended =
+    const rawBlended =
       0.35 * margin_score +
       0.25 * success_score +
       0.15 * destination_score +
       0.15 * health_score +
       0.10 * latency_s;
 
+    // Health dampening: multiply blended by a factor so degraded/down providers
+    // are pushed down the ranking even when their margin is excellent.
+    // healthy=1.0 · unknown=0.90 · degraded=0.65 · down=0.30
+    const dampen = HEALTH_DAMPENING[c.providerHealthStatus] ?? 0.90;
+    const blended = rawBlended * dampen;
+
     return {
       ...c,
       dataOrdersCount,
+      belowMarginThreshold: margin_score < minMarginPercent,
       scores: {
         cost_score,
         margin_score,
@@ -246,8 +299,18 @@ function applySortStrategy(
 
     case "blended_score":
     default:
-      // Best blended score first
-      return copy.sort((a, b) => b.scores.blended_score - a.scores.blended_score);
+      // Best blended score first.
+      // Tiebreaker: when two candidates' margin_score is within 5 points,
+      // prefer the one with the higher success_score. This ensures that
+      // comparable-margin providers are differentiated by actual reliability.
+      return copy.sort((a, b) => {
+        const marginDiff = Math.abs(a.scores.margin_score - b.scores.margin_score);
+        if (marginDiff <= 5) {
+          const successDiff = b.scores.success_score - a.scores.success_score;
+          if (successDiff !== 0) return successDiff;
+        }
+        return b.scores.blended_score - a.scores.blended_score;
+      });
   }
 }
 
@@ -401,18 +464,51 @@ export async function selectBestProviderForPlan(
     throw new Error(`[routingEngine] Normalized plan not found: ${normalizedPlanId}`);
   }
 
-  // 2. Score all enabled, active candidates (destination stats fetched per provider)
-  const candidates = await scoreCandidates(normalizedPlanId, plan.retailPriceUsd, plan.regionCode);
+  // 2. Load margin protection threshold from settings
+  const minMarginPercent = await getMinMarginPercent();
+
+  // 3. Score all enabled, active candidates (destination stats + health dampening applied)
+  const candidates = await scoreCandidates(
+    normalizedPlanId,
+    plan.retailPriceUsd,
+    plan.regionCode,
+    minMarginPercent,
+  );
   if (candidates.length === 0) {
     throw new Error(
       `[routingEngine] No enabled active offers found for plan "${plan.name}" (${normalizedPlanId})`,
     );
   }
 
-  // 3. Sort by chosen strategy
-  const ranked = applySortStrategy(candidates, strategy);
+  // 4. Margin gate — split into candidates that meet the threshold and those that don't.
+  //    Prefer above-threshold candidates. Only use below-threshold as a last resort
+  //    (no alternative), logging a warning so the operator knows.
+  const aboveThreshold = candidates.filter(c => !c.belowMarginThreshold);
+  const belowThreshold = candidates.filter(c => c.belowMarginThreshold);
 
-  // 4. Build the fallback chain (all candidates in ranked order)
+  let candidatesForRanking: ScoredCandidate[];
+  if (aboveThreshold.length > 0) {
+    candidatesForRanking = aboveThreshold;
+    if (belowThreshold.length > 0) {
+      console.warn(
+        `[routingEngine] Margin gate: excluded ${belowThreshold.length} below-threshold offer(s) ` +
+        `(min=${minMarginPercent}%) for plan "${plan.name}": ` +
+        belowThreshold.map(c => `${c.providerKey}(${c.scores.margin_score}%)`).join(", "),
+      );
+    }
+  } else {
+    // All candidates are below threshold — fall back to full pool to avoid blocking sales
+    candidatesForRanking = candidates;
+    console.warn(
+      `[routingEngine] Margin gate: ALL offers for plan "${plan.name}" are below threshold ` +
+      `(min=${minMarginPercent}%). Selecting best available to avoid blocking sale.`,
+    );
+  }
+
+  // 5. Sort by chosen strategy
+  const ranked = applySortStrategy(candidatesForRanking, strategy);
+
+  // 6. Build the fallback chain (all candidates in ranked order)
   const fallbackChain: RankedProvider[] = ranked.map((c, i) => ({
     rank: i + 1,
     providerKey: c.providerKey,
@@ -426,16 +522,16 @@ export async function selectBestProviderForPlan(
   const winner = ranked[0];
   const decisionReason = buildReason(strategy, winner, ranked);
 
-  // 6. Build scores map (keyed by providerKey for easy lookup)
+  // 7. Build scores map (all candidates incl. below-threshold, for full audit trail)
   const scoresMap: Record<string, ProviderScores> = {};
   for (const c of candidates) {
     scoresMap[c.providerKey] = c.scores;
   }
 
-  // 7. Compute confidence for this decision
+  // 8. Compute confidence for this decision
   const { score: confScore, label: confLabel } = calculateConfidence(winner);
 
-  // 8. Persist to routing_decisions
+  // 9. Persist to routing_decisions
   const [saved] = await db
     .insert(routingDecisions)
     .values({
