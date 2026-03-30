@@ -1,75 +1,120 @@
 import type { EsimProvider, ProviderPlan, ProviderOrderResult, CoverageType } from "./types";
+import { randomUUID } from "crypto";
 
 // ─── Zendit eSIM Provider ─────────────────────────────────────────────────────
-// API base:  https://api.zendit.io/v1
-// Auth:      X-API-Key header
-// Key env:   ZENDIT_API_KEY
+// Swagger (test):  https://test-api.zendit.io/swagger/index.html
+// Swagger (prod):  https://api.zendit.io/swagger/index.html
+// Base URL:        https://{test-api|api}.zendit.io/v1
+// Auth:            Authorization: Bearer <API_KEY>
+// Keys:            ZENDIT_API_KEY (required)
+//                  ZENDIT_ENV     "production" → api.zendit.io; else test-api.zendit.io
 //
-// Catalogue endpoint (per-country):
-//   GET /esim/plans?country={ISO2}
-//   Response: { items: ZenditPlan[] }
+// Catalogue:  GET /esim/offers?limit=100&offset=N[&country=ISO2]
+//   Response: { list: ESimOffer[], total: number, limit: number, offset: number }
 //
-// Full catalogue helper:
-//   getAllCataloguePlans(countryCodes) iterates each code and deduplicates.
+// Purchase:   POST /esim/purchases  { offerId, transactionId }
+// QR code:    GET  /esim/purchases/{transactionId}/qrcode
+// Status:     GET  /esim/purchases/{transactionId}  → .status
 
-interface ZenditPlanCost {
-  amount: number;       // in cents (USD)
+interface ZenditCost {
   currency?: string;
+  currencyDivisor?: number;  // e.g. 100 for cents
+  fixed?: number;            // price in minor currency units (fixed / currencyDivisor = USD)
+  fee?: number;
 }
 
-interface ZenditPlan {
-  id?: string;
-  productId?: string;   // canonical plan identifier
-  title?: string;
-  name?: string;
-  data_amount_gb?: number;
-  dataAmountGb?: number;
-  validity_days?: number;
-  validityDays?: number;
-  cost?: ZenditPlanCost;
-  price?: ZenditPlanCost;
-  network_speed?: string;
-  networkSpeed?: string;
-  coverage_countries?: string[];
-  coverageCountries?: string[];
-  features?: string[];
-  is_unlimited?: boolean;
-  isUnlimited?: boolean;
+interface ZenditESimOffer {
+  offerId: string;
+  brand?: string;
+  brandName?: string;
+  country?: string;          // Primary ISO-2 country code (always present per schema)
+  regions?: string[];        // e.g. ["Global"] or ["Europe", "Southeast Asia"]
+  dataGB?: number;           // Data in GB
+  dataUnlimited?: boolean;
+  durationDays?: number;     // Validity in days
+  cost?: ZenditCost;
+  price?: ZenditCost;
+  dataSpeeds?: string[];     // e.g. ["4G", "LTE"]
+  enabled?: boolean;
+  notes?: string;
+  shortNotes?: string;
+  brand_name?: string;
+}
+
+interface ZenditOffersResponse {
+  list?: ZenditESimOffer[];
+  total?: number;            // NOTE: "total" not "count"
+  limit?: number;
+  offset?: number;
+}
+
+interface ZenditESimConfirmation {
+  iccid?: string;
+  smdpAddress?: string;
+  activationCode?: string;
+  externalReferenceId?: string;
+}
+
+interface ZenditPurchaseResponse {
+  transactionId?: string;
+  status?: string;
+  confirmation?: ZenditESimConfirmation;
+}
+
+interface ZenditQRCodeResponse {
+  qrCode?: string;
 }
 
 export class ZenditProvider implements EsimProvider {
   name = "zendit";
   private apiKey: string | undefined;
-  private baseUrl = "https://api.zendit.io/v1";
+  private baseUrl: string;
 
   constructor() {
     this.apiKey = process.env.ZENDIT_API_KEY;
+    const isProduction = (process.env.ZENDIT_ENV ?? "").toLowerCase() === "production";
+    const host = isProduction ? "api.zendit.io" : "test-api.zendit.io";
+    this.baseUrl = `https://${host}/v1`;
   }
 
   isConfigured(): boolean {
     return !!this.apiKey;
   }
 
-  private async fetchCountryPlans(countryCode: string): Promise<ProviderPlan[]> {
-    const res = await fetch(
-      `${this.baseUrl}/esim/plans?country=${countryCode.toUpperCase()}`,
-      { headers: { "X-API-Key": this.apiKey! } },
-    );
-    if (!res.ok) {
-      throw new Error(`Zendit API ${res.status} for country ${countryCode}`);
-    }
-    const data = await res.json() as { items?: ZenditPlan[] };
-    const items: ZenditPlan[] = Array.isArray(data.items) ? data.items : [];
-    return items.map(p => this.mapItem(p, countryCode));
+  private get headers() {
+    return {
+      "Authorization": `Bearer ${this.apiKey}`,
+      "Content-Type": "application/json",
+    };
   }
 
-  private mapItem(p: ZenditPlan, countryCode: string): ProviderPlan {
-    const providerRef = p.productId ?? p.id ?? "";
-    const dataGb = p.data_amount_gb ?? p.dataAmountGb ?? 0;
-    const isUnlimited = p.is_unlimited ?? p.isUnlimited ?? false;
-    const validityDays = p.validity_days ?? p.validityDays ?? 1;
-    const costCents = p.cost?.amount ?? p.price?.amount ?? 0;
-    const wholesaleCost = costCents / 100;
+  /** Determine coverage type from regions array. */
+  private resolveCoverageType(regions: string[] = [], country?: string): CoverageType {
+    const regionLower = regions.map(r => r.toLowerCase());
+    if (regionLower.some(r => r === "global" || r.includes("global"))) return "global";
+    if (regions.length > 0) return "regional";
+    return country ? "country" : "global";
+  }
+
+  /** Resolve wholesale cost from cost/price object. Returns USD. */
+  private resolveCost(cost?: ZenditCost, price?: ZenditCost): { usd: number; currency: string } {
+    const c = cost ?? price;
+    if (!c) return { usd: 0, currency: "USD" };
+    const divisor = c.currencyDivisor ?? 100;
+    const fixed = c.fixed ?? 0;
+    const currency = c.currency ?? "USD";
+    return { usd: fixed / divisor, currency };
+  }
+
+  /** Map a raw ESimOffer to a ProviderPlan. */
+  private mapOffer(offer: ZenditESimOffer): ProviderPlan {
+    const countryCode = (offer.country ?? "GLOBAL").toUpperCase();
+    const coverageType = this.resolveCoverageType(offer.regions, offer.country);
+    const { usd: wholesaleCost, currency } = this.resolveCost(offer.cost, offer.price);
+
+    const isUnlimited = offer.dataUnlimited ?? false;
+    const dataGb = isUnlimited ? 999 : (offer.dataGB ?? 0);
+    const validityDays = offer.durationDays ?? 1;
 
     const dataLabel = isUnlimited
       ? "Unlimited"
@@ -77,87 +122,113 @@ export class ZenditProvider implements EsimProvider {
         ? `${Math.round(dataGb * 10) / 10} GB`
         : `${Math.round(dataGb * 1024)} MB`;
 
-    const speedInfo = p.network_speed ?? p.networkSpeed ?? "4G/LTE";
-    const coveredCountries = p.coverage_countries ?? p.coverageCountries ?? [countryCode];
+    const speedInfo = (offer.dataSpeeds ?? []).join("/").replace(/lte/i, "LTE") || "4G/LTE";
 
-    // Determine coverage type from how many countries this plan covers
-    const coverageType: CoverageType =
-      coveredCountries.length === 0 ? "country"
-      : coveredCountries.length === 1 ? "country"
-      : coveredCountries.length >= 50 ? "global"
-      : "regional";
+    const regionList = (offer.regions ?? []).join(", ");
+    const coverage = regionList || countryCode;
 
-    const features: string[] = Array.isArray(p.features) ? p.features : ["Data only", "Instant activation"];
-    if (speedInfo.toLowerCase().includes("5g")) features.push("5G where available");
+    const features: string[] = ["Data only", "Instant activation"];
+    const speedUpper = speedInfo.toUpperCase();
+    if (speedUpper.includes("5G")) features.push("5G where available");
+
+    const name =
+      offer.shortNotes
+      ?? offer.notes
+      ?? `${offer.brandName ?? offer.brand ?? "Zendit"} — ${dataLabel} / ${validityDays}d`;
 
     return {
       provider: this.name,
-      providerRef,
-      countryCode: countryCode.toUpperCase(),
-      dataAmountGb: isUnlimited ? 999 : dataGb,
+      providerRef: offer.offerId,
+      countryCode,
+      dataAmountGb: dataGb,
       validityDays,
       wholesaleCost,
-      currency: "USD",
-      name: p.title ?? p.name ?? `${dataLabel} — ${validityDays} Days`,
+      currency,
+      name,
       dataAmount: dataLabel,
       validity: `${validityDays} Days`,
       speedInfo,
-      coverage: coveredCountries.join(", ") || countryCode,
+      coverage,
       features,
       coverageType,
     };
   }
 
+  /** Fetch one page of offers (optionally filtered by country). */
+  private async fetchOffersPage(limit: number, offset: number, country?: string): Promise<ZenditOffersResponse> {
+    // Zendit uses _limit/_offset (underscore-prefixed) — both are required
+    const params = new URLSearchParams({ _limit: String(limit), _offset: String(offset) });
+    if (country) params.set("country", country.toUpperCase());
+
+    const res = await fetch(`${this.baseUrl}/esim/offers?${params}`, {
+      headers: this.headers,
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Zendit API ${res.status}: ${body.slice(0, 200)}`);
+    }
+
+    return res.json() as Promise<ZenditOffersResponse>;
+  }
+
   /**
-   * Fetch the full Zendit catalogue across the given country codes.
-   * Deduplicates by (providerRef, countryCode) to avoid double-counting plans
-   * that appear in multiple country responses.
+   * Fetch the full Zendit catalogue via the global /esim/offers endpoint (paginated).
+   * Each offer has a single primary `country` field — no fan-out needed.
    */
-  async getAllCataloguePlans(countryCodes: string[]): Promise<ProviderPlan[]> {
+  async getAllCataloguePlans(_countryCodes: string[]): Promise<ProviderPlan[]> {
     if (!this.apiKey) {
-      console.log("[zendit] Not configured (ZENDIT_API_KEY missing) — skipping catalogue fetch");
+      console.log("[zendit] Not configured (ZENDIT_API_KEY missing) — skipping");
       return [];
     }
 
-    const seen = new Set<string>();
-    const all: ProviderPlan[] = [];
-    let errors = 0;
+    const PAGE_SIZE = 100;
+    const plans: ProviderPlan[] = [];
+    let offset = 0;
 
-    for (const code of countryCodes) {
+    console.log(`[zendit] Fetching catalogue from ${this.baseUrl}/esim/offers ...`);
+
+    while (true) {
+      let page: ZenditOffersResponse;
       try {
-        const plans = await this.fetchCountryPlans(code);
-        for (const p of plans) {
-          const key = `${p.providerRef}__${p.countryCode}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            all.push(p);
-          }
-        }
+        page = await this.fetchOffersPage(PAGE_SIZE, offset);
       } catch (err: any) {
-        errors++;
-        if (errors <= 3) {
-          // Log first few errors, suppress the rest to keep noise low
-          console.warn(`[zendit] Failed to fetch plans for ${code}: ${err.message}`);
+        console.error(`[zendit] Catalogue fetch failed at offset ${offset}: ${err.message}`);
+        break;
+      }
+
+      const items = page.list ?? [];
+
+      if (offset === 0) {
+        console.log(`[zendit] total=${page.total}, first page=${items.length} items`);
+        if (items.length > 0) {
+          console.log(`[zendit] Sample offer keys: ${Object.keys(items[0]).join(", ")}`);
         }
       }
+
+      for (const offer of items) {
+        if (!offer.offerId) continue;
+        if (offer.enabled === false) continue;
+        plans.push(this.mapOffer(offer));
+      }
+
+      const total = page.total ?? items.length;
+      offset += PAGE_SIZE;
+      if (offset >= total || items.length < PAGE_SIZE) break;
     }
 
-    if (errors > 3) {
-      console.warn(`[zendit] ...and ${errors - 3} more country fetch errors suppressed`);
-    }
-
-    return all;
+    return plans;
   }
 
   async getPlans(countryCode: string): Promise<ProviderPlan[]> {
-    if (!this.apiKey) {
-      console.log("[zendit] Not configured — skipping plan fetch");
-      return [];
-    }
+    if (!this.apiKey) return [];
     try {
-      return await this.fetchCountryPlans(countryCode);
+      const page = await this.fetchOffersPage(100, 0, countryCode);
+      return (page.list ?? [])
+        .filter(o => o.offerId && o.enabled !== false)
+        .map(o => this.mapOffer(o));
     } catch (err: any) {
-      console.error(`[zendit] getPlans(${countryCode}) failed:`, err.message);
+      console.error(`[zendit] getPlans(${countryCode}) failed: ${err.message}`);
       return [];
     }
   }
@@ -168,47 +239,64 @@ export class ZenditProvider implements EsimProvider {
     validityDays: number;
     providerRef?: string;
   }): Promise<ProviderOrderResult> {
-    if (!this.apiKey) {
-      throw new Error("Zendit provider not configured");
-    }
+    if (!this.apiKey) throw new Error("Zendit provider not configured");
+    if (!planDetails.providerRef) throw new Error("Zendit requires an offerId (providerRef) to purchase");
 
-    const res = await fetch(`${this.baseUrl}/esim/purchases`, {
+    const transactionId = `globesim-${randomUUID()}`;
+
+    // 1. Create purchase
+    const purchaseRes = await fetch(`${this.baseUrl}/esim/purchases`, {
       method: "POST",
-      headers: {
-        "X-API-Key": this.apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        country: planDetails.countryCode,
-        data_gb: planDetails.dataAmountGb,
-        validity_days: planDetails.validityDays,
-        ...(planDetails.providerRef ? { product_id: planDetails.providerRef } : {}),
-      }),
+      headers: this.headers,
+      body: JSON.stringify({ offerId: planDetails.providerRef, transactionId }),
     });
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`Zendit purchase failed (${res.status}): ${body}`);
+    if (!purchaseRes.ok) {
+      const body = await purchaseRes.text().catch(() => "");
+      throw new Error(`Zendit purchase failed (${purchaseRes.status}): ${body.slice(0, 200)}`);
     }
 
-    const data = await res.json() as { esim?: { iccid?: string; qr_code_url?: string; activation_url?: string } };
-    const esim = data.esim ?? {};
+    // 2. Retrieve QR code (separate endpoint)
+    const qrRes = await fetch(`${this.baseUrl}/esim/purchases/${transactionId}/qrcode`, {
+      headers: this.headers,
+    });
+
+    let qrCode = "";
+    if (qrRes.ok) {
+      const qrData = await qrRes.json() as ZenditQRCodeResponse;
+      qrCode = qrData.qrCode ?? "";
+    }
+
+    // 3. Retrieve transaction details for iccid / activation info
+    const detailRes = await fetch(`${this.baseUrl}/esim/purchases/${transactionId}`, {
+      headers: this.headers,
+    });
+
+    if (!detailRes.ok) {
+      const body = await detailRes.text().catch(() => "");
+      throw new Error(`Zendit purchase detail fetch failed (${detailRes.status}): ${body.slice(0, 200)}`);
+    }
+
+    const detail = await detailRes.json() as ZenditPurchaseResponse;
+    const confirmation = detail.confirmation;
 
     return {
-      iccid: esim.iccid ?? "",
-      qrCodeUrl: esim.qr_code_url ?? "",
-      activationUrl: esim.activation_url,
+      iccid: confirmation?.iccid ?? transactionId,
+      qrCodeUrl: qrCode,
+      activationUrl: (confirmation?.smdpAddress && confirmation?.activationCode)
+        ? `LPA:1$${confirmation.smdpAddress}$${confirmation.activationCode}`
+        : undefined,
     };
   }
 
-  async getEsimStatus(iccid: string): Promise<string> {
+  async getEsimStatus(transactionId: string): Promise<string> {
     if (!this.apiKey) return "unknown";
     try {
-      const res = await fetch(`${this.baseUrl}/esim/${iccid}`, {
-        headers: { "X-API-Key": this.apiKey },
+      const res = await fetch(`${this.baseUrl}/esim/purchases/${transactionId}`, {
+        headers: this.headers,
       });
       if (!res.ok) return "unknown";
-      const data = await res.json() as { status?: string };
+      const data = await res.json() as ZenditPurchaseResponse;
       return data.status ?? "unknown";
     } catch {
       return "unknown";
