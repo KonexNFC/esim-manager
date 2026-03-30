@@ -596,20 +596,23 @@ export async function selectBestProviderForPlan(
     }
   }
 
-  // 5. Winner is rank-1
+  // 7. Winner is rank-1 (unchanged from before — fallback chain extension never affects this)
   const winner = ranked[0];
   const decisionReason = buildReason(strategy, winner, ranked);
 
-  // 7. Build scores map (all candidates incl. below-threshold, for full audit trail)
+  // 8. Build scores map (all candidates incl. below-threshold, for full audit trail)
   const scoresMap: Record<string, ProviderScores> = {};
   for (const c of candidates) {
     scoresMap[c.providerKey] = c.scores;
   }
 
-  // 8. Compute confidence for this decision
+  // 9. Compute confidence for this decision
   const { score: confScore, label: confLabel } = calculateConfidence(winner);
 
-  // 9. Persist to routing_decisions
+  // 10. Compute fallback quality (how robust the backup chain is)
+  const fallbackQuality = buildFallbackQuality(fallbackChain, candidates.length);
+
+  // 11. Persist to routing_decisions
   const [saved] = await db
     .insert(routingDecisions)
     .values({
@@ -628,7 +631,10 @@ export async function selectBestProviderForPlan(
 
   console.log(
     `[routingEngine] Plan "${plan.name}" → ${winner.providerKey}/${winner.providerPlanCode}` +
-      ` via ${strategy} | confidence=${confScore} (${confLabel}) | ${decisionReason}`,
+      ` via ${strategy} | confidence=${confScore} (${confLabel})` +
+      ` | fallbacks=${fallbackQuality.fallbackCount} (coverage=${fallbackQuality.coverageScore}, avgHealth=${fallbackQuality.avgFallbackHealthScore})` +
+      (fallbackQuality.lastResortCount > 0 ? ` [${fallbackQuality.lastResortCount} last-resort]` : "") +
+      ` | ${decisionReason}`,
   );
 
   return {
@@ -638,6 +644,7 @@ export async function selectBestProviderForPlan(
     selectedProviderKey: winner.providerKey,
     selectedProviderPlanCode: winner.providerPlanCode,
     fallbackChain,
+    fallbackQuality,
     scores: scoresMap,
     decisionReason,
     confidenceScore: confScore,
