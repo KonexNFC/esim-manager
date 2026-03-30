@@ -21,6 +21,7 @@ import {
   sendPurchaseConfirmation, sendEsimReadyEmail, sendTopupConfirmation,
   sendFulfillmentFailedEmail,
 } from './notifications';
+import { recordFulfillmentOutcome } from './destinationStats';
 import type { FallbackEntry } from './stripeService';
 
 const TRANSIENT_RETRY_DELAY_MS = 1500;
@@ -82,16 +83,22 @@ async function fulfillWithFallbackChain(
   fallbackChain: FallbackEntry[],
   baseParams: ProviderPurchaseParams,
   ctx: CustomerContext,
+  destination: string,
+  marginPercent?: number | null,
 ): Promise<{ result: EsimProvisionResult; providerName: string; providerKey: string }> {
   let lastError: Error | null = null;
 
   for (let i = 0; i < fallbackChain.length; i++) {
     const entry = fallbackChain[i];
+    const isPrimary = i === 0;
     const provider = getProviderAdapterByKey(entry.k);
 
     if (!provider) {
       console.warn(`[Fulfillment] Provider key "${entry.k}" unavailable — skipping`);
       await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'skipped', 'Provider adapter not available');
+      recordFulfillmentOutcome({
+        providerKey: entry.k, destination, outcome: 'skipped', isPrimary,
+      }).catch(() => {});
       continue;
     }
 
@@ -104,11 +111,19 @@ async function fulfillWithFallbackChain(
       );
       const durationMs = Date.now() - startMs;
       await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'ok', undefined, durationMs);
+      recordFulfillmentOutcome({
+        providerKey: entry.k, destination, outcome: 'success', isPrimary,
+        latencyMs: durationMs, marginPercent: marginPercent ?? undefined,
+      }).catch(() => {});
       console.log(`[Fulfillment] ✓ ${entry.k} succeeded in ${durationMs}ms`);
       return { result, providerName: provider.name, providerKey: entry.k };
     } catch (err: any) {
       const durationMs = Date.now() - startMs;
       await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'error', err.message, durationMs);
+      recordFulfillmentOutcome({
+        providerKey: entry.k, destination, outcome: 'failure', isPrimary,
+        latencyMs: durationMs,
+      }).catch(() => {});
       console.warn(`[Fulfillment] ✗ ${entry.k} failed in ${durationMs}ms: ${err.message}`);
       lastError = err;
     }
@@ -177,13 +192,17 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
       Array.isArray(order.fallbackProvidersJson) &&
       (order.fallbackProvidersJson as any[]).length > 0;
 
+    const countryCode = planRow.dest?.countryCode ?? 'UNKNOWN';
+
     if (hasFallbackChain) {
       const chain = order.fallbackProvidersJson as unknown as FallbackEntry[];
       console.log(
         `[Fulfillment] Using routing fallback chain for order ${orderId}: ` +
         chain.map(e => e.k).join(' → '),
       );
-      const fulfilled = await fulfillWithFallbackChain(orderId, chain, baseParams, ctx);
+      const fulfilled = await fulfillWithFallbackChain(
+        orderId, chain, baseParams, ctx, countryCode, order.marginPercent,
+      );
       result = fulfilled.result;
       resolvedProviderName = fulfilled.providerName;
       resolvedProviderKey = fulfilled.providerKey;
@@ -195,9 +214,20 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
       const startMs = Date.now();
       try {
         result = await provider.purchaseEsim(baseParams, ctx);
-        await logProviderAttempt(orderId, provider.name, baseParams.providerRef ?? null, 1, 'ok', undefined, Date.now() - startMs);
+        const durationMs = Date.now() - startMs;
+        await logProviderAttempt(orderId, provider.name, baseParams.providerRef ?? null, 1, 'ok', undefined, durationMs);
+        recordFulfillmentOutcome({
+          providerKey: provider.name, destination: countryCode,
+          outcome: 'success', isPrimary: true, latencyMs: durationMs,
+          marginPercent: order.marginPercent ?? undefined,
+        }).catch(() => {});
       } catch (err: any) {
-        await logProviderAttempt(orderId, provider.name, baseParams.providerRef ?? null, 1, 'error', err.message, Date.now() - startMs);
+        const durationMs = Date.now() - startMs;
+        await logProviderAttempt(orderId, provider.name, baseParams.providerRef ?? null, 1, 'error', err.message, durationMs);
+        recordFulfillmentOutcome({
+          providerKey: provider.name, destination: countryCode,
+          outcome: 'failure', isPrimary: true, latencyMs: durationMs,
+        }).catch(() => {});
         throw err;
       }
       resolvedProviderName = provider.name;

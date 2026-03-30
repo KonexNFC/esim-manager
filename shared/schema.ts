@@ -316,6 +316,24 @@ export const providerOffers = pgTable("provider_offers", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ─── DESTINATION PROVIDER STATS ──────────────────────
+// Rolling performance memory per (provider, destination) pair.
+// Updated after every fulfilment attempt — success, failure, or fallback.
+// Uses exponential moving averages to prioritise recent outcomes.
+export const destinationProviderStats = pgTable("destination_provider_stats", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerKey: text("provider_key").notNull(),
+  destination: text("destination").notNull(),           // ISO country code (uppercase)
+  recentOrdersCount: integer("recent_orders_count").notNull().default(0),
+  fulfilmentSuccessRate: doublePrecision("fulfilment_success_rate").notNull().default(1.0), // 0.0–1.0
+  avgLatencyMs: integer("avg_latency_ms"),
+  avgMarginPercent: doublePrecision("avg_margin_percent"),
+  failoverRate: doublePrecision("failover_rate").notNull().default(0.0), // 0.0–1.0: how often used as non-primary
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (t) => ({
+  uniq: uniqueIndex("destination_provider_stats_uniq").on(t.providerKey, t.destination),
+}));
+
 // ─── ROUTING DECISIONS ───────────────────────────────
 // Persists every routing engine decision for auditability and analytics.
 // strategy: cheapest_cost | highest_margin | best_health | blended_score
@@ -350,6 +368,7 @@ export const insertProviderOfferSchema = createInsertSchema(providerOffers).omit
 export const insertRoutingDecisionSchema = createInsertSchema(routingDecisions).omit({ id: true, createdAt: true });
 export const insertProviderAttemptSchema = createInsertSchema(providerAttempts).omit({ id: true, createdAt: true });
 export const insertSettingsSchema = createInsertSchema(settings).omit({ updatedAt: true });
+export const insertDestinationProviderStatsSchema = createInsertSchema(destinationProviderStats).omit({ id: true, updatedAt: true });
 
 // ─── TYPES ────────────────────────────────────────────
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -385,3 +404,5 @@ export type ProviderAttempt = typeof providerAttempts.$inferSelect;
 export type InsertProviderAttempt = z.infer<typeof insertProviderAttemptSchema>;
 export type Setting = typeof settings.$inferSelect;
 export type InsertSetting = z.infer<typeof insertSettingsSchema>;
+export type DestinationProviderStats = typeof destinationProviderStats.$inferSelect;
+export type InsertDestinationProviderStats = z.infer<typeof insertDestinationProviderStatsSchema>;
