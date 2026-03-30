@@ -643,13 +643,13 @@ export async function registerRoutes(
           MIN(po.wholesale_price_usd) AS min_wholesale,
           COUNT(po.id)::int           AS offer_count
         FROM   normalized_plans np
-        JOIN   provider_offers po   ON po.normalized_plan_id = np.id
-        JOIN   providers        prov ON prov.key = po.provider_key
+        JOIN   provider_offers po    ON po.normalized_plan_id = np.id
+        LEFT JOIN providers    prov  ON prov.key = po.provider_key
         WHERE  np.region_code   = ${code}
           AND  po.is_active     = true
           AND  np.is_active     = true
-          AND  prov.enabled     = true
-          AND  prov.auto_paused = false
+          AND  COALESCE(prov.enabled,     true)  = true
+          AND  COALESCE(prov.auto_paused, false) = false
         GROUP BY np.id, np.data_mb, np.validity_days, np.is_unlimited
         ORDER BY np.data_mb ASC, np.validity_days ASC
       `);

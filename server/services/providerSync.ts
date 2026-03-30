@@ -18,6 +18,7 @@ import {
   normalizedPlans,
   providerOffers,
   providerSyncRuns,
+  providers,
   settings,
 } from "@shared/schema";
 import type { ProviderPlan } from "../providers/types";
@@ -255,6 +256,23 @@ export async function syncAllProviders(
     .values({ triggeredBy, status: "running", startedAt: new Date(startedAt) })
     .returning({ id: providerSyncRuns.id });
   const logId = logRow.id;
+
+  // ── Ensure canonical provider rows exist ─────────────────────────────────
+  // This seeds the providers table on first run so plans can always be filtered
+  // by provider status. Uses ON CONFLICT DO NOTHING to preserve any existing
+  // enabled/priority settings that an admin may have configured.
+  const CANONICAL_PROVIDERS = [
+    { key: "esimgo",     name: "eSIMGo",      priority: 1 },
+    { key: "esimaccess", name: "eSIM Access",  priority: 2 },
+    { key: "zendit",     name: "Zendit",       priority: 3 },
+  ];
+  for (const p of CANONICAL_PROVIDERS) {
+    await db.execute(sql`
+      INSERT INTO providers (key, name, enabled, priority, health_status, auto_paused, created_at, updated_at)
+      VALUES (${p.key}, ${p.name}, true, ${p.priority}, 'unknown', false, NOW(), NOW())
+      ON CONFLICT (key) DO NOTHING
+    `);
+  }
 
   const results: ProviderSyncResult[] = [];
   let totalOffersUpserted = 0;

@@ -757,12 +757,18 @@ export default function DestinationDetail() {
   const [, params] = useRoute("/destinations/:id");
   const destId = params?.id ?? "";
 
-  // Heuristic: ISO country codes are 2-3 uppercase letters
-  // UUIDs or legacy numeric/slug IDs are longer
-  const isCountryCode = /^[A-Za-z]{2,3}$/.test(destId);
+  // Canonical region slugs used by the catalog engine
+  const REGION_SLUGS = new Set([
+    "GLOBAL", "EUROPE", "APAC", "LATAM", "MENA", "AFRICA",
+    "NORTHAM", "SEASIA", "SOUTHASIA", "CARIBBEAN",
+  ]);
+
+  // Match: ISO country codes (2-3 letters) OR canonical region slugs
+  const upper = destId.toUpperCase();
+  const isCountryCode = /^[A-Za-z]{2,3}$/.test(destId) || REGION_SLUGS.has(upper);
 
   if (isCountryCode) {
-    return <CountryDetail countryCode={destId.toUpperCase()} />;
+    return <CountryDetail countryCode={upper} />;
   }
 
   return <LegacyDetail destId={destId} />;
