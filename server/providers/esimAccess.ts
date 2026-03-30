@@ -148,7 +148,8 @@ export class EsimAccessProvider implements EsimProvider {
 
     const all: ProviderPlan[] = [];
     const seen = new Set<string>(); // deduplicate by packageCode+country
-    const CONCURRENCY = 10; // parallel requests per batch
+    const CONCURRENCY = 3; // conservative parallel requests to avoid rate limits
+    const BATCH_DELAY_MS = 500; // pause between batches to respect rate limits
 
     for (let i = 0; i < supported.length; i += CONCURRENCY) {
       const batch = supported.slice(i, i + CONCURRENCY);
@@ -164,6 +165,10 @@ export class EsimAccessProvider implements EsimProvider {
           }
         }
         // rejected = silently skipped (already logged inside getPlans)
+      }
+      // Pause between batches to avoid hitting eSIM Access rate limits
+      if (i + CONCURRENCY < supported.length) {
+        await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
       }
     }
     return all;
