@@ -87,28 +87,51 @@ function CountryCard({ country }: { country: AvailableCountry }) {
   );
 }
 
-/** Card for a region or global plan (no CDN flag image — uses emoji + gradient) */
+/** Landmark/region imagery for each canonical region slug */
+const REGION_IMAGES: Record<string, { url: string; credit: string }> = {
+  EUROPE:    { url: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=600&q=80", credit: "Paris, France" },
+  LATAM:     { url: "https://images.unsplash.com/photo-1526392060635-9d6019884377?auto=format&fit=crop&w=600&q=80", credit: "Machu Picchu, Peru" },
+  CARIBBEAN: { url: "https://images.unsplash.com/photo-1548574505-5e239809ee19?auto=format&fit=crop&w=600&q=80", credit: "Caribbean Sea" },
+  APAC:      { url: "https://images.unsplash.com/photo-1480796927426-f609979314bd?auto=format&fit=crop&w=600&q=80", credit: "Mount Fuji, Japan" },
+  SOUTHASIA: { url: "https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=600&q=80", credit: "Taj Mahal, India" },
+  MENA:      { url: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=600&q=80", credit: "Dubai, UAE" },
+  AFRICA:    { url: "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=600&q=80", credit: "Serengeti, Tanzania" },
+  NORTHAM:   { url: "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&w=600&q=80", credit: "New York City, USA" },
+  SEASIA:    { url: "https://images.unsplash.com/photo-1528360983277-13d401cdc186?auto=format&fit=crop&w=600&q=80", credit: "Angkor Wat, Cambodia" },
+  GLOBAL:    { url: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80", credit: "Planet Earth" },
+};
+
+/** Card for a region or global plan — uses landmark photography */
 function RegionCard({ entry }: { entry: AvailableCountry }) {
   const isGlobal = entry.type === "global";
+  const img = REGION_IMAGES[entry.countryCode.toUpperCase()];
+
   return (
     <Link
       href={`/destinations/${entry.countryCode}`}
       data-testid={`card-destination-${entry.countryCode}`}
     >
-      <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[4/5] bg-muted shadow-md hover:shadow-xl transition-shadow duration-300">
-        {/* Decorative gradient background */}
-        <div className={`absolute inset-0 ${isGlobal ? "bg-gradient-to-br from-violet-600/40 via-blue-600/30 to-indigo-700/40" : "bg-gradient-to-br from-primary/40 via-primary/20 to-primary/50"}`} />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+      <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[4/5] bg-muted shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02]">
+        {/* Landmark photo */}
+        {img ? (
+          <img
+            src={img.url}
+            alt={img.credit}
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            loading="lazy"
+          />
+        ) : (
+          <div className={`absolute inset-0 ${isGlobal ? "bg-gradient-to-br from-violet-600/60 via-blue-600/40 to-indigo-700/60" : "bg-gradient-to-br from-primary/60 via-primary/30 to-primary/70"}`} />
+        )}
 
-        <div className="absolute top-3 left-3">
-          <span className="text-3xl drop-shadow-lg leading-none">{entry.flagEmoji}</span>
-        </div>
+        {/* Dark overlay for text legibility */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/10" />
 
         {entry.planCount > 0 && (
           <div className="absolute top-3 right-3">
             <Badge
               variant="secondary"
-              className="text-[10px] px-1.5 py-0.5 bg-black/40 text-white border-white/20 backdrop-blur-sm"
+              className="text-[10px] px-1.5 py-0.5 bg-black/50 text-white border-white/20 backdrop-blur-sm"
               data-testid={`badge-plan-count-${entry.countryCode}`}
             >
               {entry.planCount} plan{entry.planCount === 1 ? "" : "s"}
@@ -118,14 +141,17 @@ function RegionCard({ entry }: { entry: AvailableCountry }) {
 
         <div className="absolute bottom-0 left-0 right-0 p-3">
           <h3
-            className="font-bold text-white text-sm leading-tight"
+            className="font-bold text-white text-sm leading-tight drop-shadow-md"
             data-testid={`text-destination-name-${entry.countryCode}`}
           >
             {entry.name}
           </h3>
-          <p className="text-white/60 text-xs mt-0.5">
+          <p className="text-white/70 text-xs mt-0.5 drop-shadow-sm">
             {isGlobal ? "Worldwide coverage" : "Multi-country plan"}
           </p>
+          {img && (
+            <p className="text-white/40 text-[9px] mt-1">{img.credit}</p>
+          )}
         </div>
       </div>
     </Link>

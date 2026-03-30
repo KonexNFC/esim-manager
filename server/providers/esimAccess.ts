@@ -132,6 +132,8 @@ export class EsimAccessProvider implements EsimProvider {
     "BV",  // Bouvet Island
     "HM",  // Heard & McDonald Islands
     "UM",  // US Minor Outlying Islands
+    "VI",  // US Virgin Islands
+    "YT",  // Mayotte
   ]);
 
   /** Fetch all packages across multiple country codes in parallel batches. */
