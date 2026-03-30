@@ -1753,5 +1753,98 @@ export async function registerRoutes(
     }
   });
 
+  // ── Catalog Health ────────────────────────────────────────────────────────────
+  app.get("/api/admin/catalog-health", requireAdmin, async (_req, res) => {
+    try {
+      const [coverageRows, providerRows, singleProviderRows, syncRunRows] = await Promise.all([
+        // Overall coverage
+        db.execute<{ country_count: string; region_count: string; active_offers: string; active_providers: string }>(sql`
+          SELECT
+            COUNT(DISTINCT np.region_code) FILTER (WHERE LENGTH(np.region_code) <= 3 AND np.region_code != '') AS country_count,
+            COUNT(DISTINCT np.region_code) FILTER (WHERE LENGTH(np.region_code) > 3) AS region_count,
+            COUNT(po.id) FILTER (WHERE po.is_active) AS active_offers,
+            COUNT(DISTINCT po.provider_key) FILTER (WHERE po.is_active) AS active_providers
+          FROM normalized_plans np
+          JOIN provider_offers po ON po.normalized_plan_id = np.id
+          WHERE np.is_active = true
+        `),
+        // Per-provider offer counts
+        db.execute<{ provider_key: string; offer_count: string; country_count: string }>(sql`
+          SELECT
+            po.provider_key,
+            COUNT(po.id) AS offer_count,
+            COUNT(DISTINCT np.region_code) AS country_count
+          FROM provider_offers po
+          JOIN normalized_plans np ON np.id = po.normalized_plan_id
+          WHERE po.is_active = true AND np.is_active = true
+          GROUP BY po.provider_key
+          ORDER BY offer_count DESC
+        `),
+        // Countries with only 1 provider (risk)
+        db.execute<{ region_code: string; providers: string }>(sql`
+          SELECT np.region_code, COUNT(DISTINCT po.provider_key) AS providers
+          FROM normalized_plans np
+          JOIN provider_offers po ON po.normalized_plan_id = np.id
+          WHERE po.is_active = true AND np.is_active = true
+            AND LENGTH(np.region_code) <= 3 AND np.region_code != ''
+          GROUP BY np.region_code
+          HAVING COUNT(DISTINCT po.provider_key) = 1
+          ORDER BY np.region_code
+        `),
+        // Last sync run
+        db.execute<{ id: string; status: string; offers_upserted: string; started_at: string; completed_at: string; failed_providers: string[] }>(sql`
+          SELECT id, status, offers_upserted, started_at, completed_at, failed_providers
+          FROM provider_sync_runs
+          ORDER BY started_at DESC
+          LIMIT 1
+        `),
+      ]);
+
+      const coverage = coverageRows.rows[0] ?? {};
+      const lastSync = syncRunRows.rows[0] ?? null;
+
+      // Priority country check
+      const PRIORITY_CODES = ['GB','US','AE','FR','ES','IT','DE','TR','TH','NG','GH','ZA','CA','SA','IN','CN','JP','ID','AU','BR'];
+      const coveredCodes = new Set(
+        (await db.execute<{ region_code: string }>(sql`
+          SELECT DISTINCT np.region_code
+          FROM normalized_plans np
+          JOIN provider_offers po ON po.normalized_plan_id = np.id
+          WHERE po.is_active = true AND np.is_active = true
+            AND np.region_code IN (${sql.join(PRIORITY_CODES.map(c => sql`${c}`), sql`,`)})
+        `)).rows.map(r => r.region_code)
+      );
+      const priorityCoverage = PRIORITY_CODES.map(code => ({
+        code,
+        covered: coveredCodes.has(code),
+      }));
+
+      res.json({
+        countryCount: parseInt(String(coverage.country_count ?? 0)),
+        regionCount: parseInt(String(coverage.region_count ?? 0)),
+        activeOffers: parseInt(String(coverage.active_offers ?? 0)),
+        activeProviders: parseInt(String(coverage.active_providers ?? 0)),
+        providerBreakdown: providerRows.rows.map(r => ({
+          providerKey: r.provider_key,
+          offerCount: parseInt(String(r.offer_count)),
+          countryCount: parseInt(String(r.country_count)),
+        })),
+        singleProviderCountries: singleProviderRows.rows.map(r => r.region_code),
+        priorityCoverage,
+        lastSync: lastSync ? {
+          id: lastSync.id,
+          status: lastSync.status,
+          offersUpserted: parseInt(String(lastSync.offers_upserted ?? 0)),
+          startedAt: lastSync.started_at,
+          completedAt: lastSync.completed_at,
+          failedProviders: lastSync.failed_providers ?? [],
+        } : null,
+      });
+    } catch (err: any) {
+      console.error("/api/admin/catalog-health error:", err.message);
+      res.status(500).json({ message: "Failed to fetch catalog health" });
+    }
+  });
+
   return httpServer;
 }

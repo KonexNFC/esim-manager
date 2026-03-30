@@ -113,23 +113,57 @@ export class EsimAccessProvider implements EsimProvider {
     return data as T;
   }
 
-  /** Fetch all packages across multiple country codes. */
+  /**
+   * Country codes that eSIM Access rejects with error 200032
+   * ("Not support the location code"). Skip them silently.
+   */
+  private static readonly UNSUPPORTED_CODES = new Set([
+    "AW",  // Aruba
+    "BL",  // Saint Barthélemy
+    "BQ",  // Caribbean Netherlands
+    "CYP", // ISO-3 code for Cyprus (use CY instead)
+    "IC",  // Canary Islands (non-standard)
+    "MF",  // Saint Martin (French part)
+    "NA",  // Namibia (eSIM Access doesn't carry it)
+    "SJ",  // Svalbard & Jan Mayen
+    "TF",  // French Southern Territories
+    "AQ",  // Antarctica
+    "PN",  // Pitcairn
+    "BV",  // Bouvet Island
+    "HM",  // Heard & McDonald Islands
+    "UM",  // US Minor Outlying Islands
+  ]);
+
+  /** Fetch all packages across multiple country codes in parallel batches. */
   async getAllPackages(countryCodes: string[]): Promise<ProviderPlan[]> {
     if (!this.isConfigured()) {
       console.log("[esimAccess] Not configured — skipping full package fetch");
       return [];
     }
+
+    // Filter out codes we know eSIM Access rejects to avoid noisy errors
+    const supported = countryCodes.filter(
+      c => !EsimAccessProvider.UNSUPPORTED_CODES.has(c.toUpperCase())
+    );
+
     const all: ProviderPlan[] = [];
     const seen = new Set<string>(); // deduplicate by packageCode+country
-    for (const code of countryCodes) {
-      try {
-        const plans = await this.getPlans(code);
-        for (const p of plans) {
-          const key = `${p.providerRef}__${code}`;
-          if (!seen.has(key)) { seen.add(key); all.push(p); }
+    const CONCURRENCY = 10; // parallel requests per batch
+
+    for (let i = 0; i < supported.length; i += CONCURRENCY) {
+      const batch = supported.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map(code => this.getPlans(code))
+      );
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j];
+        if (result.status === "fulfilled") {
+          for (const p of result.value) {
+            const key = `${p.providerRef}__${batch[j]}`;
+            if (!seen.has(key)) { seen.add(key); all.push(p); }
+          }
         }
-      } catch {
-        // Silently skip failed countries — logged inside getPlans
+        // rejected = silently skipped (already logged inside getPlans)
       }
     }
     return all;

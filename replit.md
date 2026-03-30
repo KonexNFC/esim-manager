@@ -38,6 +38,9 @@ GlobeSIM is built with a modern web stack. The **frontend** uses React with Type
 -   **Customer Dashboard:** Centralized view for active eSIMs, order history, and profile settings.
 -   **Admin Dashboard:** Provides comprehensive administrative tools including profit statistics, provider cost breakdown, profit optimization modes, plan management with pricing toggles, and live catalogue syncing with external providers.
 -   **Coverage Type Marking:** Categorizes provider offers by `coverageType` (country, regional, global).
+-   **Dynamic Global Catalog Engine:** Automated 6-hour provider syncs maintain 17K+ active offers across 194 countries + 10 regional/global plans (GLOBAL, EUROPE, APAC, LATAM, MENA, AFRICA, NORTHAM, SEASIA, SOUTHASIA, CARIBBEAN). eSIM Access fetching is parallelized (10 concurrent requests) with a blocklist of unsupported country codes.
+-   **Admin Catalog Health Dashboard:** `/api/admin/catalog-health` endpoint and visual panel in the admin dashboard showing live offer counts, provider distribution, priority market coverage (20 key countries), single-provider risk countries, and last sync status.
+-   **Region Slug System:** Canonical region slugs (GLOBAL, EUROPE, etc.) used as `region_code` in `normalized_plans` for multi-country plans. Both eSIMGo and Zendit emit regional/global plans under these slugs. Extended Zendit region name map covers 35+ region name variants.
 
 ## External Dependencies
 -   **Stripe:** Payment gateway and webhook processing.

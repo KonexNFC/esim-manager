@@ -118,9 +118,21 @@ export class ZenditProvider implements EsimProvider {
       countryCode = "GLOBAL";
     } else if (coverageType === "regional" && (offer.regions ?? []).length > 0) {
       const slug = regionSlugFromZenditRegions(offer.regions ?? []);
-      countryCode = slug ?? (offer.country ?? "GLOBAL").toUpperCase();
+      // If region list didn't match a slug, try the offer name as fallback
+      if (!slug) {
+        const nameLower = (offer.shortNotes ?? offer.notes ?? "").toLowerCase();
+        const nameSlug = regionSlugFromZenditRegions(
+          nameLower.split(/[\s,&]+/).filter(Boolean)
+        );
+        const fallback = (offer.country ?? "").toUpperCase() || "GLOBAL";
+        countryCode = nameSlug ?? fallback;
+      } else {
+        countryCode = slug;
+      }
     } else {
-      countryCode = (offer.country ?? "GLOBAL").toUpperCase();
+      const rawCode = (offer.country ?? "").toUpperCase();
+      // Guard against empty country — fall back to GLOBAL
+      countryCode = rawCode || "GLOBAL";
     }
     const { usd: wholesaleCost, currency } = this.resolveCost(offer.cost, offer.price);
 

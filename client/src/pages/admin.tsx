@@ -74,6 +74,24 @@ type AdminSettings = {
   routingMode?: string;
 };
 
+type CatalogHealth = {
+  countryCount: number;
+  regionCount: number;
+  activeOffers: number;
+  activeProviders: number;
+  providerBreakdown: { providerKey: string; offerCount: number; countryCount: number }[];
+  singleProviderCountries: string[];
+  priorityCoverage: { code: string; covered: boolean }[];
+  lastSync: {
+    id: string;
+    status: string;
+    offersUpserted: number;
+    startedAt: string;
+    completedAt: string | null;
+    failedProviders: string[];
+  } | null;
+};
+
 const ROUTING_MODES = [
   {
     key: "profit_first",
@@ -156,11 +174,150 @@ function StatCard({ title, value, icon: Icon, suffix }: { title: string; value: 
   );
 }
 
+function CatalogHealthCard({ health, isLoading }: { health?: CatalogHealth; isLoading: boolean }) {
+  if (isLoading) {
+    return (
+      <Card className="p-5">
+        <Skeleton className="h-4 w-32 mb-4" />
+        <div className="grid grid-cols-4 gap-3 mb-4">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14" />)}
+        </div>
+      </Card>
+    );
+  }
+  if (!health) return null;
+
+  const allPriorityCovered = health.priorityCoverage.every(p => p.covered);
+  const uncoveredPriority = health.priorityCoverage.filter(p => !p.covered);
+  const syncStatus = health.lastSync?.status;
+  const syncBadgeColor = syncStatus === "success" ? "text-emerald-600 dark:text-emerald-400"
+    : syncStatus === "partial" ? "text-yellow-600 dark:text-yellow-400"
+    : syncStatus === "running" ? "text-blue-600 dark:text-blue-400"
+    : "text-muted-foreground";
+
+  const formatRelativeTime = (iso: string | null | undefined) => {
+    if (!iso) return "—";
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  };
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold text-sm flex items-center gap-2">
+          <Globe className="w-4 h-4 text-primary" />
+          Live Catalog Engine
+        </h3>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Last sync:</span>
+          <span className={`font-medium ${syncBadgeColor}`}>
+            {health.lastSync ? formatRelativeTime(health.lastSync.startedAt) : "never"}
+          </span>
+          {health.lastSync?.status && (
+            <Badge variant="outline" className={`text-[10px] py-0 ${syncBadgeColor}`}>
+              {health.lastSync.status}
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Key numbers */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        {[
+          { label: "Countries", value: health.countryCount, icon: Globe, color: "text-blue-500" },
+          { label: "Regions/Global", value: health.regionCount, icon: Network, color: "text-violet-500" },
+          { label: "Active Offers", value: health.activeOffers.toLocaleString(), icon: Package, color: "text-emerald-500" },
+          { label: "Live Providers", value: health.activeProviders, icon: Server, color: "text-orange-500" },
+        ].map(({ label, value, icon: Icon, color }) => (
+          <div key={label} className="rounded-lg border bg-muted/30 p-3 text-center">
+            <Icon className={`w-4 h-4 mx-auto mb-1 ${color}`} />
+            <p className="text-xl font-bold">{value}</p>
+            <p className="text-[11px] text-muted-foreground">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Provider breakdown */}
+      <div className="mb-4">
+        <p className="text-xs font-medium text-muted-foreground mb-2">Offer distribution by provider</p>
+        <div className="space-y-1.5">
+          {health.providerBreakdown.map(p => {
+            const pct = health.activeOffers > 0 ? (p.offerCount / health.activeOffers) * 100 : 0;
+            return (
+              <div key={p.providerKey} className="flex items-center gap-2" data-testid={`row-catalog-provider-${p.providerKey}`}>
+                <span className="text-xs font-mono w-24 text-foreground truncate">{p.providerKey}</span>
+                <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
+                  <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
+                </div>
+                <span className="text-xs text-muted-foreground w-20 text-right">
+                  {p.offerCount.toLocaleString()} ({Math.round(pct)}%)
+                </span>
+                <span className="text-xs text-muted-foreground w-20 text-right">
+                  {p.countryCount} destinations
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Priority country coverage */}
+      <div className="mb-3">
+        <div className="flex items-center gap-2 mb-2">
+          <p className="text-xs font-medium text-muted-foreground">Priority market coverage</p>
+          {allPriorityCovered
+            ? <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-300 py-0">All 20 covered</Badge>
+            : <Badge variant="outline" className="text-[10px] text-yellow-600 border-yellow-300 py-0">{uncoveredPriority.length} missing</Badge>
+          }
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {health.priorityCoverage.map(({ code, covered }) => (
+            <span
+              key={code}
+              className={`text-[11px] font-mono px-1.5 py-0.5 rounded border ${covered
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800"
+                : "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800"
+              }`}
+              data-testid={`badge-priority-${code}`}
+              title={covered ? `${code}: covered` : `${code}: no active offers`}
+            >
+              {code}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Single-provider risk */}
+      {health.singleProviderCountries.length > 0 && (
+        <div className="mt-3 pt-3 border-t">
+          <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1">
+            <AlertCircle className="w-3.5 h-3.5 text-yellow-500" />
+            Single-provider destinations ({health.singleProviderCountries.length}) — no failover
+          </p>
+          <p className="text-[11px] text-muted-foreground font-mono leading-relaxed">
+            {health.singleProviderCountries.slice(0, 30).join(" · ")}
+            {health.singleProviderCountries.length > 30 && ` … +${health.singleProviderCountries.length - 30} more`}
+          </p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function DashboardTab() {
   const { toast } = useToast();
 
   const { data: stats, isLoading } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
+  });
+
+  const { data: catalogHealth, isLoading: catalogLoading } = useQuery<CatalogHealth>({
+    queryKey: ["/api/admin/catalog-health"],
   });
 
   const { data: adminSettings, isLoading: settingsLoading } = useQuery<AdminSettings>({
@@ -253,6 +410,9 @@ function DashboardTab() {
         <StatCard title="Live Plans" value={stats?.livePlans || 0} icon={Package} />
         <StatCard title="Active eSIMs" value={stats?.activeEsims || 0} icon={Wifi} />
       </div>
+
+      {/* ── Live Catalog Engine ── */}
+      <CatalogHealthCard health={catalogHealth} isLoading={catalogLoading} />
 
       {/* ── Provider Performance ── */}
       <Card className="p-5">
@@ -1495,6 +1655,8 @@ function RoutingTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/sync/runs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/providers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/catalog-health"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/countries"] });
     },
     onError: () => toast({ title: "Provider sync failed", variant: "destructive" }),
   });

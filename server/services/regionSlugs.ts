@@ -93,24 +93,50 @@ export function regionSlugFromEsimGoGroups(groups: string[]): RegionSlug | null 
 // ─── Zendit regions → slug ────────────────────────────────────────────────────
 
 const ZENDIT_REGION_MAP: Record<string, RegionSlug> = {
-  "global":               "GLOBAL",
-  "worldwide":            "GLOBAL",
-  "world":                "GLOBAL",
-  "europe":               "EUROPE",
-  "european":             "EUROPE",
-  "asia pacific":         "APAC",
-  "east asia":            "APAC",
-  "asia":                 "APAC",
-  "latin america":        "LATAM",
-  "south america":        "LATAM",
-  "central america":      "LATAM",
-  "middle east":          "MENA",
-  "africa":               "AFRICA",
-  "north america":        "NORTHAM",
-  "southeast asia":       "SEASIA",
-  "south-east asia":      "SEASIA",
-  "south asia":           "SOUTHASIA",
-  "caribbean":            "CARIBBEAN",
+  // Global
+  "global":                   "GLOBAL",
+  "worldwide":                 "GLOBAL",
+  "world":                     "GLOBAL",
+  "international":             "GLOBAL",
+  // Europe
+  "europe":                    "EUROPE",
+  "european":                  "EUROPE",
+  "eu":                        "EUROPE",
+  "european union":            "EUROPE",
+  // Americas
+  "latin america":             "LATAM",
+  "south america":             "LATAM",
+  "central america":           "LATAM",
+  "latin america & caribbean": "LATAM",
+  "north america":             "NORTHAM",
+  // Caribbean
+  "caribbean":                 "CARIBBEAN",
+  // Asia Pacific
+  "asia pacific":              "APAC",
+  "east asia":                 "APAC",
+  "asia":                      "APAC",
+  "apac":                      "APAC",
+  "pacific":                   "APAC",
+  "oceania":                   "APAC",
+  // Southeast Asia
+  "southeast asia":            "SEASIA",
+  "south-east asia":           "SEASIA",
+  "asean":                     "SEASIA",
+  // South Asia
+  "south asia":                "SOUTHASIA",
+  "subcontinent":              "SOUTHASIA",
+  // MENA
+  "middle east":               "MENA",
+  "middle east & north africa":"MENA",
+  "middle east and africa":    "MENA",
+  "north africa":              "MENA",
+  "mena":                      "MENA",
+  "gulf":                      "MENA",
+  // Africa
+  "africa":                    "AFRICA",
+  "sub-saharan africa":        "AFRICA",
+  "africa roaming":            "AFRICA",
+  "african":                   "AFRICA",
 };
 
 /**
