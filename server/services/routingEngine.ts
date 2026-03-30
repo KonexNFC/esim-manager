@@ -2,11 +2,13 @@
 // selectBestProviderForPlan(normalizedPlanId, strategy?)
 //
 // Scoring (all 0–100):
-//   cost_score    — lower wholesale price wins (inverted, normalized)
-//   margin_score  — higher (retail−wholesale)/retail wins
-//   health_score  — healthy=100, unknown=70, degraded=30, down=0
-//   latency_score — provider.priority proxy (priority 1 → 100, each step −20)
-//   blended_score — 0.35·cost + 0.25·margin + 0.25·health + 0.15·latency
+//   cost_score          — lower wholesale price wins (inverted, normalized)
+//   margin_score        — (retail−wholesale)/retail, clamped 0–100
+//   health_score        — healthy=100, unknown=70, degraded=30, down=0
+//   latency_score       — provider.priority proxy (priority 1→100, each step −20)
+//   success_score       — rolling fulfilment success rate at this destination (default 75)
+//   destination_score   — reliability factor: (1−failoverRate)×100, confidence-weighted (default 70)
+//   blended_score       — 0.35·margin + 0.25·success + 0.15·destination + 0.15·health + 0.10·latency
 //
 // Strategies:
 //   cheapest_cost  — sort by cost_score DESC
@@ -27,6 +29,7 @@ import {
   getProviderByKey,
 } from "./providerRegistry";
 import { calculateMargin } from "./marginEngine";
+import { getDestinationStats } from "./destinationStats";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -41,6 +44,8 @@ export interface ProviderScores {
   margin_score: number;
   health_score: number;
   latency_score: number;
+  success_score: number;       // rolling fulfilment success rate at this destination
+  destination_score: number;   // reliability: (1 − failoverRate), confidence-weighted
   blended_score: number;
 }
 
@@ -95,16 +100,51 @@ interface ScoredCandidate {
   scores: ProviderScores;
 }
 
+// ─── Destination score helpers ────────────────────────────────────────────────
+// When no historical data exists we default to neutral values rather than
+// penalising a provider unfairly.
+//
+// success_score     default 75 — moderate confidence, gives new providers a fair chance
+// destination_score default 70 — assumes provider is used as primary roughly 70% of the time
+
+const DEFAULT_SUCCESS_SCORE = 75;
+const DEFAULT_DESTINATION_SCORE = 70;
+
+async function buildDestinationScores(
+  providerKey: string,
+  regionCode: string,
+): Promise<{ success_score: number; destination_score: number }> {
+  const stats = await getDestinationStats(providerKey, regionCode);
+
+  if (!stats || stats.recentOrdersCount === 0) {
+    return { success_score: DEFAULT_SUCCESS_SCORE, destination_score: DEFAULT_DESTINATION_SCORE };
+  }
+
+  // success_score: rolling fulfilment success rate scaled 0–100
+  const success_score = Math.round(stats.fulfilmentSuccessRate * 100);
+
+  // destination_score: how reliable this provider is as the PRIMARY choice here.
+  // A failover_rate of 0 means it always succeeds as primary → score 100.
+  // A failover_rate of 1 means it always ends up as a fallback → score 0.
+  // Blend toward DEFAULT_DESTINATION_SCORE until we have 10+ orders of confidence.
+  const confidence = Math.min(stats.recentOrdersCount / 10, 1.0);
+  const rawDestScore = (1 - stats.failoverRate) * 100;
+  const destination_score = Math.round(
+    confidence * rawDestScore + (1 - confidence) * DEFAULT_DESTINATION_SCORE,
+  );
+
+  return { success_score, destination_score };
+}
+
 async function scoreCandidates(
   normalizedPlanId: string,
   retailPriceUsd: number,
+  regionCode: string,
 ): Promise<ScoredCandidate[]> {
-  // Fetch all active offers enriched with provider metadata
   const enrichedOffers = await getOffersForNormalizedPlan(normalizedPlanId);
-
   if (enrichedOffers.length === 0) return [];
 
-  // Gather provider health status for each offer
+  // Gather provider metadata for each offer
   const candidatesRaw: Array<{
     providerKey: string;
     providerPlanCode: string;
@@ -124,32 +164,39 @@ async function scoreCandidates(
     });
   }
 
-  // Compute cost normalization bounds
+  // Cost normalisation bounds (kept for cheapest_cost strategy and reporting)
   const prices = candidatesRaw.map(c => c.wholesalePriceUsd);
   const minPrice = Math.min(...prices);
   const maxPrice = Math.max(...prices);
   const priceRange = maxPrice - minPrice;
 
-  return candidatesRaw.map(c => {
-    // cost_score: lower price = higher score (inverted, normalized 0–100)
+  // Score each candidate (destination stats fetched in parallel for speed)
+  const destScoresPerProvider = await Promise.all(
+    candidatesRaw.map(c => buildDestinationScores(c.providerKey, regionCode)),
+  );
+
+  return candidatesRaw.map((c, i) => {
+    // cost_score: inverted normalised 0–100 (lower cost = higher score)
     const cost_score =
       priceRange === 0
         ? 100
         : Math.round(100 * (1 - (c.wholesalePriceUsd - minPrice) / priceRange));
 
-    // margin_score: shared gross margin formula → clamped 0–100
+    // margin_score: gross margin % clamped 0–100
     const rawMargin = calculateMargin(retailPriceUsd, c.wholesalePriceUsd);
     const margin_score = Math.max(0, Math.min(100, Math.round(rawMargin)));
 
     const health_score = healthScore(c.providerHealthStatus);
     const latency_s = latencyScore(c.providerPriority);
+    const { success_score, destination_score } = destScoresPerProvider[i];
 
-    // blended: 35% cost, 25% margin, 25% health, 15% latency
+    // blended: margin 35% · success 25% · destination 15% · health 15% · latency 10%
     const blended =
-      0.35 * cost_score +
-      0.25 * margin_score +
-      0.25 * health_score +
-      0.15 * latency_s;
+      0.35 * margin_score +
+      0.25 * success_score +
+      0.15 * destination_score +
+      0.15 * health_score +
+      0.10 * latency_s;
 
     return {
       ...c,
@@ -158,6 +205,8 @@ async function scoreCandidates(
         margin_score,
         health_score,
         latency_score: latency_s,
+        success_score,
+        destination_score,
         blended_score: Math.round(blended * 10) / 10,
       },
     };
@@ -209,19 +258,22 @@ function buildReason(
     case "cheapest_cost":
       return (
         `Selected "${providerKey}" via cheapest_cost strategy ` +
-        `(wholesale $${wholesalePriceUsd.toFixed(4)}, cost_score=${scores.cost_score}).`
+        `(wholesale $${wholesalePriceUsd.toFixed(4)}, cost_score=${scores.cost_score}, ` +
+        `margin=${scores.margin_score}, success=${scores.success_score}).`
       );
 
     case "highest_margin":
       return (
         `Selected "${providerKey}" via highest_margin strategy ` +
-        `(margin_score=${scores.margin_score}, wholesale $${wholesalePriceUsd.toFixed(4)}).`
+        `(margin_score=${scores.margin_score}, wholesale $${wholesalePriceUsd.toFixed(4)}, ` +
+        `success=${scores.success_score}, destination=${scores.destination_score}).`
       );
 
     case "best_health":
       return (
         `Selected "${providerKey}" via best_health strategy ` +
-        `(health_score=${scores.health_score}, latency_score=${scores.latency_score}).`
+        `(health_score=${scores.health_score}, success=${scores.success_score}, ` +
+        `destination=${scores.destination_score}, latency=${scores.latency_score}).`
       );
 
     case "blended_score":
@@ -234,8 +286,9 @@ function buildReason(
       return (
         `Selected "${providerKey}" via blended_score strategy ` +
         `(blended=${scores.blended_score}${gap}; ` +
-        `cost=${scores.cost_score}, margin=${scores.margin_score}, ` +
-        `health=${scores.health_score}, latency=${scores.latency_score}).`
+        `margin=${scores.margin_score}, success=${scores.success_score}, ` +
+        `destination=${scores.destination_score}, health=${scores.health_score}, ` +
+        `latency=${scores.latency_score}).`
       );
     }
   }
@@ -246,17 +299,28 @@ function buildCandidateReason(
   candidate: ScoredCandidate,
   rank: number,
 ): string {
-  if (rank === 1) return "primary selection";
+  const { scores } = candidate;
+  if (rank === 1) {
+    return (
+      `primary selection — blended=${scores.blended_score} ` +
+      `(margin=${scores.margin_score}, success=${scores.success_score}, ` +
+      `dest=${scores.destination_score}, health=${scores.health_score}, latency=${scores.latency_score})`
+    );
+  }
 
   switch (strategy) {
     case "cheapest_cost":
-      return `fallback rank ${rank} — cost_score=${candidate.scores.cost_score}`;
+      return `fallback rank ${rank} — cost_score=${scores.cost_score}, success=${scores.success_score}`;
     case "highest_margin":
-      return `fallback rank ${rank} — margin_score=${candidate.scores.margin_score}`;
+      return `fallback rank ${rank} — margin_score=${scores.margin_score}, success=${scores.success_score}`;
     case "best_health":
-      return `fallback rank ${rank} — health_score=${candidate.scores.health_score}`;
+      return `fallback rank ${rank} — health_score=${scores.health_score}, success=${scores.success_score}`;
     default:
-      return `fallback rank ${rank} — blended_score=${candidate.scores.blended_score}`;
+      return (
+        `fallback rank ${rank} — blended=${scores.blended_score} ` +
+        `(margin=${scores.margin_score}, success=${scores.success_score}, ` +
+        `dest=${scores.destination_score}, health=${scores.health_score})`
+      );
   }
 }
 
@@ -266,14 +330,14 @@ export async function selectBestProviderForPlan(
   normalizedPlanId: string,
   strategy: RoutingStrategy = "blended_score",
 ): Promise<RoutingResult> {
-  // 1. Load the normalized plan (need retail price for margin scoring)
+  // 1. Load the normalized plan (need retail price + regionCode for scoring)
   const plan = await getNormalizedPlan(normalizedPlanId);
   if (!plan) {
     throw new Error(`[routingEngine] Normalized plan not found: ${normalizedPlanId}`);
   }
 
-  // 2. Score all enabled, active candidates
-  const candidates = await scoreCandidates(normalizedPlanId, plan.retailPriceUsd);
+  // 2. Score all enabled, active candidates (destination stats fetched per provider)
+  const candidates = await scoreCandidates(normalizedPlanId, plan.retailPriceUsd, plan.regionCode);
   if (candidates.length === 0) {
     throw new Error(
       `[routingEngine] No enabled active offers found for plan "${plan.name}" (${normalizedPlanId})`,
