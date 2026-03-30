@@ -315,6 +315,7 @@ export const providerOffers = pgTable("provider_offers", {
   providerPlanCode: text("provider_plan_code").notNull(), // provider-specific bundle code
   wholesalePriceUsd: doublePrecision("wholesale_price_usd").notNull(),
   currency: text("currency").notNull().default("USD"),
+  coverageType: text("coverage_type").notNull().default("country"), // country | regional | global
   isActive: boolean("is_active").notNull().default(true),
   lastSyncedAt: timestamp("last_synced_at"),
   createdAt: timestamp("created_at").defaultNow(),

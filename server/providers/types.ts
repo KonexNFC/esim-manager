@@ -1,3 +1,5 @@
+export type CoverageType = "country" | "regional" | "global";
+
 export interface ProviderPlan {
   provider: string;
   providerRef?: string;
@@ -12,6 +14,8 @@ export interface ProviderPlan {
   speedInfo?: string;
   coverage: string;
   features: string[];
+  /** Whether this plan covers a single country, a multi-country region, or the whole world. */
+  coverageType?: CoverageType;
 }
 
 export interface ProviderOrderResult {

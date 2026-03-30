@@ -91,8 +91,13 @@ export class EsimGoProvider implements EsimProvider {
         const countryCodes = item.countries.length > 0
           ? item.countries.map(c => c.iso.toUpperCase())
           : ["GLOBAL"];
+        // Derive coverage type once per catalogue item
+        const coverageType: "country" | "regional" | "global" =
+          item.countries.length === 0 ? "global"
+          : item.countries.length === 1 ? "country"
+          : "regional";
         for (const iso of countryCodes) {
-          plans.push(this.mapItemToProviderPlan(item, iso));
+          plans.push(this.mapItemToProviderPlan(item, iso, coverageType));
         }
       }
       return plans;
@@ -102,7 +107,7 @@ export class EsimGoProvider implements EsimProvider {
     }
   }
 
-  private mapItemToProviderPlan(item: EsimGoCatalogueItem, countryCode: string): ProviderPlan {
+  private mapItemToProviderPlan(item: EsimGoCatalogueItem, countryCode: string, coverageType: "country" | "regional" | "global" = "country"): ProviderPlan {
     const rawMb = item.dataAmount > 0 ? item.dataAmount : 0;
     const dataGb = rawMb / 1024;
     const roundedGb = rawMb >= 1000 ? Math.round(rawMb / 1000) : Math.round(dataGb * 10) / 10;
@@ -131,6 +136,7 @@ export class EsimGoProvider implements EsimProvider {
       speedInfo: speeds,
       coverage: coverageCountries || countryCode,
       features,
+      coverageType,
     };
   }
 

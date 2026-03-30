@@ -23,6 +23,7 @@ import {
 import type { ProviderPlan } from "../providers/types";
 import { esimgo } from "../providers/esimgo";
 import { esimAccess } from "../providers/esimAccess";
+import { zendit } from "../providers/zendit";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -98,6 +99,7 @@ async function upsertOffer(
   providerKey: string,
   providerPlanCode: string,
   wholesalePriceUsd: number,
+  coverageType: "country" | "regional" | "global" = "country",
 ): Promise<boolean> {
   const [existing] = await db
     .select({ id: providerOffers.id, wholesalePriceUsd: providerOffers.wholesalePriceUsd })
@@ -117,7 +119,7 @@ async function upsertOffer(
   if (existing) {
     await db
       .update(providerOffers)
-      .set({ wholesalePriceUsd, isActive: true, lastSyncedAt: new Date(), updatedAt: new Date() })
+      .set({ wholesalePriceUsd, coverageType, isActive: true, lastSyncedAt: new Date(), updatedAt: new Date() })
       .where(eq(providerOffers.id, existing.id));
   } else {
     await db.insert(providerOffers).values({
@@ -125,6 +127,7 @@ async function upsertOffer(
       providerKey,
       providerPlanCode,
       wholesalePriceUsd,
+      coverageType,
       currency: "USD",
       isActive: true,
       lastSyncedAt: new Date(),
@@ -159,6 +162,7 @@ async function processProviderPlans(
       providerKey,
       plan.providerRef,
       plan.wholesaleCost,
+      plan.coverageType ?? "country",
     );
 
     offersUpserted++;
@@ -294,6 +298,27 @@ export async function syncAllProviders(
   } else {
     results.push({ providerKey: "esimaccess", success: false, plansFound: 0, offersUpserted: 0, error: "Not configured" });
     failedProviders.push("esimaccess");
+  }
+
+  // ── Zendit (per-country batch, same country list as eSIM Access) ───────────
+  if (zendit.isConfigured()) {
+    try {
+      console.log(`[providerSync] Fetching Zendit plans for ${countryCodes.length} countries...`);
+      const fetched = await zendit.getAllCataloguePlans(countryCodes);
+      console.log(`[providerSync] Zendit: ${fetched.length} plans`);
+      const { offersUpserted, priceChanges } = await processProviderPlans(fetched, "zendit");
+      totalOffersUpserted += offersUpserted;
+      totalPriceChanges += priceChanges;
+      results.push({ providerKey: "zendit", success: true, plansFound: fetched.length, offersUpserted });
+    } catch (err: any) {
+      console.error("[providerSync] Zendit sync failed:", err.message);
+      failedProviders.push("zendit");
+      results.push({ providerKey: "zendit", success: false, plansFound: 0, offersUpserted: 0, error: err.message });
+    }
+  } else {
+    // Not configured yet — log at debug level, don't count as a failure
+    console.log("[providerSync] Zendit: not configured (ZENDIT_API_KEY missing) — skipped");
+    results.push({ providerKey: "zendit", success: false, plansFound: 0, offersUpserted: 0, error: "Not configured" });
   }
 
   // ── Auto-update internal plan costs ───────────────────────────────────────

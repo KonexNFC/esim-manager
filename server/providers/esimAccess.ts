@@ -201,6 +201,7 @@ export class EsimAccessProvider implements EsimProvider {
           speedInfo: pkg.speed || "4G/LTE",
           coverage: coverageNames,
           features,
+          coverageType: "country" as const,
         };
       });
     } catch (err) {
