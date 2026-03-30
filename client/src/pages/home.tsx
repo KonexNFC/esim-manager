@@ -33,6 +33,7 @@ import {
 import { useState } from "react";
 import { SiVisa, SiMastercard, SiApplepay, SiStripe } from "react-icons/si";
 import type { Destination, Plan } from "@shared/schema";
+import { CountryCombobox } from "@/components/country-combobox";
 
 // Find the cheapest plan that best matches size + duration selections
 async function goToCheckout(
@@ -121,23 +122,16 @@ const planDurations = ["1 Day", "3 Days", "5 Days", "7 Days", "15 Days", "30 Day
 // ─────────────────────────────────────────────
 function HeroSection() {
   const [, navigate] = useLocation();
-  const [heroDestId, setHeroDestId] = useState<string>("");
+  const [heroCode, setHeroCode] = useState<string>("");
   const [heroSize, setHeroSize] = useState<string>("");
   const [heroDuration, setHeroDuration] = useState<string>("");
-  const [heroLoading, setHeroLoading] = useState(false);
 
-  const { data: destinations } = useQuery<Destination[]>({
-    queryKey: ["/api/destinations"],
-  });
-
-  const handleHeroFind = async () => {
-    if (!heroDestId || heroDestId === "any") {
+  const handleHeroFind = () => {
+    if (!heroCode || heroCode === "any") {
       navigate("/destinations");
-      return;
+    } else {
+      navigate(`/destinations/${heroCode}`);
     }
-    setHeroLoading(true);
-    await goToCheckout(navigate, heroDestId, heroSize, heroDuration);
-    setHeroLoading(false);
   };
 
   return (
@@ -210,17 +204,14 @@ function HeroSection() {
             >
               <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-3">Quick plan finder</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
-                <Select onValueChange={setHeroDestId} data-testid="hero-select-destination">
-                  <SelectTrigger className="bg-white/10 border-white/20 text-white h-10 text-sm [&>span]:text-white/60" data-testid="hero-trigger-destination">
-                    <SelectValue placeholder="Destination" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="any">🌍 Any destination</SelectItem>
-                    {destinations?.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>{d.flagEmoji} {d.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <CountryCombobox
+                  value={heroCode}
+                  onSelect={code => setHeroCode(code ?? "")}
+                  placeholder="Destination"
+                  allowAny
+                  className="bg-white/10 border-white/20 text-white h-10 text-sm hover:bg-white/15 hover:text-white"
+                  data-testid="hero-select-destination"
+                />
                 <Select onValueChange={setHeroSize} data-testid="hero-select-data">
                   <SelectTrigger className="bg-white/10 border-white/20 text-white h-10 text-sm [&>span]:text-white/60" data-testid="hero-trigger-data">
                     <SelectValue placeholder="Data plan" />
@@ -245,10 +236,9 @@ function HeroSection() {
               <Button
                 className="w-full font-semibold"
                 onClick={handleHeroFind}
-                disabled={heroLoading}
                 data-testid="button-hero-get-esim"
               >
-                {heroLoading ? "Finding your plan…" : "Get eSIM"}
+                Get eSIM
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
             </div>
@@ -373,47 +363,49 @@ function HeroSection() {
 // ─────────────────────────────────────────────
 // 2. PLAN FINDER
 // ─────────────────────────────────────────────
+interface CountryPlanEntry {
+  normalizedPlanId: string;
+  dataMb: number;
+  validityDays: number;
+  dataAmountGb: number;
+  isUnlimited: boolean;
+  dataLabel: string;
+  validityLabel: string;
+  estimatedPriceUsd: number;
+  providerCount: number;
+}
+
 function PlanFinder() {
   const [, navigate] = useLocation();
-  const [destId, setDestId] = useState<string>("");
+  const [countryCode, setCountryCode] = useState<string>("");
+  const [selectedCountry, setSelectedCountry] = useState<{ name: string; flagEmoji: string } | undefined>();
   const [size, setSize] = useState<string>("");
   const [duration, setDuration] = useState<string>("");
 
-  const { data: destinations } = useQuery<Destination[]>({
-    queryKey: ["/api/destinations"],
-  });
-
-  // Fetch real plans whenever a destination is selected
-  const { data: destPlans } = useQuery<Plan[]>({
-    queryKey: ["/api/plans", destId],
+  // Fetch plans from the new normalized-plans API when a country is chosen
+  const { data: plansData } = useQuery<{ countryCode: string; plans: CountryPlanEntry[] }>({
+    queryKey: ["/api/countries", countryCode, "plans"],
     queryFn: async () => {
-      if (!destId || destId === "any") return [];
-      const res = await fetch(`/api/plans?destinationId=${destId}`);
-      if (!res.ok) return [];
+      const res = await fetch(`/api/countries/${countryCode}/plans`);
+      if (!res.ok) return { countryCode, plans: [] };
       return res.json();
     },
-    enabled: !!destId && destId !== "any",
+    enabled: !!countryCode && countryCode !== "any",
   });
 
-  const [findLoading, setFindLoading] = useState(false);
-
-  const handleFind = async () => {
-    if (!destId || destId === "any") {
+  const handleFind = () => {
+    if (!countryCode || countryCode === "any") {
       navigate("/destinations");
-      return;
+    } else {
+      navigate(`/destinations/${countryCode}`);
     }
-    setFindLoading(true);
-    await goToCheckout(navigate, destId, size, duration);
-    setFindLoading(false);
   };
 
-  const selectedDest = destinations?.find(d => String(d.id) === destId);
-  const destName   = selectedDest?.name      ?? "Japan";
-  const destFlag   = selectedDest?.flagEmoji ?? "🇯🇵";
-  const planLabel  = size      || "5 GB";
-  const planDur    = duration  || "30 Days";
+  const destName = selectedCountry?.name      ?? "Japan";
+  const destFlag = selectedCountry?.flagEmoji ?? "🇯🇵";
+  const planLabel = size     || "5 GB";
+  const planDur   = duration || "30 Days";
 
-  // Map selector strings → numbers for plan matching
   const sizeToGb: Record<string, number> = {
     "1 GB": 1, "3 GB": 3, "5 GB": 5, "10 GB": 10, "Unlimited": 999,
   };
@@ -421,27 +413,30 @@ function PlanFinder() {
     "1 Day": 1, "3 Days": 3, "5 Days": 5, "7 Days": 7, "15 Days": 15, "30 Days": 30,
   };
 
-  // Find the best live plan that matches size + duration
+  // Find the best plan that matches size + duration selections
   const matchedPlan = (() => {
-    if (!destPlans?.length) return null;
+    const plans = plansData?.plans;
+    if (!plans?.length) return null;
     const gb   = sizeToGb[size]     ?? 5;
     const days = durToDays[duration] ?? 30;
-    const active = destPlans.filter(p => p.planStatus === "active");
-    const exact = active
-      .filter(p => Math.abs(p.dataAmountGb - gb) <= 0.5 && Math.abs(p.validityDays - days) <= 3)
-      .sort((a, b) => a.price - b.price)[0];
-    return exact ?? active.sort((a, b) => a.price - b.price)[0] ?? null;
+    const sorted = [...plans].sort((a, b) => a.estimatedPriceUsd - b.estimatedPriceUsd);
+    if (size === "Unlimited") {
+      return sorted.find(p => p.isUnlimited) ?? sorted[0];
+    }
+    const exact = sorted.filter(p =>
+      Math.abs(p.dataAmountGb - gb) <= 0.5 && Math.abs(p.validityDays - days) <= 3,
+    );
+    return exact[0] ?? sorted[0] ?? null;
   })();
 
   const planPrice = () => {
-    if (matchedPlan) return `£${matchedPlan.price.toFixed(2)}`;
-    // Static fallback while no destination is selected
-    if (size === "Unlimited") return "£22.99";
-    if (size === "10 GB")     return "£16.99";
-    if (size === "5 GB")      return "£12.99";
-    if (size === "3 GB")      return "£8.99";
-    if (size === "1 GB")      return "£5.99";
-    return "£12.99";
+    if (matchedPlan) return `$${matchedPlan.estimatedPriceUsd.toFixed(2)}`;
+    if (size === "Unlimited") return "$22.99";
+    if (size === "10 GB")     return "$16.99";
+    if (size === "5 GB")      return "$12.99";
+    if (size === "3 GB")      return "$8.99";
+    if (size === "1 GB")      return "$5.99";
+    return "$12.99";
   };
 
   const perfectFor = (): string[] => {
@@ -469,19 +464,17 @@ function PlanFinder() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">Where are you going?</p>
-                <Select onValueChange={setDestId} data-testid="select-destination">
-                  <SelectTrigger className="h-11 border-border bg-background shadow-sm" data-testid="trigger-destination">
-                    <SelectValue placeholder="Select destination" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="any">🌍 Any destination</SelectItem>
-                    {destinations?.map((d) => (
-                      <SelectItem key={d.id} value={d.id} data-testid={`option-dest-${d.id}`}>
-                        {d.flagEmoji} {d.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <CountryCombobox
+                  value={countryCode}
+                  onSelect={(code, country) => {
+                    setCountryCode(code ?? "");
+                    setSelectedCountry(country);
+                  }}
+                  placeholder="Select destination"
+                  allowAny
+                  className="w-full h-11 border-border bg-background shadow-sm justify-between"
+                  data-testid="select-destination"
+                />
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">How much data?</p>
@@ -516,7 +509,7 @@ function PlanFinder() {
             </div>
 
             {/* Recommendation card — shown after destination is selected */}
-            {destId && destId !== "any" && (
+            {countryCode && countryCode !== "any" && (
             <div className="mt-6 rounded-xl border bg-background" data-testid="plan-recommendation-card">
               <div className="px-5 pt-4 pb-2 border-b">
                 <p className="text-xs font-bold uppercase tracking-widest text-primary">Recommended for your trip</p>
@@ -554,10 +547,9 @@ function PlanFinder() {
                     size="lg"
                     className="font-semibold flex-shrink-0"
                     onClick={handleFind}
-                    disabled={findLoading}
                     data-testid="button-see-plans"
                   >
-                    {findLoading ? "Finding your plan…" : "Continue to Checkout"}
+                    See Plans
                     <ArrowRight className="ml-2 w-4 h-4" />
                   </Button>
                 </div>
