@@ -1343,6 +1343,16 @@ function RoutingTab() {
     onError: () => toast({ title: "Update failed", variant: "destructive" }),
   });
 
+  const resumeProvider = useMutation({
+    mutationFn: (key: string) => apiRequest("POST", `/api/admin/providers/${key}/resume`, {}),
+    onSuccess: async (res: any, key) => {
+      const data = await res.json();
+      toast({ title: `Provider "${key}" resumed`, description: "It will now receive traffic again." });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/providers"] });
+    },
+    onError: () => toast({ title: "Resume failed", variant: "destructive" }),
+  });
+
   return (
     <div className="space-y-6">
 
@@ -1393,24 +1403,62 @@ function RoutingTab() {
               <span className="text-center">Priority</span>
               <span className="text-center">Health</span>
               <span className="text-center">Last Check</span>
-              <span className="text-center">Enabled</span>
+              <span className="text-center">Action</span>
             </div>
             {providers.map((p) => (
-              <div key={p.key} className="grid grid-cols-5 gap-3 px-4 py-3 items-center" data-testid={`row-provider-${p.key}`}>
+              <div
+                key={p.key}
+                className={`grid grid-cols-5 gap-3 px-4 py-3 items-center ${p.autoPaused ? "bg-orange-50 dark:bg-orange-950/20" : ""}`}
+                data-testid={`row-provider-${p.key}`}
+              >
                 <div>
                   <p className="text-sm font-medium">{p.name}</p>
                   <p className="text-xs text-muted-foreground font-mono">{p.key}</p>
+                  {p.autoPaused && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-1 mt-1 cursor-help w-fit">
+                          <AlertCircle className="w-3 h-3 text-orange-500 shrink-0" />
+                          <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Auto-Paused</span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-xs">
+                        <p className="text-xs font-medium mb-1">Paused by system</p>
+                        <p className="text-xs text-muted-foreground">{p.autoPauseReason ?? "Performance threshold exceeded"}</p>
+                        {p.autoPausedAt && (
+                          <p className="text-xs text-muted-foreground mt-1">{new Date(p.autoPausedAt).toLocaleString()}</p>
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                 </div>
                 <p className="text-sm text-center font-mono">#{p.priority}</p>
                 <div className="flex justify-center"><HealthBadge status={p.healthStatus} /></div>
                 <p className="text-xs text-center text-muted-foreground">
                   {p.lastHealthCheck ? new Date(p.lastHealthCheck).toLocaleDateString() : "Never"}
                 </p>
-                <div className="flex justify-center">
+                <div className="flex flex-col gap-1.5 items-center">
+                  {p.autoPaused && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-orange-400 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30 w-full"
+                      onClick={() => resumeProvider.mutate(p.key)}
+                      disabled={resumeProvider.isPending}
+                      data-testid={`button-resume-provider-${p.key}`}
+                    >
+                      {resumeProvider.isPending ? (
+                        <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                      ) : (
+                        <Play className="w-3 h-3 mr-1" />
+                      )}
+                      Resume
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant={p.enabled ? "default" : "outline"}
-                    className="h-7 text-xs"
+                    className="h-7 text-xs w-full"
                     onClick={() => toggleProvider.mutate({ key: p.key, enabled: !p.enabled })}
                     data-testid={`button-toggle-provider-${p.key}`}
                   >
