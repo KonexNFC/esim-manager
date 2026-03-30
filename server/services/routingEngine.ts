@@ -100,6 +100,24 @@ export interface RankedProvider {
   wholesalePriceUsd: number;
   scores: ProviderScores;
   reason: string;
+  isLastResort?: boolean;   // true when margin is below threshold — used only because no better option exists
+}
+
+// ─── Fallback quality ─────────────────────────────────────────────────────────
+// Measures how robust the fallback chain is: how many options exist and how
+// healthy they are. Stored with the routing decision for observability.
+//
+// coverageScore formula:
+//   providerCoverage (0–60): min(fallbackCount, 2) / 2 × 60
+//   healthCoverage   (0–40): avgFallbackHealthScore / 100 × 40
+//   Total: 0–100 (100 = 2+ healthy fallbacks)
+
+export interface FallbackQuality {
+  fallbackCount: number;          // how many fallbacks are in the chain (excludes winner)
+  totalCandidates: number;        // all providers scored for this plan
+  lastResortCount: number;        // fallbacks that are below-margin last-resort
+  avgFallbackHealthScore: number; // avg health_score of rank-2+ providers (0 when no fallbacks)
+  coverageScore: number;          // 0–100 composite
 }
 
 export type ConfidenceLabel = "high" | "medium" | "low";
@@ -111,6 +129,7 @@ export interface RoutingResult {
   selectedProviderKey: string;
   selectedProviderPlanCode: string;
   fallbackChain: RankedProvider[];
+  fallbackQuality: FallbackQuality;
   scores: Record<string, ProviderScores>;
   decisionReason: string;
   confidenceScore: number;
@@ -452,6 +471,31 @@ function buildCandidateReason(
   }
 }
 
+// ─── Fallback quality computation ────────────────────────────────────────────
+
+function buildFallbackQuality(
+  fallbackChain: RankedProvider[],
+  totalCandidates: number,
+): FallbackQuality {
+  const fallbacks = fallbackChain.slice(1); // everything after the winner
+  const fallbackCount = fallbacks.length;
+  const lastResortCount = fallbacks.filter(f => f.isLastResort).length;
+
+  const avgFallbackHealthScore =
+    fallbackCount === 0
+      ? 0
+      : Math.round(
+          fallbacks.reduce((sum, f) => sum + f.scores.health_score, 0) / fallbackCount,
+        );
+
+  // coverageScore: 0–60 from count coverage + 0–40 from health quality
+  const providerCoverage = Math.round((Math.min(fallbackCount, 2) / 2) * 60);
+  const healthCoverage = Math.round((avgFallbackHealthScore / 100) * 40);
+  const coverageScore = providerCoverage + healthCoverage;
+
+  return { fallbackCount, totalCandidates, lastResortCount, avgFallbackHealthScore, coverageScore };
+}
+
 // ─── Main engine function ─────────────────────────────────────────────────────
 
 export async function selectBestProviderForPlan(
@@ -508,7 +552,11 @@ export async function selectBestProviderForPlan(
   // 5. Sort by chosen strategy
   const ranked = applySortStrategy(candidatesForRanking, strategy);
 
-  // 6. Build the fallback chain (all candidates in ranked order)
+  // 6. Build the fallback chain — all above-threshold candidates in ranked order,
+  //    then extend with below-threshold last-resort options until ≥2 fallbacks exist.
+  //    This guarantees the fulfillment engine always has strong backup choices while
+  //    keeping the primary selection (winner) completely unchanged.
+  const MINIMUM_FALLBACKS = 2;
   const fallbackChain: RankedProvider[] = ranked.map((c, i) => ({
     rank: i + 1,
     providerKey: c.providerKey,
@@ -516,7 +564,37 @@ export async function selectBestProviderForPlan(
     wholesalePriceUsd: c.wholesalePriceUsd,
     scores: c.scores,
     reason: buildCandidateReason(strategy, c, i + 1),
+    isLastResort: false,
   }));
+
+  // Extend with last-resort fallbacks (below-threshold) if needed
+  if (fallbackChain.length - 1 < MINIMUM_FALLBACKS && belowThreshold.length > 0) {
+    // Sort below-threshold by blended_score descending — best of the bad options first
+    const sortedLastResort = [...belowThreshold].sort(
+      (a, b) => b.scores.blended_score - a.scores.blended_score,
+    );
+    for (const c of sortedLastResort) {
+      if (fallbackChain.length - 1 >= MINIMUM_FALLBACKS) break;
+      const rank = fallbackChain.length + 1;
+      fallbackChain.push({
+        rank,
+        providerKey: c.providerKey,
+        providerPlanCode: c.providerPlanCode,
+        wholesalePriceUsd: c.wholesalePriceUsd,
+        scores: c.scores,
+        reason:
+          `last-resort fallback rank ${rank} — below margin threshold (${c.scores.margin_score}% < ${minMarginPercent}%) ` +
+          `blended=${c.scores.blended_score} (success=${c.scores.success_score}, health=${c.scores.health_score})`,
+        isLastResort: true,
+      });
+    }
+    if (fallbackChain.length > 1) {
+      console.warn(
+        `[routingEngine] Plan "${plan.name}": added ${fallbackChain.length - ranked.length} last-resort ` +
+        `fallback(s) from below-margin pool to reach ${fallbackChain.length - 1} total fallbacks.`,
+      );
+    }
+  }
 
   // 5. Winner is rank-1
   const winner = ranked[0];
