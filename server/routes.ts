@@ -537,21 +537,26 @@ export async function registerRoutes(
   // ─── COUNTRIES (dynamic from provider_offers) ────────
   app.get("/api/countries", async (req, res) => {
     try {
-      const countries = await storage.getAvailableCountries();
+      const all = await storage.getAvailableCountries();
 
       // Optional filters
       const regionFilter = (req.query.region as string | undefined)?.toLowerCase();
       const q = (req.query.q as string | undefined)?.toLowerCase();
 
-      let filtered = countries;
+      // Separate countries from multi-country regions/global
+      const countriesOnly = all.filter(c => c.type === "country");
+      const regionsOnly   = all.filter(c => c.type === "region" || c.type === "global");
+
+      let filtered = countriesOnly;
       if (regionFilter && regionFilter !== "all") {
         filtered = filtered.filter(c => c.region.toLowerCase() === regionFilter);
       }
       if (q) {
+        const qLower = q.toLowerCase();
         filtered = filtered.filter(
           c =>
-            c.name.toLowerCase().includes(q) ||
-            c.countryCode.toLowerCase().includes(q),
+            c.name.toLowerCase().includes(qLower) ||
+            c.countryCode.toLowerCase().includes(qLower),
         );
       }
 
@@ -562,10 +567,24 @@ export async function registerRoutes(
         grouped[c.region].push(c);
       }
 
-      // Sorted list of regions that have results
       const regions = Object.keys(grouped).sort();
 
-      res.json({ countries: filtered, grouped, regions, total: filtered.length });
+      // Also filter the regional/global entries when a search query is active
+      const filteredRegions = q
+        ? regionsOnly.filter(
+            r =>
+              r.name.toLowerCase().includes(q) ||
+              r.countryCode.toLowerCase().includes(q),
+          )
+        : regionsOnly;
+
+      res.json({
+        countries: filtered,
+        grouped,
+        regions,
+        total: filtered.length,
+        multiCountryPlans: filteredRegions,   // region + global entries
+      });
     } catch (err: any) {
       console.error("[/api/countries]", err);
       res.status(500).json({ message: "Failed to fetch countries" });
@@ -574,21 +593,23 @@ export async function registerRoutes(
 
   app.get("/api/countries/:code", async (req, res) => {
     try {
-      const { getCountryInfo, iso2ToFlag, normaliseCode } = await import("./services/countryData");
+      const { getLocationInfo, normaliseCode } = await import("./services/countryData");
       const code = normaliseCode(req.params.code);
-      const meta = getCountryInfo(code);
-      if (!meta) return res.status(404).json({ message: "Country not found" });
+      const info = getLocationInfo(code);
+      if (!info) return res.status(404).json({ message: "Country or region not found" });
 
       // Count active plans for this code
-      const countries = await storage.getAvailableCountries();
-      const match = countries.find(c => c.countryCode === code);
+      const all = await storage.getAvailableCountries();
+      const match = all.find(c => c.countryCode === code);
 
       res.json({
         countryCode: code,
-        name: meta.name,
-        flagEmoji: iso2ToFlag(code),
-        region: meta.region,
+        name: info.name,
+        flagEmoji: info.flagEmoji,
+        region: info.region,
+        isRegion: info.isRegion,
         planCount: match?.planCount ?? 0,
+        type: match?.type ?? (info.isRegion ? "region" : "country"),
       });
     } catch (err: any) {
       res.status(500).json({ message: "Failed to fetch country" });
@@ -680,7 +701,7 @@ export async function registerRoutes(
   app.post("/api/checkout/country-plan", async (req, res) => {
     try {
       const { createCountryPlanCheckoutSession } = await import("./services/stripeService");
-      const { getCountryInfo, iso2ToFlag, normaliseCode } = await import("./services/countryData");
+      const { getLocationInfo, normaliseCode } = await import("./services/countryData");
 
       const {
         normalizedPlanId,
@@ -698,8 +719,8 @@ export async function registerRoutes(
       }
 
       const code = normaliseCode(rawCode);
-      const meta = getCountryInfo(code);
-      if (!meta) return res.status(400).json({ message: "Unknown country code" });
+      const info = getLocationInfo(code);
+      if (!info) return res.status(400).json({ message: "Unknown country or region code" });
 
       // Optionally attach userId from session
       const userId = (req as any).user?.id as string | undefined;
@@ -708,8 +729,8 @@ export async function registerRoutes(
       const result = await createCountryPlanCheckoutSession({
         normalizedPlanId,
         countryCode: code,
-        countryName: meta.name,
-        region: meta.region,
+        countryName: info.name,
+        region: info.region,
         dataLabel,
         validityLabel,
         dataAmountGb: Number(dataAmountGb),

@@ -57,6 +57,8 @@ interface CountryMeta {
   flagEmoji: string;
   region: string;
   planCount: number;
+  isRegion?: boolean;
+  type?: "country" | "region" | "global";
 }
 
 interface CountryPlan {
@@ -530,12 +532,19 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
 
       {/* Hero */}
       <div className="relative rounded-xl overflow-hidden mb-8 h-48 sm:h-56 bg-muted">
-        <img
-          src={`https://flagcdn.com/w1280/${code.toLowerCase()}.png`}
-          alt={meta.name}
-          className="w-full h-full object-cover opacity-60"
-          onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = "0"; }}
-        />
+        {/* Flag image (only for country codes; hidden for regions via onError) */}
+        {!meta.isRegion && (
+          <img
+            src={`https://flagcdn.com/w1280/${code.toLowerCase()}.png`}
+            alt={meta.name}
+            className="w-full h-full object-cover opacity-60"
+            onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = "0"; }}
+          />
+        )}
+        {/* Decorative gradient background for regions */}
+        {meta.isRegion && (
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-primary/10 to-transparent" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
         <div className="absolute bottom-0 left-0 p-5 flex items-center gap-3">
           <span className="text-4xl">{meta.flagEmoji}</span>
@@ -543,7 +552,9 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
             <h1 className="text-2xl sm:text-3xl font-bold text-white" data-testid="text-destination-title">
               {meta.name}
             </h1>
-            <p className="text-white/70 text-sm" data-testid="text-destination-region">{meta.region}</p>
+            <p className="text-white/70 text-sm" data-testid="text-destination-region">
+              {meta.isRegion ? "Multi-country plan" : meta.region}
+            </p>
           </div>
         </div>
         {plans.length > 0 && (

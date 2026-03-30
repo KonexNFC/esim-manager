@@ -3,6 +3,8 @@
 // Flag emojis are derived algorithmically from the country code.
 // Region taxonomy matches the frontend filter labels.
 
+import { isRegionSlug, getRegionMeta } from "./regionSlugs";
+
 export type GeoRegion =
   | "Africa"
   | "Asia"
@@ -286,9 +288,33 @@ export function getCountryInfo(rawCode: string): CountryMeta | null {
   return COUNTRY_DATA[code] ?? null;
 }
 
-/** Normalise a raw region_code from the DB to a canonical ISO-2 code. */
+/** Normalise a raw region_code from the DB to a canonical ISO-2 code or region slug. */
 export function normaliseCode(rawCode: string): string {
   return (CODE_ALIASES[rawCode.toUpperCase()] ?? rawCode).toUpperCase();
+}
+
+/**
+ * Unified location lookup: handles both ISO-2 country codes AND canonical region
+ * slugs (GLOBAL, EUROPE, APAC, …).  Returns { name, flagEmoji, region, isRegion }.
+ */
+export function getLocationInfo(rawCode: string): {
+  name: string;
+  flagEmoji: string;
+  region: string;
+  isRegion: boolean;
+} | null {
+  const code = normaliseCode(rawCode);
+  // Try country first
+  const country = getCountryInfo(code);
+  if (country) {
+    return { name: country.name, flagEmoji: iso2ToFlag(code), region: country.region, isRegion: false };
+  }
+  // Try region slug
+  if (isRegionSlug(code)) {
+    const meta = getRegionMeta(code)!;
+    return { name: meta.name, flagEmoji: meta.flagEmoji, region: meta.name, isRegion: true };
+  }
+  return null;
 }
 
 /** All region labels, sorted for display. */

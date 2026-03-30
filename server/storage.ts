@@ -14,14 +14,16 @@ import {
   type Notification, type InsertNotification,
   type PaymentEvent, type ProviderSyncLog,
 } from "@shared/schema";
-import { getCountryInfo, iso2ToFlag, normaliseCode } from "./services/countryData";
+import { getLocationInfo, iso2ToFlag, normaliseCode } from "./services/countryData";
+import { isRegionSlug, getRegionMeta, ALL_REGION_SLUGS } from "./services/regionSlugs";
 
 export interface AvailableCountry {
-  countryCode: string;   // canonical ISO-2 code
+  countryCode: string;   // canonical ISO-2 code OR region slug (EUROPE, GLOBAL, etc.)
   name: string;
   flagEmoji: string;
   region: string;
   planCount: number;     // distinct normalized plans with active offers
+  type: "country" | "region" | "global";
 }
 
 const pool = new pg.Pool({
@@ -211,7 +213,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAvailableCountries(): Promise<AvailableCountry[]> {
-    // Raw GROUP BY to avoid Drizzle's broken selectDistinct in v0.39.x
+    // Raw GROUP BY — no length filter so region slugs (GLOBAL, EUROPE, etc.) are included
     const rows = await db.execute<{ country_code: string; plan_count: string }>(sql`
       SELECT np.region_code AS country_code,
              COUNT(DISTINCT np.id)::int AS plan_count
@@ -219,29 +221,48 @@ export class DatabaseStorage implements IStorage {
       JOIN   normalized_plans np ON po.normalized_plan_id = np.id
       WHERE  po.is_active = true
         AND  np.region_code != ''
-        AND  length(np.region_code) <= 3
+        AND  np.is_active = true
       GROUP BY np.region_code
       ORDER BY np.region_code
     `);
 
-    const countries: AvailableCountry[] = [];
+    const results: AvailableCountry[] = [];
     for (const row of rows.rows) {
       const raw = row.country_code ?? "";
       if (!raw) continue;
       const canonical = normaliseCode(raw);
-      const meta = getCountryInfo(canonical);
-      if (!meta) continue; // skip unrecognised codes
-      countries.push({
+      const info = getLocationInfo(canonical);
+      if (!info) continue; // skip unrecognised codes
+
+      const regionSlug = isRegionSlug(canonical);
+      const regionMeta = regionSlug ? getRegionMeta(canonical) : null;
+
+      results.push({
         countryCode: canonical,
-        name: meta.name,
-        flagEmoji: iso2ToFlag(canonical),
-        region: meta.region,
+        name: info.name,
+        flagEmoji: info.flagEmoji,
+        region: info.region,
         planCount: Number(row.plan_count),
+        type: regionSlug
+          ? (regionMeta?.coverageType === "global" ? "global" : "region")
+          : "country",
       });
     }
 
-    // Sort alphabetically by country name
-    return countries.sort((a, b) => a.name.localeCompare(b.name));
+    // Countries: alphabetical; regions & global: by slug sortOrder — then merge
+    const countries = results
+      .filter(r => r.type === "country")
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const regions = results
+      .filter(r => r.type === "region" || r.type === "global")
+      .sort((a, b) => {
+        const sa = getRegionMeta(a.countryCode)?.sortOrder ?? 99;
+        const sb = getRegionMeta(b.countryCode)?.sortOrder ?? 99;
+        return sa - sb;
+      });
+
+    return [...countries, ...regions];
   }
 
   // ─── Plans ────────────────────────────────────────

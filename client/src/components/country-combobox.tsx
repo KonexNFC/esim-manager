@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronDown, Search, Star, X } from "lucide-react";
+import { Check, ChevronDown, Search, Star, X, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -16,6 +16,7 @@ interface AvailableCountry {
   flagEmoji: string;
   region: string;
   planCount: number;
+  type?: "country" | "region" | "global";
 }
 
 interface CountriesResponse {
@@ -23,6 +24,7 @@ interface CountriesResponse {
   grouped: Record<string, AvailableCountry[]>;
   regions: string[];
   total: number;
+  multiCountryPlans?: AvailableCountry[];
 }
 
 const POPULAR_CODES = [
@@ -31,17 +33,11 @@ const POPULAR_CODES = [
 ];
 
 export interface CountryComboboxProps {
-  /** Currently selected country code, or empty string / undefined for none. */
   value?: string;
-  /** Called with the chosen country code (or undefined for "Any destination"). */
   onSelect: (code: string | undefined, country?: AvailableCountry) => void;
-  /** Placeholder text shown when nothing is selected. */
   placeholder?: string;
-  /** Additional class names applied to the trigger button. */
   className?: string;
-  /** When true, show an "Any destination" option at the top. */
   allowAny?: boolean;
-  /** Accessible label used on the trigger. */
   "data-testid"?: string;
 }
 
@@ -61,21 +57,34 @@ export function CountryCombobox({
     queryKey: ["/api/countries"],
   });
 
-  const byCode = useMemo(
-    () => new Map(data?.countries.map(c => [c.countryCode, c]) ?? []),
-    [data?.countries],
-  );
+  // Unified code → entry lookup (countries + regions + global)
+  const byCode = useMemo(() => {
+    const map = new Map<string, AvailableCountry>();
+    for (const c of data?.countries ?? []) map.set(c.countryCode, c);
+    for (const r of data?.multiCountryPlans ?? []) map.set(r.countryCode, r);
+    return map;
+  }, [data]);
 
   const selected = value ? byCode.get(value) : undefined;
-  const label = value === "any" ? "🌍 Any destination" : selected ? `${selected.flagEmoji} ${selected.name}` : undefined;
+  const label = value === "any"
+    ? "🌍 Any destination"
+    : selected
+      ? `${selected.flagEmoji} ${selected.name}`
+      : undefined;
 
-  // Popular countries that exist in the catalogue
+  // Popular countries
   const popularCountries = useMemo(
-    () => POPULAR_CODES.map(code => byCode.get(code)).filter((c): c is AvailableCountry => !!c),
+    () => POPULAR_CODES.map(code => byCode.get(code)).filter((c): c is AvailableCountry => !!c && c.type !== "region" && c.type !== "global"),
     [byCode],
   );
 
-  // All regions + their countries, filtered by search
+  // Region + global entries
+  const multiCountryEntries = useMemo(
+    () => data?.multiCountryPlans ?? [],
+    [data],
+  );
+
+  // Per-region country sections (for non-search default view)
   const filteredSections = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!data) return [];
@@ -95,10 +104,18 @@ export function CountryCombobox({
     );
   }, [popularCountries, search]);
 
-  const hasSearch = search.trim().length > 0;
-  const noResults = hasSearch && filteredSections.length === 0;
+  // Regions/global filtered by search
+  const filteredMultiCountry = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return multiCountryEntries;
+    return multiCountryEntries.filter(
+      r => r.name.toLowerCase().includes(q) || r.countryCode.toLowerCase().includes(q),
+    );
+  }, [multiCountryEntries, search]);
 
-  // Focus search input when dropdown opens
+  const hasSearch = search.trim().length > 0;
+  const noResults = hasSearch && filteredSections.length === 0 && filteredMultiCountry.length === 0;
+
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -141,7 +158,7 @@ export function CountryCombobox({
             ref={inputRef}
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search countries…"
+            placeholder="Search countries or regions…"
             className="h-8 border-0 p-0 focus-visible:ring-0 text-sm"
             data-testid="input-country-search"
           />
@@ -171,15 +188,38 @@ export function CountryCombobox({
           )}
 
           {noResults ? (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">No countries found</p>
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">No destinations found</p>
           ) : hasSearch ? (
-            /* Flat search results */
-            filteredSections.flatMap(s => s.countries).map(country => (
-              <CountryOption key={country.countryCode} country={country} selected={value} onPick={pick} />
-            ))
-          ) : (
-            /* Default: popular + grouped by region */
+            /* Flat search results — countries first, then regions */
             <>
+              {filteredSections.flatMap(s => s.countries).map(country => (
+                <CountryOption key={country.countryCode} country={country} selected={value} onPick={pick} />
+              ))}
+              {filteredMultiCountry.length > 0 && filteredSections.flatMap(s => s.countries).length > 0 && (
+                <div className="mx-3 my-1 border-t" />
+              )}
+              {filteredMultiCountry.map(r => (
+                <CountryOption key={r.countryCode} country={r} selected={value} onPick={pick} />
+              ))}
+            </>
+          ) : (
+            /* Default view: multi-country plans at top, then popular, then regions */
+            <>
+              {/* Global & Regional Plans section */}
+              {multiCountryEntries.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 px-3 py-1 mt-1">
+                    <Globe className="h-3 w-3 text-primary" />
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Multi-Country Plans</span>
+                  </div>
+                  {multiCountryEntries.map(r => (
+                    <CountryOption key={r.countryCode} country={r} selected={value} onPick={pick} />
+                  ))}
+                  <div className="mx-3 my-1 border-t" />
+                </div>
+              )}
+
+              {/* Popular countries */}
               {filteredPopular.length > 0 && (
                 <div>
                   <div className="flex items-center gap-1.5 px-3 py-1 mt-1">
@@ -192,6 +232,7 @@ export function CountryCombobox({
                 </div>
               )}
 
+              {/* Country sections grouped by region */}
               {filteredSections.map(({ region, countries }) => (
                 <div key={region}>
                   <div className="px-3 py-1 mt-2">

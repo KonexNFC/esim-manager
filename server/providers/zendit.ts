@@ -1,5 +1,6 @@
 import type { EsimProvider, ProviderPlan, ProviderOrderResult, CoverageType } from "./types";
 import { randomUUID } from "crypto";
+import { regionSlugFromZenditRegions } from "../services/regionSlugs";
 
 // ─── Zendit eSIM Provider ─────────────────────────────────────────────────────
 // Swagger (test):  https://test-api.zendit.io/swagger/index.html
@@ -108,8 +109,19 @@ export class ZenditProvider implements EsimProvider {
 
   /** Map a raw ESimOffer to a ProviderPlan. */
   private mapOffer(offer: ZenditESimOffer): ProviderPlan {
-    const countryCode = (offer.country ?? "GLOBAL").toUpperCase();
     const coverageType = this.resolveCoverageType(offer.regions, offer.country);
+
+    // For regional/global offers, use a canonical region slug as the countryCode so the
+    // plan is filed under e.g. "EUROPE" or "GLOBAL" rather than a single country.
+    let countryCode: string;
+    if (coverageType === "global") {
+      countryCode = "GLOBAL";
+    } else if (coverageType === "regional" && (offer.regions ?? []).length > 0) {
+      const slug = regionSlugFromZenditRegions(offer.regions ?? []);
+      countryCode = slug ?? (offer.country ?? "GLOBAL").toUpperCase();
+    } else {
+      countryCode = (offer.country ?? "GLOBAL").toUpperCase();
+    }
     const { usd: wholesaleCost, currency } = this.resolveCost(offer.cost, offer.price);
 
     const isUnlimited = offer.dataUnlimited ?? false;

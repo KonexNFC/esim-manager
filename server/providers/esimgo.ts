@@ -1,4 +1,5 @@
 import type { EsimProvider, ProviderPlan, ProviderOrderResult } from "./types";
+import { regionSlugFromEsimGoGroups } from "../services/regionSlugs";
 
 const BASE_URL = "https://api.esim-go.com/v2.5";
 
@@ -77,7 +78,10 @@ export class EsimGoProvider implements EsimProvider {
     return res.json() as Promise<T>;
   }
 
-  /** Fetch the FULL catalogue (all countries). Returns one ProviderPlan per bundle×country. */
+  /** Fetch the FULL catalogue (all countries). Returns one ProviderPlan per bundle×country,
+   *  plus one extra plan per regional/global bundle keyed by region slug so users can
+   *  explicitly search for "Europe", "Global", etc.
+   */
   async getAllCataloguePlans(): Promise<ProviderPlan[]> {
     if (!this.apiKey) {
       console.log("[esimgo] Not configured — skipping full catalogue fetch");
@@ -96,8 +100,21 @@ export class EsimGoProvider implements EsimProvider {
           item.countries.length === 0 ? "global"
           : item.countries.length === 1 ? "country"
           : "regional";
+
+        // Fan-out: one plan per country (existing behaviour keeps per-country routing working)
         for (const iso of countryCodes) {
           plans.push(this.mapItemToProviderPlan(item, iso, coverageType));
+        }
+
+        // Additionally emit one plan keyed by region slug so the bundle appears
+        // when a user browses "Europe", "Asia Pacific", "Global", etc.
+        if (coverageType === "global") {
+          // Already emitted as "GLOBAL" above — skip duplicate
+        } else if (coverageType === "regional") {
+          const slug = regionSlugFromEsimGoGroups(item.groups ?? []);
+          if (slug) {
+            plans.push(this.mapItemToProviderPlan(item, slug, "regional"));
+          }
         }
       }
       return plans;
