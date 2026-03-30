@@ -349,6 +349,8 @@ export const routingDecisions = pgTable("routing_decisions", {
   scores: jsonb("scores").notNull(),                    // Record<providerKey, ProviderScores>
   decisionReason: text("decision_reason").notNull(),
   retailPriceUsdSnapshot: doublePrecision("retail_price_usd_snapshot"),
+  confidenceScore: integer("confidence_score"),         // 0–100; null for legacy rows
+  confidenceLabel: text("confidence_label"),            // "high" | "medium" | "low"
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -58,6 +58,8 @@ export interface RankedProvider {
   reason: string;
 }
 
+export type ConfidenceLabel = "high" | "medium" | "low";
+
 export interface RoutingResult {
   decisionId: string;
   normalizedPlanId: string;
@@ -67,6 +69,8 @@ export interface RoutingResult {
   fallbackChain: RankedProvider[];
   scores: Record<string, ProviderScores>;
   decisionReason: string;
+  confidenceScore: number;
+  confidenceLabel: ConfidenceLabel;
 }
 
 // ─── Health score map ─────────────────────────────────────────────────────────
@@ -97,6 +101,7 @@ interface ScoredCandidate {
   wholesalePriceUsd: number;
   providerPriority: number;
   providerHealthStatus: string;
+  dataOrdersCount: number;  // orders in destination_provider_stats for this provider+region
   scores: ProviderScores;
 }
 
@@ -113,11 +118,11 @@ const DEFAULT_DESTINATION_SCORE = 70;
 async function buildDestinationScores(
   providerKey: string,
   regionCode: string,
-): Promise<{ success_score: number; destination_score: number }> {
+): Promise<{ success_score: number; destination_score: number; dataOrdersCount: number }> {
   const stats = await getDestinationStats(providerKey, regionCode);
 
   if (!stats || stats.recentOrdersCount === 0) {
-    return { success_score: DEFAULT_SUCCESS_SCORE, destination_score: DEFAULT_DESTINATION_SCORE };
+    return { success_score: DEFAULT_SUCCESS_SCORE, destination_score: DEFAULT_DESTINATION_SCORE, dataOrdersCount: 0 };
   }
 
   // success_score: rolling fulfilment success rate scaled 0–100
@@ -133,7 +138,7 @@ async function buildDestinationScores(
     confidence * rawDestScore + (1 - confidence) * DEFAULT_DESTINATION_SCORE,
   );
 
-  return { success_score, destination_score };
+  return { success_score, destination_score, dataOrdersCount: stats.recentOrdersCount };
 }
 
 async function scoreCandidates(
@@ -188,7 +193,7 @@ async function scoreCandidates(
 
     const health_score = healthScore(c.providerHealthStatus);
     const latency_s = latencyScore(c.providerPriority);
-    const { success_score, destination_score } = destScoresPerProvider[i];
+    const { success_score, destination_score, dataOrdersCount } = destScoresPerProvider[i];
 
     // blended: margin 35% · success 25% · destination 15% · health 15% · latency 10%
     const blended =
@@ -200,6 +205,7 @@ async function scoreCandidates(
 
     return {
       ...c,
+      dataOrdersCount,
       scores: {
         cost_score,
         margin_score,
@@ -243,6 +249,65 @@ function applySortStrategy(
       // Best blended score first
       return copy.sort((a, b) => b.scores.blended_score - a.scores.blended_score);
   }
+}
+
+// ─── Confidence scoring ───────────────────────────────────────────────────────
+//
+// Confidence reflects how much we trust this routing decision.
+// It is independent of which provider wins — it measures the QUALITY of the
+// information the engine had when it made its choice.
+//
+// Four equally-weighted factors (see weights below):
+//
+//   health_factor      (30%) — Is the provider currently reported healthy?
+//   data_factor        (25%) — How many orders of destination history do we have?
+//   success_factor     (25%) — What is the provider's success rate at this destination?
+//   margin_factor      (20%) — Is the margin strong enough to absorb surprises?
+//
+// Labels:  80+ → "high"   |   50–79 → "medium"   |   <50 → "low"
+
+function confidenceLabel(score: number): ConfidenceLabel {
+  if (score >= 80) return "high";
+  if (score >= 50) return "medium";
+  return "low";
+}
+
+function calculateConfidence(winner: ScoredCandidate): { score: number; label: ConfidenceLabel } {
+  const { scores, providerHealthStatus, dataOrdersCount } = winner;
+
+  // 1. Health factor — direct provider health signal
+  //    healthy=100, unknown=50, degraded=20, down=0
+  const healthFactor = healthScore(providerHealthStatus);
+
+  // 2. Data availability factor — confidence in destination stats
+  //    0 orders → 30 (no history at all)
+  //    1–4 orders → 40–60 (minimal history)
+  //    5–19 orders → 65–85 (moderate)
+  //    20+ orders → 95 (well-established)
+  const dataFactor = dataOrdersCount === 0
+    ? 30
+    : Math.min(95, 30 + Math.round(dataOrdersCount * 3.25));
+
+  // 3. Success factor — rolling success rate at this destination
+  //    Uses the pre-computed success_score (0–100).
+  //    When dataOrdersCount=0 the score is the default 75, but we already
+  //    penalise that through the data factor so we keep it as-is here.
+  const successFactor = scores.success_score;
+
+  // 4. Margin factor — how comfortable is the margin?
+  //    margin_score IS the gross margin %, clamped 0–100.
+  //    Map to a confidence factor: >= 60% feels very safe, <= 10% feels risky.
+  //    Linear scale: marginScore / 60, capped at 100.
+  const marginFactor = Math.min(100, Math.round((scores.margin_score / 60) * 100));
+
+  const raw =
+    0.30 * healthFactor +
+    0.25 * dataFactor +
+    0.25 * successFactor +
+    0.20 * marginFactor;
+
+  const score = Math.max(0, Math.min(100, Math.round(raw)));
+  return { score, label: confidenceLabel(score) };
 }
 
 // ─── Human-readable reason builder ───────────────────────────────────────────
@@ -367,7 +432,10 @@ export async function selectBestProviderForPlan(
     scoresMap[c.providerKey] = c.scores;
   }
 
-  // 7. Persist to routing_decisions
+  // 7. Compute confidence for this decision
+  const { score: confScore, label: confLabel } = calculateConfidence(winner);
+
+  // 8. Persist to routing_decisions
   const [saved] = await db
     .insert(routingDecisions)
     .values({
@@ -379,12 +447,14 @@ export async function selectBestProviderForPlan(
       scores: scoresMap as unknown as Record<string, unknown>,
       decisionReason,
       retailPriceUsdSnapshot: plan.retailPriceUsd,
+      confidenceScore: confScore,
+      confidenceLabel: confLabel,
     })
     .returning();
 
   console.log(
     `[routingEngine] Plan "${plan.name}" → ${winner.providerKey}/${winner.providerPlanCode}` +
-      ` via ${strategy} | ${decisionReason}`,
+      ` via ${strategy} | confidence=${confScore} (${confLabel}) | ${decisionReason}`,
   );
 
   return {
@@ -396,6 +466,8 @@ export async function selectBestProviderForPlan(
     fallbackChain,
     scores: scoresMap,
     decisionReason,
+    confidenceScore: confScore,
+    confidenceLabel: confLabel,
   };
 }
 
