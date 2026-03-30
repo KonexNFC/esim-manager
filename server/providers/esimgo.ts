@@ -112,9 +112,10 @@ export class EsimGoProvider implements EsimProvider {
         ? `${roundedGb} GB`
         : `${rawMb} MB`;
     const coverageCountries = item.countries.map((c) => c.name).join(", ");
-    const speeds = item.speed.length > 0 ? item.speed.join("/") : "4G/LTE";
+    const speedArr: string[] = Array.isArray(item.speed) ? item.speed : [];
+    const speeds = speedArr.length > 0 ? speedArr.join("/") : "4G/LTE";
     const features: string[] = ["Data only", "Instant activation"];
-    if (item.speed.some((s) => s.toLowerCase().includes("5g"))) features.push("5G where available");
+    if (speedArr.some((s) => s.toLowerCase().includes("5g"))) features.push("5G where available");
     if (item.roamingEnabled && item.roamingEnabled.length > 0) features.push(`Roaming in ${item.roamingEnabled.length} countries`);
     return {
       provider: this.name,
