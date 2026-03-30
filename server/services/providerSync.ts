@@ -10,7 +10,7 @@
 //   5. For each internal plan: find cheapest matching offer, update cost+provider
 //   6. Record everything in `provider_sync_runs`
 
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "../storage";
 import {
   plans,
@@ -24,6 +24,7 @@ import type { ProviderPlan } from "../providers/types";
 import { esimgo } from "../providers/esimgo";
 import { esimAccess } from "../providers/esimAccess";
 import { zendit } from "../providers/zendit";
+import { quantizeDataMb, formatPlanName } from "./planNormalizer";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -51,7 +52,9 @@ export interface SyncSummary {
 
 function planToMb(plan: ProviderPlan): number {
   if (plan.dataAmountGb >= 999) return 999999; // unlimited
-  return Math.round(plan.dataAmountGb * 1024);
+  // Quantize immediately so different providers always hit the same tier.
+  // e.g. eSIMGo's 1000 MB (SI) → 1024 MB (canonical 1 GB)
+  return quantizeDataMb(Math.round(plan.dataAmountGb * 1024));
 }
 
 /** Find a normalizedPlan row matching regionCode + dataMb + validityDays, or create one. */
@@ -59,15 +62,18 @@ async function findOrCreateNormalizedPlan(
   regionCode: string,
   dataMb: number,
   validityDays: number,
-  planName: string,
+  _providerPlanName: string, // ignored — we generate our own standardised name
 ): Promise<string> {
+  // Always work with the canonical MB value
+  const canonicalMb = quantizeDataMb(dataMb);
+
   const [existing] = await db
     .select({ id: normalizedPlans.id })
     .from(normalizedPlans)
     .where(
       and(
         eq(normalizedPlans.regionCode, regionCode),
-        eq(normalizedPlans.dataMb, dataMb),
+        eq(normalizedPlans.dataMb, canonicalMb),
         eq(normalizedPlans.validityDays, validityDays),
       ),
     )
@@ -75,14 +81,15 @@ async function findOrCreateNormalizedPlan(
 
   if (existing) return existing.id;
 
-  const isUnlimited = dataMb >= 999999;
+  const isUnlimited = canonicalMb >= 999999;
+  const standardName = formatPlanName(regionCode, canonicalMb, validityDays);
   const [created] = await db
     .insert(normalizedPlans)
     .values({
       regionCode,
-      dataMb,
+      dataMb: canonicalMb,
       validityDays,
-      name: planName,
+      name: standardName,
       isUnlimited,
       planType: "data",
       retailPriceUsd: 0,
@@ -254,11 +261,27 @@ export async function syncAllProviders(
   let totalPriceChanges = 0;
   const failedProviders: string[] = [];
 
-  // Collect country codes for batch providers (eSIM Access)
+  // ── Build comprehensive country list ──────────────────────────────────────
+  // Use the union of:
+  //   a) all countries in the destinations table (legacy)
+  //   b) all region_codes in normalized_plans with active offers
+  //      (covers countries synced by Zendit / eSIMGo that aren't in destinations)
+  // This ensures eSIM Access is queried for all countries we carry plans for.
   const destRows = await db
     .select({ countryCode: destinations.countryCode })
     .from(destinations);
-  const countryCodes = [...new Set(destRows.map(r => r.countryCode.toUpperCase()))];
+  const normCodeRows = await db.execute<{ region_code: string }>(sql`
+    SELECT DISTINCT np.region_code
+    FROM normalized_plans np
+    JOIN provider_offers po ON po.normalized_plan_id = np.id
+    WHERE po.is_active = true
+      AND length(np.region_code) BETWEEN 2 AND 3
+  `);
+  const allCodes = new Set<string>([
+    ...destRows.map(r => r.countryCode.toUpperCase()),
+    ...normCodeRows.rows.map(r => r.region_code.toUpperCase()),
+  ]);
+  const countryCodes = [...allCodes].sort();
 
   // ── eSIMGo (single full-catalogue call) ───────────────────────────────────
   if (esimgo.isConfigured()) {

@@ -1532,6 +1532,34 @@ export async function registerRoutes(
     }
   });
 
+  // ── Normalize / remap plan offers (admin) ─────────────────────────────────
+
+  /** Preview: return counts of what remapExistingOffers would change. */
+  app.get("/api/admin/normalize-plans/stats", requireAdmin, async (_req, res) => {
+    try {
+      const { getRemapStats } = await import("./services/planNormalizer");
+      const stats = await getRemapStats();
+      res.json(stats);
+    } catch (err: any) {
+      console.error("/api/admin/normalize-plans/stats error:", err.message);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  /** Execute the remap job: merge SI-unit duplicates, clean orphans, standardise names. */
+  app.post("/api/admin/normalize-plans/run", requireAdmin, async (_req, res) => {
+    try {
+      const { remapExistingOffers } = await import("./services/planNormalizer");
+      console.log("[normalize-plans] Starting remap job…");
+      const result = await remapExistingOffers();
+      console.log("[normalize-plans] Done:", result);
+      res.json({ success: true, ...result });
+    } catch (err: any) {
+      console.error("/api/admin/normalize-plans/run error:", err.message);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   // ── All provider attempts across orders (admin) ─────────────────────────────
   app.get("/api/admin/routing/attempts", requireAdmin, async (req, res) => {
     try {

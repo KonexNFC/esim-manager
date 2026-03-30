@@ -1458,6 +1458,30 @@ function RoutingTab() {
     queryKey: ["/api/admin/sync/runs"],
   });
 
+  const { data: normStats, refetch: refetchNormStats } = useQuery<any>({
+    queryKey: ["/api/admin/normalize-plans/stats"],
+  });
+
+  const normalizeMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/normalize-plans/run", {}),
+    onSuccess: async (res: any) => {
+      const data = await res.json();
+      toast({
+        title: "Plan mapping normalised",
+        description: [
+          data.orphansDeleted ? `${data.orphansDeleted} orphan plans deleted` : null,
+          data.offersRelinked ? `${data.offersRelinked} offers re-linked` : null,
+          data.plansMergedAndDeleted ? `${data.plansMergedAndDeleted} duplicate plans merged` : null,
+          data.plansRenamedInPlace ? `${data.plansRenamedInPlace} plans renamed` : null,
+          data.namesUpdated ? `${data.namesUpdated} names standardised` : null,
+        ].filter(Boolean).join(" · ") || "Nothing to change.",
+      });
+      refetchNormStats();
+      queryClient.invalidateQueries({ queryKey: ["/api/countries"] });
+    },
+    onError: () => toast({ title: "Normalisation failed", variant: "destructive" }),
+  });
+
   const catalogueSyncMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/admin/providers/sync", {}),
     onSuccess: async (res: any) => {
@@ -1672,6 +1696,48 @@ function RoutingTab() {
                     {p.enabled ? <><Pause className="w-3 h-3 mr-1" />Enabled</> : <><Play className="w-3 h-3 mr-1" />Disabled</>}
                   </Button>
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* ── Normalize Plan Mapping ── */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <GitBranch className="w-5 h-5 text-violet-500" />
+            <h3 className="font-semibold text-base">Normalize Plan Mapping</h3>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => normalizeMutation.mutate()}
+            disabled={normalizeMutation.isPending}
+            data-testid="button-normalize-plans"
+          >
+            {normalizeMutation.isPending
+              ? <RefreshCw className="w-3 h-3 mr-1.5 animate-spin" />
+              : <GitBranch className="w-3 h-3 mr-1.5" />}
+            {normalizeMutation.isPending ? "Running…" : "Run Normalizer"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Merges duplicate normalized plans created by providers using different unit conventions (e.g. eSIMGo stores 1 GB as 1000 MB; Zendit uses 1024 MB).
+          Multiple providers will share the same normalized plan, enabling multi-provider routing. Also standardises all plan names to "Country X GB / Y Days" format and removes orphan plans.
+        </p>
+        {normStats && (
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 text-center text-xs">
+            {[
+              { label: "Orphan plans", value: normStats.orphanPlansFound, color: normStats.orphanPlansFound > 0 ? "text-orange-500" : "text-muted-foreground" },
+              { label: "SI duplicates", value: normStats.siPlansFound, color: normStats.siPlansFound > 0 ? "text-amber-500" : "text-muted-foreground" },
+              { label: "Merges needed", value: normStats.mergesNeeded, color: normStats.mergesNeeded > 0 ? "text-amber-500" : "text-muted-foreground" },
+              { label: "Renames needed", value: normStats.renames, color: normStats.renames > 0 ? "text-blue-500" : "text-muted-foreground" },
+              { label: "Offers affected", value: normStats.offersAffected, color: "text-muted-foreground" },
+              { label: "Plans to remove", value: normStats.plansToDelete, color: normStats.plansToDelete > 0 ? "text-red-500" : "text-muted-foreground" },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="rounded-md bg-muted/40 p-2">
+                <p className={`text-lg font-bold ${color}`}>{value}</p>
+                <p className="text-muted-foreground">{label}</p>
               </div>
             ))}
           </div>

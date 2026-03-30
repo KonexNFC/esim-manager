@@ -19,7 +19,7 @@ const PROVIDERS = [
     metadata: { apiVersion: "v2.5", baseUrl: "https://api.esim-go.com/v2.5", notes: "Primary provider — HMAC auth via X-API-Key" },
   },
   {
-    key: "esimAccess",
+    key: "esimaccess",
     name: "eSIM Access",
     enabled: true,
     priority: 2,
@@ -119,105 +119,105 @@ type OfferDef = { providerKey: string; providerPlanCode: string; wholesalePriceU
 const OFFER_MAP: Record<string, OfferDef[]> = {
   "UK 1 GB / 7 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_1GB_7D_GB_V2",          wholesalePriceUsd: 1.36  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_GB_1GB_7D",               wholesalePriceUsd: 1.50  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_GB_1GB_7D",               wholesalePriceUsd: 1.50  },
     { providerKey: "zendit",     providerPlanCode: "ZENDIT_GB_1GB_7D",            wholesalePriceUsd: 1.45  },
   ],
   "UK 3 GB / 30 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_3GB_30D_GB_V2",          wholesalePriceUsd: 2.83  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_GB_3GB_30D",              wholesalePriceUsd: 3.00  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_GB_3GB_30D",              wholesalePriceUsd: 3.00  },
     { providerKey: "zendit",     providerPlanCode: "ZENDIT_GB_3GB_30D",           wholesalePriceUsd: 2.95  },
   ],
   "UK 5 GB / 30 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_5GB_30D_GB_V2",          wholesalePriceUsd: 4.36  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_GB_5GB_30D",              wholesalePriceUsd: 4.60  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_GB_5GB_30D",              wholesalePriceUsd: 4.60  },
     { providerKey: "zendit",     providerPlanCode: "ZENDIT_GB_5GB_30D",           wholesalePriceUsd: 4.50  },
   ],
   "UK 10 GB / 30 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_10GB_30D_GB_V2",         wholesalePriceUsd: 7.59  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_GB_10GB_30D",             wholesalePriceUsd: 8.00  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_GB_10GB_30D",             wholesalePriceUsd: 8.00  },
     { providerKey: "zendit",     providerPlanCode: "ZENDIT_GB_10GB_30D",          wholesalePriceUsd: 7.80  },
   ],
   "UK Unlimited / 1 Day": [
     { providerKey: "esimgo",     providerPlanCode: "esim_UL_1D_GB_V2",            wholesalePriceUsd: 1.70  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_GB_UNL_1D",              wholesalePriceUsd: 1.85  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_GB_UNL_1D",              wholesalePriceUsd: 1.85  },
   ],
   "UK Unlimited / 7 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_UL_7D_GB_V2",            wholesalePriceUsd: 8.63  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_GB_UNL_7D",              wholesalePriceUsd: 9.00  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_GB_UNL_7D",              wholesalePriceUsd: 9.00  },
   ],
   "USA 3 GB / 15 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_3GB_15D_US_V2",          wholesalePriceUsd: 3.50  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_US_3GB_15D",             wholesalePriceUsd: 3.70  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_US_3GB_15D",             wholesalePriceUsd: 3.70  },
     { providerKey: "zendit",     providerPlanCode: "ZENDIT_US_3GB_15D",           wholesalePriceUsd: 3.60  },
   ],
   "USA 5 GB / 30 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_5GB_30D_US_V2",          wholesalePriceUsd: 5.50  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_US_5GB_30D",             wholesalePriceUsd: 5.80  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_US_5GB_30D",             wholesalePriceUsd: 5.80  },
     { providerKey: "zendit",     providerPlanCode: "ZENDIT_US_5GB_30D",           wholesalePriceUsd: 5.65  },
   ],
   "USA 10 GB / 30 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_10GB_30D_US_V2",         wholesalePriceUsd: 9.50  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_US_10GB_30D",            wholesalePriceUsd: 9.90  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_US_10GB_30D",            wholesalePriceUsd: 9.90  },
   ],
   "France 1 GB / 7 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_1GB_7D_FR_V2",           wholesalePriceUsd: 1.36  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_FR_1GB_7D",              wholesalePriceUsd: 1.50  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_FR_1GB_7D",              wholesalePriceUsd: 1.50  },
   ],
   "France 3 GB / 30 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_3GB_30D_FR_V2",          wholesalePriceUsd: 2.83  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_FR_3GB_30D",             wholesalePriceUsd: 3.00  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_FR_3GB_30D",             wholesalePriceUsd: 3.00  },
   ],
   "France 5 GB / 30 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_5GB_30D_FR_V2",          wholesalePriceUsd: 4.36  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_FR_5GB_30D",             wholesalePriceUsd: 4.60  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_FR_5GB_30D",             wholesalePriceUsd: 4.60  },
   ],
   "Thailand 3 GB / 15 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_3GB_15D_TH_V2",          wholesalePriceUsd: 2.50  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_TH_3GB_15D",            wholesalePriceUsd: 2.70  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_TH_3GB_15D",            wholesalePriceUsd: 2.70  },
   ],
   "Thailand 5 GB / 30 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_5GB_30D_TH_V2",          wholesalePriceUsd: 3.80  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_TH_5GB_30D",            wholesalePriceUsd: 4.00  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_TH_5GB_30D",            wholesalePriceUsd: 4.00  },
   ],
   "UAE 2 GB / 15 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_2GB_15D_AE_V2",          wholesalePriceUsd: 3.00  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_AE_2GB_15D",            wholesalePriceUsd: 3.20  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_AE_2GB_15D",            wholesalePriceUsd: 3.20  },
   ],
   "UAE 5 GB / 30 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_5GB_30D_AE_V2",          wholesalePriceUsd: 5.50  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_AE_5GB_30D",            wholesalePriceUsd: 5.80  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_AE_5GB_30D",            wholesalePriceUsd: 5.80  },
   ],
   "Japan 3 GB / 15 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_3GB_15D_JP_V2",          wholesalePriceUsd: 3.80  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_JP_3GB_15D",            wholesalePriceUsd: 4.00  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_JP_3GB_15D",            wholesalePriceUsd: 4.00  },
   ],
   "Japan 5 GB / 30 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_5GB_30D_JP_V2",          wholesalePriceUsd: 5.80  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_JP_5GB_30D",            wholesalePriceUsd: 6.10  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_JP_5GB_30D",            wholesalePriceUsd: 6.10  },
   ],
   "Nigeria 1 GB / 7 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_1GB_7D_NG_V2",           wholesalePriceUsd: 2.00  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_NG_1GB_7D",             wholesalePriceUsd: 2.20  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_NG_1GB_7D",             wholesalePriceUsd: 2.20  },
   ],
   "Nigeria 3 GB / 30 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_3GB_30D_NG_V2",          wholesalePriceUsd: 4.00  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_NG_3GB_30D",            wholesalePriceUsd: 4.30  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_NG_3GB_30D",            wholesalePriceUsd: 4.30  },
   ],
   "South Africa 1 GB / 7 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_1GB_7D_ZA_V2",           wholesalePriceUsd: 1.80  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_ZA_1GB_7D",             wholesalePriceUsd: 2.00  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_ZA_1GB_7D",             wholesalePriceUsd: 2.00  },
   ],
   "South Africa 3 GB / 30 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_3GB_30D_ZA_V2",          wholesalePriceUsd: 3.60  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_ZA_3GB_30D",            wholesalePriceUsd: 3.80  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_ZA_3GB_30D",            wholesalePriceUsd: 3.80  },
   ],
   "Kenya 1 GB / 7 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_1GB_7D_KE_V2",           wholesalePriceUsd: 2.00  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_KE_1GB_7D",             wholesalePriceUsd: 2.20  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_KE_1GB_7D",             wholesalePriceUsd: 2.20  },
   ],
   "Kenya 3 GB / 30 Days": [
     { providerKey: "esimgo",     providerPlanCode: "esim_3GB_30D_KE_V2",          wholesalePriceUsd: 4.00  },
-    { providerKey: "esimAccess", providerPlanCode: "EA_KE_3GB_30D",            wholesalePriceUsd: 4.30  },
+    { providerKey: "esimaccess", providerPlanCode: "EA_KE_3GB_30D",            wholesalePriceUsd: 4.30  },
   ],
 };
 
