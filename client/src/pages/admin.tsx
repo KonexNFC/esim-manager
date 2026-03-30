@@ -1359,9 +1359,20 @@ function RoutingTab() {
       {/* ── Provider Management ── */}
       <Card className="p-5">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Server className="w-5 h-5 text-violet-500" />
             <h3 className="font-semibold text-base">Provider Management</h3>
+            {providers && providers.filter((p: any) => p.autoPaused).length > 0 ? (
+              <Badge variant="outline" className="border-orange-400 text-orange-600 bg-orange-50 dark:bg-orange-950/30 gap-1">
+                <AlertCircle className="w-3 h-3" />
+                {providers.filter((p: any) => p.autoPaused).length} auto-paused
+              </Badge>
+            ) : providers && providers.length > 0 ? (
+              <Badge variant="outline" className="border-green-400 text-green-600 bg-green-50 dark:bg-green-950/30 gap-1">
+                <CheckCircle2 className="w-3 h-3" />
+                All active
+              </Badge>
+            ) : null}
           </div>
           <div className="flex gap-2">
             <Button
@@ -1388,6 +1399,7 @@ function RoutingTab() {
         </div>
         <p className="text-xs text-muted-foreground mb-4">
           Seed registers the known providers (eSIMGo, eSIM Access, Mock). Sync reads all active plans and creates routing data so the engine can pick the cheapest provider at checkout.
+          The system automatically pauses any provider that drops below 80% success rate or fails 3 times in a row — you'll see an orange row and a <strong>Resume</strong> button here when that happens.
         </p>
         {providersLoading ? (
           <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
