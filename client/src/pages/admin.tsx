@@ -71,7 +71,41 @@ type AdminStats = {
 type AdminSettings = {
   targetMarginPercent: string;
   profitMode?: string;
+  routingMode?: string;
 };
+
+const ROUTING_MODES = [
+  {
+    key: "profit_first",
+    label: "Profit First",
+    description: "Maximise margin per sale",
+    weights: "Margin 50% · Success 20% · Health 10%",
+    color: "text-emerald-600 dark:text-emerald-400",
+    borderActive: "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40",
+    borderInactive: "border-border hover:border-emerald-300",
+    dotColor: "bg-emerald-500",
+  },
+  {
+    key: "balanced",
+    label: "Balanced",
+    description: "Good margin and reliability",
+    weights: "Margin 35% · Success 25% · Health 15%",
+    color: "text-violet-600 dark:text-violet-400",
+    borderActive: "border-violet-500 bg-violet-50 dark:bg-violet-950/40",
+    borderInactive: "border-border hover:border-violet-300",
+    dotColor: "bg-violet-500",
+  },
+  {
+    key: "reliability_first",
+    label: "Reliability First",
+    description: "Minimise fulfilment failures",
+    weights: "Success 35% · Health 20% · Margin 20%",
+    color: "text-blue-600 dark:text-blue-400",
+    borderActive: "border-blue-500 bg-blue-50 dark:bg-blue-950/40",
+    borderInactive: "border-border hover:border-blue-300",
+    dotColor: "bg-blue-500",
+  },
+];
 
 const PROFIT_MODES = [
   {
@@ -1458,8 +1492,64 @@ function RoutingTab() {
     onError: () => toast({ title: "Resume failed", variant: "destructive" }),
   });
 
+  const { data: routingSettings } = useQuery<AdminSettings>({
+    queryKey: ["/api/admin/settings"],
+  });
+
+  const saveRoutingMode = useMutation({
+    mutationFn: (mode: string) => apiRequest("PUT", "/api/admin/settings", { routingMode: mode }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
+      toast({ title: "Routing mode updated" });
+    },
+    onError: () => toast({ title: "Failed to update routing mode", variant: "destructive" }),
+  });
+
+  const activeRoutingMode = routingSettings?.routingMode ?? "balanced";
+
   return (
     <div className="space-y-6">
+
+      {/* ── Routing Mode ── */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <Network className="w-5 h-5 text-violet-500" />
+            <h3 className="font-semibold text-base">Routing Mode</h3>
+            <Badge variant="outline" className="capitalize text-xs">
+              {ROUTING_MODES.find(m => m.key === activeRoutingMode)?.label ?? activeRoutingMode}
+            </Badge>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Controls how the engine weights margin, reliability, and health when selecting a provider at checkout. Only affects plans that go through the blended-score routing path.
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          {ROUTING_MODES.map((mode) => {
+            const isActive = activeRoutingMode === mode.key;
+            return (
+              <button
+                key={mode.key}
+                onClick={() => saveRoutingMode.mutate(mode.key)}
+                disabled={saveRoutingMode.isPending}
+                className={`rounded-lg border-2 p-3 text-left transition-all focus:outline-none ${isActive ? mode.borderActive : mode.borderInactive}`}
+                data-testid={`button-routing-mode-${mode.key}`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className={`text-sm font-bold ${isActive ? mode.color : "text-foreground"}`}>{mode.label}</span>
+                  {isActive && <div className={`w-2 h-2 rounded-full ${mode.dotColor}`} />}
+                </div>
+                <p className={`text-[11px] leading-tight mb-1.5 ${isActive ? "text-foreground/70" : "text-muted-foreground"}`}>
+                  {mode.description}
+                </p>
+                <p className={`text-[10px] font-mono leading-tight ${isActive ? mode.color : "text-muted-foreground/60"}`}>
+                  {mode.weights}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
 
       {/* ── Provider Management ── */}
       <Card className="p-5">

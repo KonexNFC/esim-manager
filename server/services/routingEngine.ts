@@ -58,6 +58,21 @@ async function getMinMarginPercent(): Promise<number> {
   return DEFAULT_MIN_MARGIN_PERCENT;
 }
 
+async function getRoutingMode(): Promise<RoutingMode> {
+  try {
+    const [row] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, "routingMode"));
+    if (row?.value && row.value in ROUTING_MODE_WEIGHTS) {
+      return row.value as RoutingMode;
+    }
+  } catch {
+    // Non-critical — fall back to default
+  }
+  return DEFAULT_ROUTING_MODE;
+}
+
 // ─── Health dampening multipliers ────────────────────────────────────────────
 //
 // Applied to blended_score AFTER it is computed, so poor-health providers are
@@ -82,6 +97,38 @@ export type RoutingStrategy =
   | "highest_margin"
   | "best_health"
   | "blended_score";
+
+// Routing modes govern the blended_score weights used when strategy="blended_score".
+// The mode is set globally in admin settings (key: "routingMode"; default: "balanced").
+//
+//   profit_first     — boosts margin weight; best for maximising revenue per sale
+//   balanced         — equal-ish weights; the default, good general-purpose choice
+//   reliability_first — boosts health + success rate; best for minimising fulfilment failures
+
+export type RoutingMode = "profit_first" | "balanced" | "reliability_first";
+
+export interface BlendWeights {
+  margin: number;
+  success: number;
+  destination: number;
+  health: number;
+  latency: number;
+}
+
+// Weights must sum to 1.0 for each mode.
+export const ROUTING_MODE_WEIGHTS: Record<RoutingMode, BlendWeights> = {
+  profit_first: {
+    margin: 0.50, success: 0.20, destination: 0.10, health: 0.10, latency: 0.10,
+  },
+  balanced: {
+    margin: 0.35, success: 0.25, destination: 0.15, health: 0.15, latency: 0.10,
+  },
+  reliability_first: {
+    margin: 0.20, success: 0.35, destination: 0.20, health: 0.20, latency: 0.05,
+  },
+};
+
+const DEFAULT_ROUTING_MODE: RoutingMode = "balanced";
 
 export interface ProviderScores {
   cost_score: number;
@@ -210,6 +257,7 @@ async function scoreCandidates(
   retailPriceUsd: number,
   regionCode: string,
   minMarginPercent: number,
+  weights: BlendWeights,
 ): Promise<ScoredCandidate[]> {
   const enrichedOffers = await getOffersForNormalizedPlan(normalizedPlanId);
   if (enrichedOffers.length === 0) return [];
@@ -260,13 +308,13 @@ async function scoreCandidates(
     const latency_s = latencyScore(c.providerPriority);
     const { success_score, destination_score, dataOrdersCount } = destScoresPerProvider[i];
 
-    // blended: margin 35% · success 25% · destination 15% · health 15% · latency 10%
+    // blended: weights determined by the active routing mode (profit_first / balanced / reliability_first)
     const rawBlended =
-      0.35 * margin_score +
-      0.25 * success_score +
-      0.15 * destination_score +
-      0.15 * health_score +
-      0.10 * latency_s;
+      weights.margin      * margin_score +
+      weights.success     * success_score +
+      weights.destination * destination_score +
+      weights.health      * health_score +
+      weights.latency     * latency_s;
 
     // Health dampening: multiply blended by a factor so degraded/down providers
     // are pushed down the ranking even when their margin is excellent.
@@ -545,8 +593,12 @@ export async function selectBestProviderForPlan(
     throw new Error(`[routingEngine] Normalized plan not found: ${normalizedPlanId}`);
   }
 
-  // 2. Load margin protection threshold from settings
-  const minMarginPercent = await getMinMarginPercent();
+  // 2. Load routing config from settings (both run in parallel — no dependency between them)
+  const [minMarginPercent, routingMode] = await Promise.all([
+    getMinMarginPercent(),
+    getRoutingMode(),
+  ]);
+  const weights = ROUTING_MODE_WEIGHTS[routingMode];
 
   // 3. Score all enabled, active candidates (destination stats + health dampening applied)
   const candidates = await scoreCandidates(
@@ -554,6 +606,7 @@ export async function selectBestProviderForPlan(
     plan.retailPriceUsd,
     plan.regionCode,
     minMarginPercent,
+    weights,
   );
   if (candidates.length === 0) {
     throw new Error(
@@ -668,7 +721,7 @@ export async function selectBestProviderForPlan(
 
   console.log(
     `[routingEngine] Plan "${plan.name}" → ${winner.providerKey}/${winner.providerPlanCode}` +
-      ` via ${strategy} | confidence=${confScore} (${confLabel})` +
+      ` via ${strategy} [mode=${routingMode}] | confidence=${confScore} (${confLabel})` +
       ` | fallbacks=${fallbackQuality.fallbackCount} (coverage=${fallbackQuality.coverageScore}, avgHealth=${fallbackQuality.avgFallbackHealthScore})` +
       (fallbackQuality.lastResortCount > 0 ? ` [${fallbackQuality.lastResortCount} last-resort]` : "") +
       ` | ${decisionReason}`,

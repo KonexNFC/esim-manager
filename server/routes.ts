@@ -1094,6 +1094,16 @@ export async function registerRoutes(
         }
       }
 
+      // Handle routing mode
+      if (req.body.routingMode !== undefined) {
+        const validRoutingModes = ['profit_first', 'balanced', 'reliability_first'];
+        const mode = String(req.body.routingMode);
+        if (!validRoutingModes.includes(mode)) {
+          return res.status(400).json({ message: "Invalid routingMode. Must be profit_first, balanced, or reliability_first" });
+        }
+        await upsertSetting('routingMode', mode);
+      }
+
       // Handle manual targetMarginPercent (also sets mode to custom)
       if (req.body.targetMarginPercent !== undefined) {
         const val = parseFloat(String(req.body.targetMarginPercent));
