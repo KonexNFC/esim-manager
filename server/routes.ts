@@ -1379,6 +1379,70 @@ export async function registerRoutes(
     }
   });
 
+  // ── Admin: Routing transparency for an order ────────────────────────────────
+  // Returns the structured routing decision details for a specific order so the
+  // admin can see exactly why a provider was selected and what the key metrics were.
+
+  app.get("/api/admin/orders/:id/routing", requireAdmin, async (req, res) => {
+    try {
+      const { routingDecisions } = await import("@shared/schema");
+      const order = await storage.getOrder(req.params.id);
+      if (!order) return res.status(404).json({ message: "Order not found" });
+      if (!order.routingDecisionId) {
+        return res.status(404).json({ message: "No routing decision recorded for this order" });
+      }
+
+      const [decision] = await db
+        .select()
+        .from(routingDecisions)
+        .where(eq(routingDecisions.id, order.routingDecisionId));
+
+      if (!decision) {
+        return res.status(404).json({ message: "Routing decision record not found" });
+      }
+
+      // Extract the winner's scores from the full scores JSONB map
+      const scoresMap = decision.scores as Record<string, {
+        margin_score: number; health_score: number; success_score: number;
+        destination_score: number; blended_score: number; cost_score: number; latency_score: number;
+      }>;
+      const winnerScores = scoresMap[decision.selectedProviderKey] ?? null;
+
+      // Summarise fallback chain
+      const chain = Array.isArray(decision.fallbackChain) ? (decision.fallbackChain as any[]) : [];
+      const fallbackProviders = chain.slice(1).map((f: any) => ({
+        providerKey: f.providerKey,
+        rank: f.rank,
+        isLastResort: f.isLastResort ?? false,
+      }));
+
+      res.json({
+        decisionId: decision.id,
+        selectedProviderKey: decision.selectedProviderKey,
+        strategy: decision.strategy,
+        // Key metrics for the selected provider
+        marginPercent: winnerScores?.margin_score ?? null,
+        healthScore: winnerScores?.health_score ?? null,
+        destinationSuccessRate: winnerScores?.success_score ?? null,
+        destinationScore: winnerScores?.destination_score ?? null,
+        blendedScore: winnerScores?.blended_score ?? null,
+        // Confidence
+        confidenceScore: decision.confidenceScore,
+        confidenceLabel: decision.confidenceLabel,
+        // Human narrative
+        decisionReason: decision.decisionReason,
+        // Fallback summary
+        fallbackCount: fallbackProviders.length,
+        fallbackProviders,
+        // Timestamps
+        decidedAt: decision.createdAt,
+      });
+    } catch (err: any) {
+      console.error("/api/admin/orders/:id/routing error:", err.message);
+      res.status(500).json({ message: "Failed to fetch routing details" });
+    }
+  });
+
   // ── Admin: Manual Re-fulfillment ─────────────────────────────────────────────
   // Re-trigger fulfillment for a failed or stuck order without issuing a refund.
 

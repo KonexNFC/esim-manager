@@ -902,6 +902,32 @@ function OrdersTab() {
     },
   });
 
+  // Routing transparency — lazy fetch per order on expand
+  const [routingExpanded, setRoutingExpanded] = useState<Record<string, boolean>>({});
+  const [routingData, setRoutingData] = useState<Record<string, any>>({});
+  const [routingLoading, setRoutingLoading] = useState<Record<string, boolean>>({});
+
+  const toggleRouting = async (orderId: string) => {
+    const next = !routingExpanded[orderId];
+    setRoutingExpanded(p => ({ ...p, [orderId]: next }));
+    if (next && !routingData[orderId]) {
+      setRoutingLoading(p => ({ ...p, [orderId]: true }));
+      try {
+        const res = await fetch(`/api/admin/orders/${orderId}/routing`);
+        if (res.ok) {
+          const data = await res.json();
+          setRoutingData(p => ({ ...p, [orderId]: data }));
+        } else {
+          setRoutingData(p => ({ ...p, [orderId]: null }));
+        }
+      } catch {
+        setRoutingData(p => ({ ...p, [orderId]: null }));
+      } finally {
+        setRoutingLoading(p => ({ ...p, [orderId]: false }));
+      }
+    }
+  };
+
   const [refulfillPending, setRefulfillPending] = useState<Record<string, boolean>>({});
   const refulfillOrder = async (orderId: string) => {
     setRefulfillPending(p => ({ ...p, [orderId]: true }));
@@ -1070,6 +1096,85 @@ function OrdersTab() {
                   </>
                 )}
               </div>
+
+              {/* Routing transparency — only shown for orders processed by the routing engine */}
+              {(order as any).routingDecisionId && (
+                <div className="mt-2 pt-2 border-t border-dashed border-border">
+                  <button
+                    onClick={() => toggleRouting(order.id)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    data-testid={`button-routing-toggle-${order.id}`}
+                  >
+                    <Network className="w-3 h-3" />
+                    <span>Routing decision</span>
+                    <ChevronRight className={`w-3 h-3 transition-transform ${routingExpanded[order.id] ? "rotate-90" : ""}`} />
+                  </button>
+                  {routingExpanded[order.id] && (
+                    <div className="mt-2">
+                      {routingLoading[order.id] ? (
+                        <div className="flex gap-3">
+                          <Skeleton className="h-3 w-32" />
+                          <Skeleton className="h-3 w-24" />
+                          <Skeleton className="h-3 w-28" />
+                        </div>
+                      ) : routingData[order.id] === null ? (
+                        <p className="text-xs text-muted-foreground">Routing details not available</p>
+                      ) : routingData[order.id] ? (
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap gap-2">
+                            {routingData[order.id].marginPercent != null && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs" data-testid={`badge-routing-margin-${order.id}`}>
+                                <TrendingUp className="w-3 h-3 text-violet-500" />
+                                Margin {routingData[order.id].marginPercent}%
+                              </span>
+                            )}
+                            {routingData[order.id].healthScore != null && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs" data-testid={`badge-routing-health-${order.id}`}>
+                                <CheckCircle2 className={`w-3 h-3 ${
+                                  routingData[order.id].healthScore >= 90 ? "text-emerald-500"
+                                  : routingData[order.id].healthScore >= 60 ? "text-yellow-500"
+                                  : "text-red-500"
+                                }`} />
+                                Health {routingData[order.id].healthScore}/100
+                              </span>
+                            )}
+                            {routingData[order.id].destinationSuccessRate != null && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs" data-testid={`badge-routing-dest-${order.id}`}>
+                                <Globe className="w-3 h-3 text-blue-500" />
+                                Dest. success {routingData[order.id].destinationSuccessRate}%
+                              </span>
+                            )}
+                            {routingData[order.id].confidenceScore != null && (
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
+                                routingData[order.id].confidenceLabel === "high"
+                                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                                  : routingData[order.id].confidenceLabel === "medium"
+                                    ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+                                    : "bg-red-500/10 text-red-700 dark:text-red-400"
+                              }`} data-testid={`badge-routing-confidence-${order.id}`}>
+                                <HelpCircle className="w-3 h-3" />
+                                Confidence {routingData[order.id].confidenceScore} ({routingData[order.id].confidenceLabel})
+                              </span>
+                            )}
+                            {routingData[order.id].fallbackCount > 0 && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs">
+                                <GitBranch className="w-3 h-3 text-muted-foreground" />
+                                {routingData[order.id].fallbackCount} fallback{routingData[order.id].fallbackCount !== 1 ? "s" : ""}{" "}
+                                ({routingData[order.id].fallbackProviders?.map((f: any) => f.providerKey).join(", ")})
+                              </span>
+                            )}
+                          </div>
+                          {routingData[order.id].decisionReason && (
+                            <p className="text-xs text-muted-foreground italic leading-relaxed" data-testid={`text-routing-reason-${order.id}`}>
+                              "{routingData[order.id].decisionReason}"
+                            </p>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
               <Select

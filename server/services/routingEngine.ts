@@ -392,51 +392,88 @@ function calculateConfidence(winner: ScoredCandidate): { score: number; label: C
   return { score, label: confidenceLabel(score) };
 }
 
-// ─── Human-readable reason builder ───────────────────────────────────────────
+// ─── Narrative reason builder ────────────────────────────────────────────────
+//
+// Produces a human-readable sentence explaining why this provider was selected,
+// e.g. "Selected esimgo due to highest margin (75%), strong DE performance, and healthy status"
+//
+// The technical score numbers are still preserved in the DB via `scores` JSONB;
+// this narrative is stored as `decisionReason` for operator transparency.
+
+function healthLabel(healthScore: number): string {
+  if (healthScore >= 90) return "healthy status";
+  if (healthScore >= 60) return "degraded health";
+  return "poor health";
+}
+
+/** Pick the top-3 human strengths for the winner, sorted by score value descending. */
+function topStrengths(
+  scores: ProviderScores,
+  regionCode: string | null | undefined,
+  strategy: RoutingStrategy,
+): string[] {
+  const candidates: Array<{ score: number; text: string }> = [
+    { score: scores.margin_score,      text: `strong margin (${scores.margin_score}%)` },
+    { score: scores.success_score,     text: `${scores.success_score}% fulfilment success rate` },
+    { score: scores.health_score,      text: healthLabel(scores.health_score) },
+    { score: scores.destination_score, text: regionCode
+        ? `strong ${regionCode} performance (${scores.destination_score}/100)`
+        : `strong destination performance (${scores.destination_score}/100)` },
+  ];
+
+  // For strategy-specific selection, boost the lead factor to the front
+  if (strategy === "cheapest_cost")  candidates.sort((a, b) => (b.score === scores.cost_score ? 1 : 0) - (a.score === scores.cost_score ? 1 : 0));
+  else if (strategy === "highest_margin") candidates.sort((a, b) => (b.score === scores.margin_score ? 1 : -1));
+  else if (strategy === "best_health")    candidates.sort((a, b) => (b.score === scores.health_score ? 1 : -1));
+  else candidates.sort((a, b) => b.score - a.score); // blended — highest raw score first
+
+  const top = candidates.slice(0, 3).map(c => c.text);
+  if (top.length < 2) return top;
+  const last = top.pop()!;
+  return [...top, `and ${last}`];
+}
 
 function buildReason(
   strategy: RoutingStrategy,
   winner: ScoredCandidate,
   allCandidates: ScoredCandidate[],
+  regionCode?: string | null,
 ): string {
   const { scores, providerKey, wholesalePriceUsd } = winner;
+  const runner = allCandidates[1];
 
   switch (strategy) {
-    case "cheapest_cost":
-      return (
-        `Selected "${providerKey}" via cheapest_cost strategy ` +
-        `(wholesale $${wholesalePriceUsd.toFixed(4)}, cost_score=${scores.cost_score}, ` +
-        `margin=${scores.margin_score}, success=${scores.success_score}).`
-      );
+    case "cheapest_cost": {
+      const gapStr = runner
+        ? ` (saving $${(runner.wholesalePriceUsd - wholesalePriceUsd).toFixed(2)} vs ${runner.providerKey})`
+        : "";
+      const strengths = topStrengths(scores, regionCode, strategy);
+      return `Selected ${providerKey} due to lowest wholesale cost ($${wholesalePriceUsd.toFixed(2)})${gapStr}, ${strengths.join(", ")}`;
+    }
 
-    case "highest_margin":
-      return (
-        `Selected "${providerKey}" via highest_margin strategy ` +
-        `(margin_score=${scores.margin_score}, wholesale $${wholesalePriceUsd.toFixed(4)}, ` +
-        `success=${scores.success_score}, destination=${scores.destination_score}).`
-      );
+    case "highest_margin": {
+      const gapStr = runner
+        ? ` (+${(scores.margin_score - runner.scores.margin_score).toFixed(1)} pts over ${runner.providerKey})`
+        : "";
+      const strengths = topStrengths(scores, regionCode, strategy).slice(1); // skip margin — already in headline
+      return `Selected ${providerKey} due to highest margin (${scores.margin_score}%)${gapStr}, ${strengths.join(", ")}`;
+    }
 
-    case "best_health":
-      return (
-        `Selected "${providerKey}" via best_health strategy ` +
-        `(health_score=${scores.health_score}, success=${scores.success_score}, ` +
-        `destination=${scores.destination_score}, latency=${scores.latency_score}).`
-      );
+    case "best_health": {
+      const gapStr = runner
+        ? ` (+${(scores.health_score - runner.scores.health_score).toFixed(0)} pts over ${runner.providerKey})`
+        : "";
+      const strengths = topStrengths(scores, regionCode, strategy).slice(1);
+      return `Selected ${providerKey} due to best health score (${scores.health_score}/100)${gapStr}, ${strengths.join(", ")}`;
+    }
 
     case "blended_score":
     default: {
-      const [first, second] = allCandidates;
-      const gap =
-        second
-          ? ` (+${(first.scores.blended_score - second.scores.blended_score).toFixed(1)} over next)`
-          : "";
-      return (
-        `Selected "${providerKey}" via blended_score strategy ` +
-        `(blended=${scores.blended_score}${gap}; ` +
-        `margin=${scores.margin_score}, success=${scores.success_score}, ` +
-        `destination=${scores.destination_score}, health=${scores.health_score}, ` +
-        `latency=${scores.latency_score}).`
-      );
+      const gapStr = runner
+        ? ` (+${(scores.blended_score - runner.scores.blended_score).toFixed(1)} blended score over ${runner.providerKey})`
+        : "";
+      const strengths = topStrengths(scores, regionCode, strategy);
+      return `Selected ${providerKey}${gapStr} due to ${strengths.join(", ")}`;
     }
   }
 }
@@ -598,7 +635,7 @@ export async function selectBestProviderForPlan(
 
   // 7. Winner is rank-1 (unchanged from before — fallback chain extension never affects this)
   const winner = ranked[0];
-  const decisionReason = buildReason(strategy, winner, ranked);
+  const decisionReason = buildReason(strategy, winner, ranked, plan.regionCode);
 
   // 8. Build scores map (all candidates incl. below-threshold, for full audit trail)
   const scoresMap: Record<string, ProviderScores> = {};
