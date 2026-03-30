@@ -252,10 +252,10 @@ export async function syncAllProviders(
 
   // Collect country codes for batch providers (eSIM Access)
   const destRows = await db
-    .selectDistinct({ countryCode: destinations.countryCode })
+    .select({ countryCode: destinations.countryCode })
     .from(destinations)
     .where(eq(destinations.isActive, true));
-  const countryCodes = destRows.map(r => r.countryCode.toUpperCase());
+  const countryCodes = [...new Set(destRows.map(r => r.countryCode.toUpperCase()))];
 
   // ── eSIMGo (single full-catalogue call) ───────────────────────────────────
   if (esimgo.isConfigured()) {
@@ -361,7 +361,7 @@ export function startProviderSyncScheduler(): void {
   setTimeout(async () => {
     console.log("[providerSync] Running initial scheduled sync...");
     await syncAllProviders("auto").catch(err =>
-      console.error("[providerSync] Initial sync failed:", err.message),
+      console.error("[providerSync] Initial sync failed:", err.message, err.stack),
     );
     setInterval(async () => {
       console.log("[providerSync] Running 6-hour scheduled sync...");
