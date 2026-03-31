@@ -69,6 +69,22 @@ export interface FallbackEntry {
   w: number;            // wholesalePriceUsd
 }
 
+/**
+ * Stripe metadata values are capped at 500 characters.
+ * Trim the fallback chain to however many entries fit within that limit.
+ * The winner (index 0) is always kept; extras are dropped from the tail.
+ */
+function chainJson(chain: FallbackEntry[]): string {
+  const LIMIT = 490; // leave a small buffer below the 500-char cap
+  let trimmed = chain.slice();
+  let json = JSON.stringify(trimmed);
+  while (json.length > LIMIT && trimmed.length > 1) {
+    trimmed = trimmed.slice(0, -1);
+    json = JSON.stringify(trimmed);
+  }
+  return json;
+}
+
 async function findNormalizedPlanForParams(
   countryCode: string,
   dataAmountGb: number,
@@ -165,7 +181,7 @@ export async function createPlanCheckoutSession(
       routingMetadata.routingDecisionId = routing.decisionId;
       routingMetadata.selectedProviderKey = routing.selectedProviderKey;
       routingMetadata.selectedProviderPlanCode = routing.selectedProviderPlanCode;
-      routingMetadata.fallbackChainJson = JSON.stringify(compactChain);
+      routingMetadata.fallbackChainJson = chainJson(compactChain);
       routingMetadata.wholesaleCostUsd = winner.wholesalePriceUsd.toFixed(4);
       routingMetadata.marginPercent = pricing.marginPercent.toFixed(2);
       routingMetadata.confidenceScore = String(routing.confidenceScore);
@@ -339,7 +355,7 @@ export async function createCountryPlanCheckoutSession(
       routingDecisionId: routing.decisionId,
       selectedProviderKey: routing.selectedProviderKey,
       selectedProviderPlanCode: routing.selectedProviderPlanCode,
-      fallbackChainJson: JSON.stringify(compactChain),
+      fallbackChainJson: chainJson(compactChain),
       wholesaleCostUsd: winner.wholesalePriceUsd.toFixed(4),
       marginPercent: pricing.marginPercent.toFixed(2),
       confidenceScore: String(routing.confidenceScore),
