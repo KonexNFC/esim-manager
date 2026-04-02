@@ -105,6 +105,15 @@ async function sendEmail(to: string, subject: string, html: string): Promise<voi
 
 // ─── Shared template helpers ──────────────────────────────────────────────────
 
+function esc(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function layout(content: string, title: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -178,11 +187,12 @@ function callToAction(href: string, text: string): string {
 // ─── eSIM Ready Email ─────────────────────────────────────────────────────────
 
 export async function sendEsimReadyEmail(data: EsimReadyData): Promise<void> {
-  const displayName = data.name ? ` ${data.name.split(' ')[0]}` : '';
+  const displayName = data.name ? ` ${esc(data.name.split(' ')[0])}` : '';
+  const destination = esc(data.destination);
 
   const content = `
     ${heading(`Your eSIM is ready to install! 🎉`)}
-    ${subheading(`Hi${displayName}, your GlobeSIM for <strong>${data.destination}</strong> has been activated and is ready to use.`)}
+    ${subheading(`Hi${displayName}, your GlobeSIM for <strong>${destination}</strong> has been activated and is ready to use.`)}
 
     <!-- QR Code -->
     <div style="text-align:center;margin:28px 0;">
@@ -194,8 +204,8 @@ export async function sendEsimReadyEmail(data: EsimReadyData): Promise<void> {
         height="220"
         style="border:4px solid #f0f0f0;border-radius:12px;display:block;margin:0 auto;"
       />
-      ${data.iccid ? `<p style="margin:12px 0 0;font-size:12px;color:#888;">ICCID: <strong style="font-family:monospace;color:#111;">${data.iccid}</strong></p>` : ''}
-      ${data.manualCode ? `<p style="margin:6px 0 0;font-size:11px;color:#aaa;">Manual code: <span style="font-family:monospace;">${data.manualCode}</span></p>` : ''}
+      ${data.iccid ? `<p style="margin:12px 0 0;font-size:12px;color:#888;">ICCID: <strong style="font-family:monospace;color:#111;">${esc(data.iccid)}</strong></p>` : ''}
+      ${data.manualCode ? `<p style="margin:6px 0 0;font-size:11px;color:#aaa;">Manual code: <span style="font-family:monospace;">${esc(data.manualCode)}</span></p>` : ''}
     </div>
 
     <!-- Divider -->
@@ -255,8 +265,8 @@ export async function sendEsimReadyEmail(data: EsimReadyData): Promise<void> {
 // ─── Purchase Confirmation ────────────────────────────────────────────────────
 
 export async function sendPurchaseConfirmation(data: PurchaseConfirmationData): Promise<void> {
-  const displayName = data.name ? ` ${data.name.split(' ')[0]}` : '';
-  const priceFormatted = `${data.currency} ${data.totalPrice.toFixed(2)}`;
+  const displayName = data.name ? ` ${esc(data.name.split(' ')[0])}` : '';
+  const priceFormatted = `${esc(data.currency)} ${data.totalPrice.toFixed(2)}`;
 
   const content = `
     ${heading('Order confirmed! ✅')}
@@ -264,10 +274,10 @@ export async function sendPurchaseConfirmation(data: PurchaseConfirmationData): 
 
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
       ${infoRow('Order ID', `#${data.orderId.slice(0, 8).toUpperCase()}`)}
-      ${infoRow('Plan', data.planName)}
-      ${infoRow('Destination', data.destination)}
-      ${infoRow('Data', data.dataAmount)}
-      ${infoRow('Validity', data.validity)}
+      ${infoRow('Plan', esc(data.planName))}
+      ${infoRow('Destination', esc(data.destination))}
+      ${infoRow('Data', esc(data.dataAmount))}
+      ${infoRow('Validity', esc(data.validity))}
       ${infoRow('Total charged', priceFormatted)}
     </table>
 
@@ -289,7 +299,7 @@ export async function sendPurchaseConfirmation(data: PurchaseConfirmationData): 
 // ─── Fulfillment Failed ───────────────────────────────────────────────────────
 
 export async function sendFulfillmentFailedEmail(data: FulfillmentFailedData): Promise<void> {
-  const displayName = data.name ? ` ${data.name.split(' ')[0]}` : '';
+  const displayName = data.name ? ` ${esc(data.name.split(' ')[0])}` : '';
 
   const content = `
     ${heading('Action required — eSIM activation issue')}
@@ -297,7 +307,7 @@ export async function sendFulfillmentFailedEmail(data: FulfillmentFailedData): P
 
     <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-bottom:24px;">
       <p style="margin:0;font-size:14px;color:#991b1b;font-weight:600;">What happened?</p>
-      <p style="margin:8px 0 0;font-size:13px;color:#7f1d1d;">${data.reason ?? 'A provider network error prevented your eSIM from being provisioned.'}</p>
+      <p style="margin:8px 0 0;font-size:13px;color:#7f1d1d;">${data.reason ? esc(data.reason) : 'A provider network error prevented your eSIM from being provisioned.'}</p>
     </div>
 
     <p style="font-size:14px;color:#444;line-height:1.7;">
@@ -325,8 +335,8 @@ export async function sendFulfillmentFailedEmail(data: FulfillmentFailedData): P
 // ─── Top-up Confirmation ─────────────────────────────────────────────────────
 
 export async function sendTopupConfirmation(data: TopupConfirmationData): Promise<void> {
-  const displayName = data.name ? ` ${data.name.split(' ')[0]}` : '';
-  const priceFormatted = `${data.currency} ${data.price.toFixed(2)}`;
+  const displayName = data.name ? ` ${esc(data.name.split(' ')[0])}` : '';
+  const priceFormatted = `${esc(data.currency)} ${data.price.toFixed(2)}`;
 
   const content = `
     ${heading('Top-up confirmed! 🚀')}
@@ -334,7 +344,7 @@ export async function sendTopupConfirmation(data: TopupConfirmationData): Promis
 
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
       ${infoRow('Order ID', `#${data.orderId.slice(0, 8).toUpperCase()}`)}
-      ${infoRow('Top-up', data.topupName)}
+      ${infoRow('Top-up', esc(data.topupName))}
       ${infoRow('Amount charged', priceFormatted)}
     </table>
 
@@ -351,13 +361,13 @@ export async function sendTopupConfirmation(data: TopupConfirmationData): Promis
 // ─── Order Status Update ──────────────────────────────────────────────────────
 
 export async function sendOrderStatusUpdate(data: OrderStatusUpdateData): Promise<void> {
-  const displayName = data.name ? ` ${data.name.split(' ')[0]}` : '';
+  const displayName = data.name ? ` ${esc(data.name.split(' ')[0])}` : '';
 
   const content = `
-    ${heading(`Order update — ${data.status}`)}
+    ${heading(`Order update — ${esc(data.status)}`)}
     ${subheading(`Hi${displayName}, here's an update on your order #${data.orderId.slice(0, 8).toUpperCase()}.`)}
 
-    ${data.message ? `<p style="font-size:14px;color:#444;line-height:1.7;">${data.message}</p>` : ''}
+    ${data.message ? `<p style="font-size:14px;color:#444;line-height:1.7;">${esc(data.message)}</p>` : ''}
 
     ${callToAction(`${BASE_URL}/dashboard`, 'View Order →')}
   `;
