@@ -1,8 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { useQuery } from "@tanstack/react-query";
 import {
   Accordion,
@@ -28,14 +26,13 @@ import {
   Wifi, Star, Lock, CheckCircle2,
   Signal, Quote, Users, Radio,
   QrCode, MapPin, Banknote, ShieldCheck,
-  Package, TrendingUp, Timer, Gift, PhoneCall
+  Package, TrendingUp, Timer, Gift, PhoneCall, ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
 import { SiVisa, SiMastercard, SiApplepay, SiStripe } from "react-icons/si";
 import type { Destination, Plan } from "@shared/schema";
 import { CountryCombobox } from "@/components/country-combobox";
 
-// Find the cheapest plan that best matches size + duration selections
 async function goToCheckout(
   navigate: (path: string) => void,
   destId: string,
@@ -47,10 +44,7 @@ async function goToCheckout(
     const plans: Plan[] = await res.json();
     const active = plans.filter((p) => p.planStatus !== "inactive");
     if (!active.length) { navigate(`/destinations/${destId}`); return; }
-
     let pool = [...active];
-
-    // Match data size
     if (size && size !== "Unlimited") {
       const targetGb = parseFloat(size);
       const bySize = pool.filter((p) => {
@@ -62,8 +56,6 @@ async function goToCheckout(
       const unl = pool.filter((p) => /unlimited/i.test(p.dataAmount));
       if (unl.length) pool = unl;
     }
-
-    // Match duration
     if (duration) {
       const targetDays = parseInt(duration);
       const byDur = pool.filter((p) => {
@@ -72,8 +64,6 @@ async function goToCheckout(
       });
       if (byDur.length) pool = byDur;
     }
-
-    // Pick cheapest match
     const best = pool.reduce((a, b) => (b.price < a.price ? b : a), pool[0]);
     navigate(`/checkout/${best.id}`);
   } catch {
@@ -96,17 +86,6 @@ const flagStrip = [
   { code: "AU", label: "Australia", flag: "🇦🇺" },
 ];
 
-const carriers = [
-  { name: "Vodafone",   color: "#FF0000" },
-  { name: "T-Mobile",   color: "#E20074" },
-  { name: "Orange",     color: "#FF7900" },
-  { name: "Airtel",     color: "#FF0000" },
-  { name: "Etisalat",   color: "#00AF64" },
-  { name: "SingTel",    color: "#E30033" },
-  { name: "NTT Docomo", color: "#E40000" },
-  { name: "Telstra",    color: "#1F7FFF" },
-];
-
 const mockPlans = [
   { dest: "United Kingdom", flag: "🇬🇧", data: "10 GB", days: 30, price: "$18" },
   { dest: "Europe",         flag: "🇪🇺", data: "5 GB",  days: 15, price: "$14" },
@@ -114,7 +93,7 @@ const mockPlans = [
   { dest: "Nigeria",        flag: "🇳🇬", data: "5 GB",  days: 30, price: "$16" },
 ];
 
-const planSizes = ["1 GB", "3 GB", "5 GB", "10 GB", "Unlimited"];
+const planSizes     = ["1 GB", "3 GB", "5 GB", "10 GB", "Unlimited"];
 const planDurations = ["1 Day", "3 Days", "5 Days", "7 Days", "15 Days", "30 Days"];
 
 // ─────────────────────────────────────────────
@@ -122,51 +101,67 @@ const planDurations = ["1 Day", "3 Days", "5 Days", "7 Days", "15 Days", "30 Day
 // ─────────────────────────────────────────────
 function HeroSection() {
   const [, navigate] = useLocation();
-  const [heroCode, setHeroCode] = useState<string>("");
-  const [heroSize, setHeroSize] = useState<string>("");
+  const [heroCode, setHeroCode]         = useState<string>("");
+  const [heroSize, setHeroSize]         = useState<string>("");
   const [heroDuration, setHeroDuration] = useState<string>("");
 
   const handleHeroFind = () => {
-    if (!heroCode || heroCode === "any") {
-      navigate("/destinations");
-    } else {
-      navigate(`/destinations/${heroCode}`);
-    }
+    if (!heroCode || heroCode === "any") navigate("/destinations");
+    else navigate(`/destinations/${heroCode}`);
   };
 
   return (
-    <section className="relative overflow-hidden">
+    <section className="relative overflow-hidden min-h-[92vh] flex flex-col">
+      {/* Background */}
       <div className="absolute inset-0">
-        <img src="/images/hero-bg.png" alt="" className="w-full h-full object-cover" style={{ filter: "brightness(0.55) blur(1px)", transform: "scale(1.02)" }} />
-        <div className="absolute inset-0 bg-gradient-to-br from-black/85 via-black/75 to-black/90" />
+        <img
+          src="/images/hero-bg.png"
+          alt=""
+          className="w-full h-full object-cover"
+          style={{ filter: "brightness(0.4) saturate(1.2)", transform: "scale(1.04)" }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-black/90 via-black/70 to-violet-950/80" />
+        {/* Subtle purple glow in upper-right */}
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full opacity-20"
+          style={{ background: "radial-gradient(circle, #7c3aed 0%, transparent 70%)" }} />
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-24 pb-0 sm:pt-32 lg:pt-40">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center pb-14 sm:pb-20">
+      <div className="relative flex-1 max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-0 sm:pt-28 lg:pt-36 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center pb-16 sm:pb-20">
 
           {/* Left: Copy */}
           <div>
+            {/* Pill badge */}
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-white/70 text-xs font-semibold uppercase tracking-widest mb-6 backdrop-blur-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              190+ countries · Instant activation
+            </div>
+
             <h1
-              className="text-5xl sm:text-6xl lg:text-7xl font-bold text-white tracking-tight leading-[1.05]"
+              className="font-display text-5xl sm:text-6xl lg:text-[4.5rem] xl:text-[5.5rem] font-bold text-white leading-[1.0] tracking-tight mb-6"
               data-testid="text-hero-title"
             >
               Land Anywhere.
               <br />
-              Get Data in
+              <span className="text-gradient-bright">Get Data in</span>
               <br />
-              <span className="bg-gradient-to-r from-violet-400 via-purple-400 to-blue-400 bg-clip-text text-transparent">60 Seconds.</span>
+              60 Seconds.
             </h1>
 
             <p
-              className="mt-6 text-lg sm:text-xl text-white/65 max-w-lg leading-relaxed"
+              className="text-white/60 text-lg sm:text-xl max-w-lg leading-relaxed mb-8"
               data-testid="text-hero-subtitle"
             >
-              No roaming fees. No SIM cards. Instant global connectivity across 190+ countries.
+              No roaming fees. No SIM cards. Instant global connectivity the moment you touch down.
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3 mb-8">
               <Link href="/destinations">
-                <Button size="lg" className="px-7 text-base font-semibold shadow-lg" data-testid="button-get-connected">
+                <Button
+                  size="lg"
+                  className="h-12 px-7 text-base font-bold shadow-xl shadow-primary/30 bg-primary hover:bg-primary/90"
+                  data-testid="button-get-connected"
+                >
                   Get Connected Now
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
@@ -175,7 +170,7 @@ function HeroSection() {
                 <Button
                   size="lg"
                   variant="outline"
-                  className="bg-white/8 backdrop-blur-sm text-white border-white/20 text-base"
+                  className="h-12 bg-white/8 backdrop-blur-sm text-white border-white/20 hover:bg-white/15 hover:text-white text-base font-semibold"
                   data-testid="button-view-plans"
                 >
                   View Plans
@@ -184,25 +179,25 @@ function HeroSection() {
             </div>
 
             {/* Trust bullets */}
-            <ul className="mt-6 space-y-2" data-testid="trust-bullets">
+            <div className="flex flex-col gap-2" data-testid="trust-bullets">
               {[
-                "Works instantly on arrival",
-                "Keep your number (WhatsApp, calls, texts)",
-                "Delivered to your email instantly",
+                "Works instantly on arrival — no setup queues",
+                "Keep your number · WhatsApp, calls & texts stay active",
+                "QR code delivered to your email in seconds",
               ].map((b) => (
-                <li key={b} className="flex items-center gap-2 text-white/70 text-sm">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                <div key={b} className="flex items-center gap-2.5 text-white/60 text-sm">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
                   {b}
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
 
-            {/* Inline plan selector */}
+            {/* Quick plan finder */}
             <div
-              className="mt-8 rounded-xl bg-white/8 backdrop-blur-md border border-white/15 p-4"
+              className="mt-8 rounded-2xl bg-white/6 backdrop-blur-md border border-white/12 p-4 sm:p-5"
               data-testid="hero-plan-selector"
             >
-              <p className="text-xs font-semibold uppercase tracking-widest text-white/40 mb-3">Quick plan finder</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-white/35 mb-3">Quick plan finder</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
                 <CountryCombobox
                   value={heroCode}
@@ -234,124 +229,104 @@ function HeroSection() {
                 </Select>
               </div>
               <Button
-                className="w-full font-semibold"
+                className="w-full font-bold h-10"
                 onClick={handleHeroFind}
                 data-testid="button-hero-get-esim"
               >
-                Get eSIM
+                Find My eSIM
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
             </div>
           </div>
 
-          {/* Right: Plan preview card */}
+          {/* Right: Floating plan preview */}
           <div className="hidden lg:block" data-testid="card-hero-preview">
-            <Card className="overflow-hidden shadow-2xl border-white/10 bg-card/95 backdrop-blur-xl">
-              <div className="px-5 pt-5 pb-4 border-b border-border/50 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Popular Plans</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Starting from <strong className="text-foreground">$9</strong></p>
+            <div className="relative">
+              {/* Glow behind card */}
+              <div className="absolute inset-0 rounded-3xl opacity-30" style={{ background: "radial-gradient(ellipse, #7c3aed 0%, transparent 70%)", filter: "blur(40px)" }} />
+              <div className="relative rounded-3xl border border-white/10 bg-black/50 backdrop-blur-2xl overflow-hidden shadow-2xl">
+                <div className="px-6 pt-6 pb-4 border-b border-white/8 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/35 mb-0.5">Popular Plans</p>
+                    <p className="text-sm text-white/50">Starting from <strong className="text-white/90">$9</strong></p>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500/20 border border-violet-500/30 text-violet-300 text-xs font-semibold">
+                    <Zap className="w-3 h-3" />
+                    Instant QR
+                  </div>
                 </div>
-                <Badge variant="secondary" className="text-xs font-medium">
-                  <Zap className="w-3 h-3 mr-1" />
-                  Instant QR delivery
-                </Badge>
-              </div>
-              <div className="p-3 space-y-1.5">
-                {mockPlans.map((p) => (
-                  <div
-                    key={p.dest}
-                    className="flex items-center justify-between py-3 px-3 rounded-md bg-background/70 border border-border/40"
-                    data-testid={`mock-plan-${p.dest.toLowerCase().replace(/\s/g, '-')}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-xl leading-none" role="img" aria-label={p.dest}>{p.flag}</span>
-                      <div>
-                        <p className="text-sm font-semibold leading-tight">{p.dest}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{p.data} · {p.days} days</p>
+                <div className="p-4 space-y-2">
+                  {mockPlans.map((p) => (
+                    <div
+                      key={p.dest}
+                      className="flex items-center justify-between py-3 px-4 rounded-xl bg-white/5 border border-white/8 hover:bg-white/8 transition-colors"
+                      data-testid={`mock-plan-${p.dest.toLowerCase().replace(/\s/g, '-')}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl leading-none">{p.flag}</span>
+                        <div>
+                          <p className="text-sm font-bold text-white leading-tight">{p.dest}</p>
+                          <p className="text-xs text-white/45 mt-0.5">{p.data} · {p.days} days</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-white">{p.price}</p>
+                        <p className="text-[10px] text-white/40">one-off</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold">{p.price}</p>
-                      <p className="text-xs text-muted-foreground">one-off</p>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                <div className="px-4 pb-5">
+                  <Link href="/destinations">
+                    <Button className="w-full font-bold" data-testid="button-hero-card-browse">
+                      Browse All Plans
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </Link>
+                </div>
               </div>
-              <div className="px-3 pb-4">
-                <Link href="/destinations">
-                  <Button className="w-full font-semibold" data-testid="button-hero-card-browse">
-                    Browse All Plans
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </Link>
-              </div>
-            </Card>
+            </div>
           </div>
         </div>
 
         {/* Flag strip */}
-        <div className="border-t border-white/10 py-4">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-            <span className="text-white/30 text-xs uppercase tracking-widest font-medium flex-shrink-0 hidden sm:block">
-              Destinations
-            </span>
+        <div className="border-t border-white/8 py-5">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <span className="text-white/25 text-[10px] uppercase tracking-widest font-bold flex-shrink-0 hidden sm:block">Popular</span>
             {flagStrip.map((item) => (
-              <div key={item.code} className="flex items-center gap-1.5" data-testid={`flag-strip-${item.code.toLowerCase()}`}>
-                <span className="text-base leading-none" role="img" aria-label={item.label}>{item.flag}</span>
-                <span className="text-white/45 text-xs tracking-wide">{item.label}</span>
-              </div>
+              <Link key={item.code} href={`/destinations/${item.code}`} data-testid={`flag-strip-${item.code.toLowerCase()}`}>
+                <div className="flex items-center gap-1.5 hover:opacity-75 transition-opacity cursor-pointer">
+                  <span className="text-base leading-none">{item.flag}</span>
+                  <span className="text-white/40 text-xs font-medium">{item.label}</span>
+                </div>
+              </Link>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Carrier bar */}
-      <div className="relative border-t border-white/8 bg-black/40 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <div className="flex items-center gap-1.5 text-white/30 flex-shrink-0">
-              <Radio className="w-3 h-3" />
-              <span className="text-xs uppercase tracking-widest font-semibold">Tier 1 networks</span>
-            </div>
-            <div className="w-px h-3 bg-white/15 hidden sm:block" />
-            {carriers.map((c) => (
-              <span
-                key={c.name}
-                className="text-xs font-semibold tracking-wide"
-                style={{ color: c.color + "99" }}
-                data-testid={`carrier-${c.name.toLowerCase().replace(/\s/g, '-')}`}
-              >
-                {c.name}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Trust bar with payment icons */}
-      <div className="relative bg-black/25">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-0 justify-between">
-            <div className="flex flex-wrap sm:flex-nowrap items-center gap-6 sm:gap-0 sm:divide-x sm:divide-white/15">
+      {/* Bottom bar */}
+      <div className="relative border-t border-white/6 bg-black/35 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5">
+          <div className="flex flex-col sm:flex-row items-center gap-4 justify-between">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               {[
                 { icon: Lock,        label: "Secure checkout" },
                 { icon: Zap,         label: "Instant delivery" },
                 { icon: Users,       label: "5,000+ travellers" },
                 { icon: ShieldCheck, label: "24/7 support" },
               ].map(({ icon: Icon, label }) => (
-                <div key={label} className="flex items-center gap-2 sm:px-5 first:sm:pl-0 text-white/55" data-testid={`trust-bar-${label.toLowerCase().replace(/[\s+]/g, '-').replace(/[^a-z0-9-]/g, '')}`}>
+                <div key={label} className="flex items-center gap-1.5 text-white/45" data-testid={`trust-bar-${label.toLowerCase().replace(/[\s+]/g, '-')}`}>
                   <Icon className="w-3.5 h-3.5" />
                   <span className="text-xs font-medium">{label}</span>
                 </div>
               ))}
             </div>
-            {/* Payment icons */}
             <div className="flex items-center gap-3 flex-shrink-0" data-testid="payment-icons">
-              <SiVisa        className="h-5 w-auto text-white/50" data-testid="payment-icon-visa" />
-              <SiMastercard  className="h-5 w-auto text-white/50" data-testid="payment-icon-mc" />
-              <SiApplepay    className="h-5 w-auto text-white/50" data-testid="payment-icon-apple-pay" />
-              <SiStripe      className="h-5 w-auto text-white/50" data-testid="payment-icon-stripe" />
+              <SiVisa       className="h-4 w-auto text-white/40" data-testid="payment-icon-visa" />
+              <SiMastercard className="h-4 w-auto text-white/40" data-testid="payment-icon-mc" />
+              <SiApplepay   className="h-4 w-auto text-white/40" data-testid="payment-icon-apple-pay" />
+              <SiStripe     className="h-4 w-auto text-white/40" data-testid="payment-icon-stripe" />
             </div>
           </div>
         </div>
@@ -361,7 +336,67 @@ function HeroSection() {
 }
 
 // ─────────────────────────────────────────────
-// 2. PLAN FINDER
+// 2. HOW IT WORKS
+// ─────────────────────────────────────────────
+function HowItWorks() {
+  const steps = [
+    {
+      num: "01",
+      icon: Globe,
+      title: "Choose your plan",
+      description: "Pick your destination, data size, and trip length. Done in 30 seconds.",
+    },
+    {
+      num: "02",
+      icon: QrCode,
+      title: "Get your QR instantly",
+      description: "Your QR code lands in your inbox the moment payment clears. No waiting.",
+    },
+    {
+      num: "03",
+      icon: Wifi,
+      title: "Scan and go",
+      description: "Open phone Settings, scan the QR, and you're online. That's it.",
+    },
+  ];
+
+  return (
+    <section id="how-it-works" className="py-24 sm:py-32 border-t">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="mb-16 max-w-xl">
+          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">How it works</p>
+          <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.0]" data-testid="text-how-it-works-title">
+            Online in<br /><span className="text-gradient">60 seconds.</span>
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-border rounded-2xl overflow-hidden border">
+          {steps.map((step, idx) => (
+            <div
+              key={idx}
+              className="bg-card p-8 sm:p-10 flex flex-col gap-6"
+              data-testid={`card-step-${idx + 1}`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <step.icon className="w-6 h-6 text-primary" />
+                </div>
+                <span className="font-display text-5xl font-bold text-border">{step.num}</span>
+              </div>
+              <div>
+                <h3 className="font-display font-bold text-xl mb-2" data-testid={`text-step-title-${idx + 1}`}>{step.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{step.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────
+// 3. PLAN FINDER
 // ─────────────────────────────────────────────
 interface CountryPlanEntry {
   normalizedPlanId: string;
@@ -377,12 +412,11 @@ interface CountryPlanEntry {
 
 function PlanFinder() {
   const [, navigate] = useLocation();
-  const [countryCode, setCountryCode] = useState<string>("");
+  const [countryCode, setCountryCode]       = useState<string>("");
   const [selectedCountry, setSelectedCountry] = useState<{ name: string; flagEmoji: string } | undefined>();
-  const [size, setSize] = useState<string>("");
+  const [size, setSize]         = useState<string>("");
   const [duration, setDuration] = useState<string>("");
 
-  // Fetch plans from the new normalized-plans API when a country is chosen
   const { data: plansData } = useQuery<{ countryCode: string; plans: CountryPlanEntry[] }>({
     queryKey: ["/api/countries", countryCode, "plans"],
     queryFn: async () => {
@@ -394,38 +428,26 @@ function PlanFinder() {
   });
 
   const handleFind = () => {
-    if (!countryCode || countryCode === "any") {
-      navigate("/destinations");
-    } else {
-      navigate(`/destinations/${countryCode}`);
-    }
+    if (!countryCode || countryCode === "any") navigate("/destinations");
+    else navigate(`/destinations/${countryCode}`);
   };
 
-  const destName = selectedCountry?.name      ?? "Japan";
-  const destFlag = selectedCountry?.flagEmoji ?? "🇯🇵";
+  const destName  = selectedCountry?.name      ?? "Japan";
+  const destFlag  = selectedCountry?.flagEmoji ?? "🇯🇵";
   const planLabel = size     || "5 GB";
   const planDur   = duration || "30 Days";
 
-  const sizeToGb: Record<string, number> = {
-    "1 GB": 1, "3 GB": 3, "5 GB": 5, "10 GB": 10, "Unlimited": 999,
-  };
-  const durToDays: Record<string, number> = {
-    "1 Day": 1, "3 Days": 3, "5 Days": 5, "7 Days": 7, "15 Days": 15, "30 Days": 30,
-  };
+  const sizeToGb:  Record<string, number> = { "1 GB": 1, "3 GB": 3, "5 GB": 5, "10 GB": 10, "Unlimited": 999 };
+  const durToDays: Record<string, number> = { "1 Day": 1, "3 Days": 3, "5 Days": 5, "7 Days": 7, "15 Days": 15, "30 Days": 30 };
 
-  // Find the best plan that matches size + duration selections
   const matchedPlan = (() => {
     const plans = plansData?.plans;
     if (!plans?.length) return null;
     const gb   = sizeToGb[size]     ?? 5;
     const days = durToDays[duration] ?? 30;
     const sorted = [...plans].sort((a, b) => a.estimatedPriceUsd - b.estimatedPriceUsd);
-    if (size === "Unlimited") {
-      return sorted.find(p => p.isUnlimited) ?? sorted[0];
-    }
-    const exact = sorted.filter(p =>
-      Math.abs(p.dataAmountGb - gb) <= 0.5 && Math.abs(p.validityDays - days) <= 3,
-    );
+    if (size === "Unlimited") return sorted.find(p => p.isUnlimited) ?? sorted[0];
+    const exact = sorted.filter(p => Math.abs(p.dataAmountGb - gb) <= 0.5 && Math.abs(p.validityDays - days) <= 3);
     return exact[0] ?? sorted[0] ?? null;
   })();
 
@@ -447,29 +469,26 @@ function PlanFinder() {
   };
 
   return (
-    <section id="plans" className="py-24 sm:py-32 border-t">
+    <section id="plans" className="py-24 sm:py-32 border-t bg-card">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-12">
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Plan Finder</p>
-          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-plan-finder-title">
-            Find the Right eSIM in Seconds
+        <div className="mb-12">
+          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Plan Finder</p>
+          <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-plan-finder-title">
+            Find the right eSIM<br />in seconds.
           </h2>
-          <p className="mt-4 text-muted-foreground max-w-md mx-auto leading-relaxed">
+          <p className="mt-4 text-muted-foreground max-w-md leading-relaxed">
             Tell us where you're headed and how long you're going. We'll match you to the best plan.
           </p>
         </div>
 
-        <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
+        <div className="rounded-2xl border bg-background shadow-sm overflow-hidden">
           <div className="p-6 sm:p-8">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">Where are you going?</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">Where are you going?</p>
                 <CountryCombobox
                   value={countryCode}
-                  onSelect={(code, country) => {
-                    setCountryCode(code ?? "");
-                    setSelectedCountry(country);
-                  }}
+                  onSelect={(code, country) => { setCountryCode(code ?? ""); setSelectedCountry(country); }}
                   placeholder="Select destination"
                   allowAny
                   className="w-full h-11 border-border bg-background shadow-sm justify-between"
@@ -477,99 +496,86 @@ function PlanFinder() {
                 />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">How much data?</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">How much data?</p>
                 <Select onValueChange={setSize} data-testid="select-data-size">
                   <SelectTrigger className="h-11 border-border bg-background shadow-sm" data-testid="trigger-data-size">
                     <SelectValue placeholder="Data allowance" />
                   </SelectTrigger>
                   <SelectContent>
                     {planSizes.map((s) => (
-                      <SelectItem key={s} value={s} data-testid={`option-size-${s.toLowerCase().replace(/\s/g, '-')}`}>
-                        {s}
-                      </SelectItem>
+                      <SelectItem key={s} value={s} data-testid={`option-size-${s.toLowerCase().replace(/\s/g, '-')}`}>{s}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">How long?</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">How long?</p>
                 <Select onValueChange={setDuration} data-testid="select-duration">
                   <SelectTrigger className="h-11 border-border bg-background shadow-sm" data-testid="trigger-duration">
                     <SelectValue placeholder="Trip length" />
                   </SelectTrigger>
                   <SelectContent>
                     {planDurations.map((d) => (
-                      <SelectItem key={d} value={d} data-testid={`option-duration-${d.toLowerCase().replace(/\s/g, '-')}`}>
-                        {d}
-                      </SelectItem>
+                      <SelectItem key={d} value={d} data-testid={`option-duration-${d.toLowerCase().replace(/\s/g, '-')}`}>{d}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            {/* Recommendation card — shown after destination is selected */}
             {countryCode && countryCode !== "any" && (
-            <div className="mt-6 rounded-xl border bg-background" data-testid="plan-recommendation-card">
-              <div className="px-5 pt-4 pb-2 border-b">
-                <p className="text-xs font-bold uppercase tracking-widest text-primary">Recommended for your trip</p>
-              </div>
-              <div className="p-5">
-                {/* Destination + plan */}
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="text-3xl leading-none" role="img" aria-label={destName}>{destFlag}</span>
-                  <div>
-                    <p className="font-bold text-lg leading-tight" data-testid="rec-dest-name">{destName}</p>
-                    <p className="text-sm text-muted-foreground" data-testid="rec-plan-label">{planLabel} • {planDur}</p>
-                  </div>
+              <div className="mt-6 rounded-xl border bg-card" data-testid="plan-recommendation-card">
+                <div className="px-5 pt-4 pb-3 border-b flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-widest text-primary">Best match for your trip</p>
+                  <Badge variant="secondary" className="text-xs">{matchedPlan?.providerCount ?? "Multi"} providers</Badge>
                 </div>
-
-                {/* Perfect for */}
-                <div className="mb-5">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2.5">Perfect for:</p>
-                  <ul className="space-y-2">
-                    {perfectFor().map((b) => (
-                      <li key={b} className="flex items-center gap-2.5 text-sm">
-                        <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
-                        {b}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Price + CTA */}
-                <div className="flex items-end justify-between gap-4 pt-4 border-t">
-                  <div>
-                    <p className="text-3xl font-bold tracking-tight" data-testid="rec-plan-price">{planPrice()}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">one-off · no subscription</p>
-                  </div>
-                  <Button
-                    size="lg"
-                    className="font-semibold flex-shrink-0"
-                    onClick={handleFind}
-                    data-testid="button-see-plans"
-                  >
-                    See Plans
-                    <ArrowRight className="ml-2 w-4 h-4" />
-                  </Button>
-                </div>
-
-                {/* Urgency + risk reversal */}
-                <div className="mt-4 pt-4 border-t grid grid-cols-2 gap-x-4 gap-y-1.5" data-testid="risk-reversal-strip">
-                  {[
-                    { icon: Zap,          text: "Instant delivery · No waiting" },
-                    { icon: CheckCircle2, text: "Works immediately after activation" },
-                    { icon: ShieldCheck,  text: "No contracts. No hidden fees." },
-                    { icon: Globe,        text: "Used by travellers across 190+ countries" },
-                  ].map(({ icon: Icon, text }) => (
-                    <div key={text} className="flex items-start gap-1.5">
-                      <Icon className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
-                      <span className="text-xs text-muted-foreground leading-snug">{text}</span>
+                <div className="p-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-3xl leading-none">{destFlag}</span>
+                    <div>
+                      <p className="font-bold text-lg leading-tight" data-testid="rec-dest-name">{destName}</p>
+                      <p className="text-sm text-muted-foreground" data-testid="rec-plan-label">{planLabel} · {planDur}</p>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="mb-5">
+                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Perfect for</p>
+                    <ul className="space-y-1.5">
+                      {perfectFor().map((b) => (
+                        <li key={b} className="flex items-center gap-2 text-sm">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                          {b}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="flex items-end justify-between gap-4 pt-4 border-t">
+                    <div>
+                      <p className="text-3xl font-bold tracking-tight" data-testid="rec-plan-price">{planPrice()}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">one-off · no subscription</p>
+                    </div>
+                    <Button size="lg" className="font-bold flex-shrink-0" onClick={handleFind} data-testid="button-see-plans">
+                      See Plans
+                      <ArrowRight className="ml-2 w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t grid grid-cols-2 gap-x-4 gap-y-1.5" data-testid="risk-reversal-strip">
+                    {[
+                      { icon: Zap,          text: "Instant delivery" },
+                      { icon: CheckCircle2, text: "Works on arrival" },
+                      { icon: ShieldCheck,  text: "No hidden fees" },
+                      { icon: Globe,        text: "190+ countries" },
+                    ].map(({ icon: Icon, text }) => (
+                      <div key={text} className="flex items-center gap-1.5">
+                        <Icon className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                        <span className="text-xs text-muted-foreground">{text}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
             )}
           </div>
 
@@ -579,62 +585,6 @@ function PlanFinder() {
               <span className="text-primary underline underline-offset-2 cursor-pointer" data-testid="link-browse-all-inline">Browse all destinations</span>
             </Link>
           </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────
-// 3. HOW IT WORKS
-// ─────────────────────────────────────────────
-function HowItWorks() {
-  const steps = [
-    {
-      icon: Globe,
-      title: "Choose your plan",
-      description: "Pick your destination, data size, and trip length. Done in seconds.",
-    },
-    {
-      icon: QrCode,
-      title: "Receive your eSIM instantly",
-      description: "Your QR code lands in your inbox the moment you pay. No waiting.",
-    },
-    {
-      icon: Wifi,
-      title: "Activate and go online",
-      description: "Scan the QR code in your phone settings. You're connected.",
-    },
-  ];
-
-  return (
-    <section id="how-it-works" className="py-24 sm:py-32 border-t bg-card">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-16">
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">How it works</p>
-          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-how-it-works-title">
-            Get Connected in 60 Seconds
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 lg:gap-10">
-          {steps.map((step, idx) => (
-            <div key={idx} className="relative" data-testid={`card-step-${idx + 1}`}>
-              {idx < steps.length - 1 && (
-                <div className="hidden sm:block absolute top-8 left-[58%] w-[42%] border-t border-dashed border-border" />
-              )}
-              <div className="flex items-center gap-3 mb-5">
-                <div className="flex items-center justify-center w-14 h-14 rounded-xl bg-primary/10 relative flex-shrink-0">
-                  <step.icon className="w-6 h-6 text-primary" />
-                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
-                    {idx + 1}
-                  </span>
-                </div>
-              </div>
-              <h3 className="font-semibold text-lg mb-2" data-testid={`text-step-title-${idx + 1}`}>{step.title}</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">{step.description}</p>
-            </div>
-          ))}
         </div>
       </div>
     </section>
@@ -653,24 +603,22 @@ const regionFromPrice: Record<string, string> = {
 };
 
 function PopularDestinations() {
-  const { data: destinations } = useQuery<Destination[]>({
-    queryKey: ["/api/destinations"],
-  });
+  const { data: destinations } = useQuery<Destination[]>({ queryKey: ["/api/destinations"] });
   const popular = destinations?.filter(d => d.popular).slice(0, 8) ?? [];
 
   return (
-    <section className="py-24 sm:py-32 border-t bg-gradient-to-b from-card to-background">
+    <section className="py-24 sm:py-32 border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Popular Destinations</p>
-            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight">
-              Where do you want to go?
+            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Popular Destinations</p>
+            <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight">
+              Where do you<br />want to go?
             </h2>
           </div>
           <Link href="/destinations">
-            <Button variant="outline" size="lg" data-testid="button-popular-browse-all">
-              Browse all destinations
+            <Button variant="outline" size="lg" className="font-bold" data-testid="button-popular-browse-all">
+              Browse all
               <ArrowRight className="ml-2 w-4 h-4" />
             </Button>
           </Link>
@@ -679,25 +627,22 @@ function PopularDestinations() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
           {popular.map((dest) => (
             <Link key={dest.id} href={`/destinations/${dest.id}`} data-testid={`card-popular-dest-${dest.id}`}>
-              <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[3/4] bg-muted shadow-md">
+              <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[3/4] bg-muted shadow-lg">
                 <img
                   src={dest.imageUrl}
                   alt={dest.name}
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
+                {/* Top badge */}
+                <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm border border-white/15 rounded-lg px-2 py-1">
+                  <p className="text-white/50 text-[9px] uppercase tracking-wide font-bold leading-none mb-0.5">from</p>
+                  <p className="text-white font-bold text-xs">{regionFromPrice[dest.region] ?? "£9.99"}</p>
+                </div>
                 <div className="absolute bottom-0 left-0 right-0 p-4">
-                  <div className="flex items-end justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-xl leading-none mb-1.5">{dest.flagEmoji}</p>
-                      <p className="font-bold text-white text-sm leading-tight truncate">{dest.name}</p>
-                      <p className="text-white/60 text-xs mt-0.5">{dest.region}</p>
-                    </div>
-                    <div className="flex-shrink-0 bg-white/15 backdrop-blur-sm border border-white/20 rounded-lg px-2.5 py-1.5 text-right">
-                      <p className="text-white/60 text-[9px] uppercase tracking-wide font-medium leading-none mb-0.5">from</p>
-                      <p className="text-white font-bold text-sm">{regionFromPrice[dest.region] ?? "£9.99"}</p>
-                    </div>
-                  </div>
+                  <p className="text-xl leading-none mb-1.5">{dest.flagEmoji}</p>
+                  <p className="font-bold text-white text-sm leading-tight">{dest.name}</p>
+                  <p className="text-white/50 text-xs mt-0.5">{dest.region}</p>
                 </div>
               </div>
             </Link>
@@ -715,72 +660,69 @@ function WhyGlobeSIM() {
   const benefits = [
     {
       icon: Banknote,
-      iconClass: "text-emerald-500",
-      bgClass: "bg-emerald-500/10",
+      accent: "text-emerald-400",
+      bg: "bg-emerald-400/10",
       title: "No roaming fees — ever",
-      description: "One fixed price. No per-minute charges, no bill shock when you land. What you pay at checkout is all you pay.",
+      description: "One fixed price. No per-minute charges, no bill shock. What you pay at checkout is all you pay.",
     },
     {
       icon: Zap,
-      iconClass: "text-amber-500",
-      bgClass: "bg-amber-500/10",
+      accent: "text-amber-400",
+      bg: "bg-amber-400/10",
       title: "Activated in under 60 seconds",
-      description: "Your QR code arrives the instant you check out. Scan it from your phone settings and you're online in minutes.",
+      description: "QR code arrives the instant you check out. Scan from your phone settings and you're online.",
     },
     {
       icon: Signal,
-      iconClass: "text-blue-500",
-      bgClass: "bg-blue-500/10",
+      accent: "text-sky-400",
+      bg: "bg-sky-400/10",
       title: "Keep your existing number",
-      description: "Your regular SIM stays fully active. Calls, texts, and WhatsApp all work on your main number — your eSIM handles data.",
+      description: "Your regular SIM stays fully active. Calls, texts, and WhatsApp work normally while your eSIM handles data.",
     },
     {
       icon: Globe,
-      iconClass: "text-primary",
-      bgClass: "bg-primary/10",
-      title: "Regional and global plans",
+      accent: "text-violet-400",
+      bg: "bg-violet-400/10",
+      title: "Regional & global plans",
       description: "One eSIM, multiple countries. Cover all of Europe, the Middle East, or Southeast Asia with a single purchase.",
     },
     {
       icon: Radio,
-      iconClass: "text-violet-500",
-      bgClass: "bg-violet-500/10",
+      accent: "text-pink-400",
+      bg: "bg-pink-400/10",
       title: "Tier 1 global networks",
-      description: "Routed through Vodafone, T-Mobile, Orange, and other Tier 1 carriers for strong, reliable signal wherever you go.",
+      description: "Routed through Vodafone, T-Mobile, Orange, and other Tier 1 carriers for reliable signal everywhere.",
     },
     {
       icon: Smartphone,
-      iconClass: "text-rose-500",
-      bgClass: "bg-rose-500/10",
+      accent: "text-blue-400",
+      bg: "bg-blue-400/10",
       title: "100% digital — no plastic",
-      description: "No SIM card. No post. No carrier store. Buy online, install digitally, travel. That's it.",
+      description: "No SIM card. No post. No carrier store. Buy online, install digitally, travel.",
     },
   ];
 
   return (
-    <section className="py-24 sm:py-32 border-t">
+    <section className="py-24 sm:py-32 border-t bg-card">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-14">
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Why GlobeSIM</p>
-          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-benefits-title">
-            Built for how people actually travel
+        <div className="mb-14 max-w-2xl">
+          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Why GlobeSIM</p>
+          <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.0]" data-testid="text-benefits-title">
+            Built for how<br />people actually travel.
           </h2>
-          <p className="mt-4 text-muted-foreground max-w-md mx-auto leading-relaxed">
-            Fast, transparent, and reliable — with no lock-in, no contracts, and no physical SIM required.
-          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {benefits.map((b, i) => (
             <div
               key={b.title}
-              className="p-6 rounded-xl border bg-card shadow-sm"
+              className="p-7 rounded-2xl border bg-background hover:border-primary/30 transition-colors"
               data-testid={`card-benefit-${i}`}
             >
-              <div className={`flex items-center justify-center w-11 h-11 rounded-xl ${b.bgClass} mb-4`}>
-                <b.icon className={`w-5 h-5 ${b.iconClass}`} />
+              <div className={`inline-flex items-center justify-center w-11 h-11 rounded-xl ${b.bg} mb-5`}>
+                <b.icon className={`w-5 h-5 ${b.accent}`} />
               </div>
-              <h3 className="font-semibold mb-2 leading-snug">{b.title}</h3>
+              <h3 className="font-bold text-base mb-2 leading-snug">{b.title}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">{b.description}</p>
             </div>
           ))}
@@ -791,13 +733,14 @@ function WhyGlobeSIM() {
 }
 
 // ─────────────────────────────────────────────
-// 5. TRAVEL BUNDLES
+// 6. BUNDLES
 // ─────────────────────────────────────────────
 const bundles = [
   {
     id: "europe",
     flag: "🇪🇺",
     label: "Most Popular",
+    highlighted: true,
     title: "Europe Pack",
     subtitle: "28 countries · One eSIM",
     description: "Full coverage across the EU, UK, and beyond. Maps, social, streaming — all without switching SIMs.",
@@ -808,9 +751,10 @@ const bundles = [
     id: "nigeria",
     flag: "🇳🇬🇬🇧",
     label: "Best Value",
+    highlighted: false,
     title: "UK ↔ Nigeria Pack",
     subtitle: "Dual-country · Stay connected both ends",
-    description: "Built for the UK–Nigeria corridor. Stay connected on both ends without paying roaming rates on either.",
+    description: "Built for the UK–Nigeria corridor. Stay connected on both ends without roaming charges on either.",
     features: ["UK + Nigeria coverage", "5 GB data", "30-day validity"],
     price: "From $16",
   },
@@ -818,6 +762,7 @@ const bundles = [
     id: "global",
     flag: "🌍",
     label: "Premium",
+    highlighted: false,
     title: "Global Traveller Pack",
     subtitle: "190+ countries · No limits",
     description: "One eSIM that works everywhere. Ideal for frequent travellers, business trips, or multi-stop tours.",
@@ -828,46 +773,48 @@ const bundles = [
 
 function BundlesSection() {
   return (
-    <section className="py-24 sm:py-32 border-t bg-card">
+    <section className="py-24 sm:py-32 border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-14">
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Travel Bundles</p>
-          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-bundles-title">
-            Bundles built for your route
+        <div className="mb-14 max-w-xl">
+          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Travel Bundles</p>
+          <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-bundles-title">
+            Bundles built<br />for your route.
           </h2>
-          <p className="mt-4 text-muted-foreground max-w-md mx-auto leading-relaxed">
-            Pre-configured for the most popular travel corridors — buy once, stay connected throughout.
-          </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {bundles.map((bundle) => (
             <div
               key={bundle.id}
-              className="flex flex-col rounded-xl border bg-background p-6"
+              className={`flex flex-col rounded-2xl border p-7 ${bundle.highlighted ? "bg-primary text-primary-foreground border-primary" : "bg-card"}`}
               data-testid={`card-bundle-${bundle.id}`}
             >
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-3xl leading-none" role="img" aria-label={bundle.title}>{bundle.flag}</span>
-                <Badge variant={bundle.label === "Most Popular" ? "default" : "secondary"} className="text-xs font-semibold">
+              <div className="flex items-start justify-between mb-6">
+                <span className="text-4xl leading-none">{bundle.flag}</span>
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${bundle.highlighted ? "bg-white/20 border-white/30 text-white" : "bg-primary/10 border-primary/20 text-primary"}`}>
                   {bundle.label}
-                </Badge>
+                </span>
               </div>
-              <h3 className="font-bold text-xl mb-0.5">{bundle.title}</h3>
-              <p className="text-xs text-muted-foreground mb-3 font-medium">{bundle.subtitle}</p>
-              <p className="text-sm text-muted-foreground leading-relaxed mb-5 flex-1">{bundle.description}</p>
-              <ul className="space-y-2 mb-6">
+              <h3 className="font-display font-bold text-2xl mb-1">{bundle.title}</h3>
+              <p className={`text-xs font-semibold mb-3 ${bundle.highlighted ? "text-white/60" : "text-muted-foreground"}`}>{bundle.subtitle}</p>
+              <p className={`text-sm leading-relaxed mb-6 flex-1 ${bundle.highlighted ? "text-white/75" : "text-muted-foreground"}`}>{bundle.description}</p>
+              <ul className="space-y-2 mb-7">
                 {bundle.features.map((f) => (
                   <li key={f} className="flex items-center gap-2 text-sm">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                    {f}
+                    <CheckCircle2 className={`w-3.5 h-3.5 flex-shrink-0 ${bundle.highlighted ? "text-white/70" : "text-primary"}`} />
+                    <span className={bundle.highlighted ? "text-white/80" : ""}>{f}</span>
                   </li>
                 ))}
               </ul>
-              <div className="flex items-center justify-between pt-4 border-t">
-                <span className="font-bold text-lg">{bundle.price}</span>
+              <div className="flex items-center justify-between pt-5 border-t border-current/10">
+                <span className="font-display font-bold text-xl">{bundle.price}</span>
                 <Link href="/destinations">
-                  <Button size="sm" data-testid={`button-bundle-${bundle.id}`}>
+                  <Button
+                    size="sm"
+                    variant={bundle.highlighted ? "secondary" : "default"}
+                    className="font-bold"
+                    data-testid={`button-bundle-${bundle.id}`}
+                  >
                     View Bundle
                     <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
                   </Button>
@@ -882,7 +829,7 @@ function BundlesSection() {
 }
 
 // ─────────────────────────────────────────────
-// 6. COMPATIBILITY
+// 7. COMPATIBILITY
 // ─────────────────────────────────────────────
 function CompatibilitySection() {
   const devices = [
@@ -893,17 +840,16 @@ function CompatibilitySection() {
   ];
 
   return (
-    <section className="py-24 sm:py-32 border-t">
+    <section className="py-24 sm:py-32 border-t bg-card">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Compatibility</p>
-            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-compat-title">
-              Works with most modern devices
+            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Compatibility</p>
+            <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-compat-title">
+              Works with most<br />modern devices.
             </h2>
             <p className="text-muted-foreground mb-7 leading-relaxed">
-              Compatible with most eSIM-enabled iPhones and Android devices released since 2018.
-              Your device must be carrier-unlocked.
+              Compatible with most eSIM-enabled iPhones and Android devices released since 2018. Your device must be carrier-unlocked.
             </p>
             <ul className="space-y-4 mb-8">
               {devices.map((d, i) => (
@@ -914,22 +860,21 @@ function CompatibilitySection() {
               ))}
             </ul>
             <Link href="/compatibility">
-              <Button size="lg" data-testid="button-check-compat">
+              <Button size="lg" className="font-bold" data-testid="button-check-compat">
                 Check your device
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
             </Link>
           </div>
 
-          <div className="rounded-2xl bg-primary p-8 text-primary-foreground flex flex-col">
-            <Smartphone className="w-12 h-12 mb-6 opacity-70" />
-            <h3 className="text-2xl font-bold mb-3">Not sure if your phone is compatible?</h3>
-            <p className="text-primary-foreground/70 leading-relaxed mb-8 flex-1">
-              Our device checker covers 60+ models across Apple, Samsung, Google, and more.
-              Takes under 30 seconds to confirm eSIM support.
+          <div className="rounded-2xl bg-gradient-to-br from-primary via-violet-600 to-blue-600 p-8 text-white flex flex-col shadow-2xl shadow-primary/30">
+            <Smartphone className="w-12 h-12 mb-6 opacity-80" />
+            <h3 className="font-display text-2xl font-bold mb-3">Not sure if your phone is compatible?</h3>
+            <p className="text-white/70 leading-relaxed mb-8 flex-1">
+              Our device checker covers 60+ models across Apple, Samsung, Google, and more. Takes under 30 seconds to confirm eSIM support.
             </p>
             <Link href="/compatibility">
-              <Button variant="outline" size="lg" className="bg-white/10 border-white/20 text-white w-full sm:w-auto" data-testid="button-device-checker-cta">
+              <Button variant="outline" size="lg" className="bg-white/10 border-white/20 text-white hover:bg-white/20 w-full sm:w-auto font-bold" data-testid="button-device-checker-cta">
                 Open Device Checker
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
@@ -942,33 +887,33 @@ function CompatibilitySection() {
 }
 
 // ─────────────────────────────────────────────
-// 7. BUILT FOR GLOBAL TRAVELLERS
+// 8. BUILT FOR REAL ROUTES
 // ─────────────────────────────────────────────
 function BuiltForTravellers() {
   const routes = [
-    { flag: "🇬🇧🇪🇺", label: "UK → Europe",          desc: "Single eSIM across 28 EU countries. No SIM swaps mid-trip." },
-    { flag: "🇬🇧🇳🇬", label: "UK ↔ Nigeria",         desc: "Stay connected in both directions without local SIM hassle." },
-    { flag: "🇬🇧🇦🇪", label: "UK → Dubai / UAE",    desc: "Fast 4G/5G coverage across the UAE. Activates before you land." },
-    { flag: "🌍",     label: "Multi-stop global",   desc: "One plan, every continent. Built for the modern nomad." },
+    { flag: "🇬🇧🇪🇺", label: "UK → Europe",        desc: "Single eSIM across 28 EU countries. No SIM swaps mid-trip." },
+    { flag: "🇬🇧🇳🇬", label: "UK ↔ Nigeria",       desc: "Stay connected in both directions without local SIM hassle." },
+    { flag: "🇬🇧🇦🇪", label: "UK → Dubai / UAE",  desc: "Fast 4G/5G coverage across the UAE. Activates before you land." },
+    { flag: "🌍",     label: "Multi-stop global", desc: "One plan, every continent. Built for the modern nomad." },
   ];
 
   return (
-    <section className="py-24 sm:py-32 border-t bg-card">
+    <section className="py-24 sm:py-32 border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Built for real routes</p>
-            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-built-for-title">
-              Optimised for the world's most popular travel corridors
+            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Built for real routes</p>
+            <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-built-for-title">
+              Optimised for the world's most popular corridors.
             </h2>
             <p className="text-muted-foreground leading-relaxed mb-8">
-              GlobeSIM isn't a generic eSIM reseller. We've built pricing, coverage, and plans around the routes real travellers take — UK, Europe, Africa, and the Middle East.
+              GlobeSIM isn't a generic eSIM reseller. We've built pricing, coverage, and plans around the routes real travellers actually take.
             </p>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2.5">
               {["No app required", "Works worldwide", "No contracts", "Instant activation"].map((item) => (
                 <span
                   key={item}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-background text-sm font-medium"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-card text-sm font-semibold"
                   data-testid={`microcopy-${item.toLowerCase().replace(/\s/g, '-')}`}
                 >
                   <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
@@ -982,14 +927,15 @@ function BuiltForTravellers() {
             {routes.map((route) => (
               <div
                 key={route.label}
-                className="flex items-start gap-4 p-4 rounded-xl border bg-background"
+                className="flex items-start gap-4 p-5 rounded-2xl border bg-card hover:border-primary/30 transition-colors"
                 data-testid={`route-card-${route.label.toLowerCase().replace(/[\s→↔\/]/g, '-').replace(/-+/g, '-').replace(/[^a-z0-9-]/g, '')}`}
               >
-                <span className="text-2xl leading-none mt-0.5" role="img" aria-label={route.label}>{route.flag}</span>
+                <span className="text-2xl leading-none mt-0.5 flex-shrink-0">{route.flag}</span>
                 <div>
-                  <p className="font-semibold text-sm mb-0.5">{route.label}</p>
+                  <p className="font-bold text-sm mb-0.5">{route.label}</p>
                   <p className="text-sm text-muted-foreground leading-snug">{route.desc}</p>
                 </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground/40 ml-auto flex-shrink-0 mt-0.5" />
               </div>
             ))}
           </div>
@@ -1000,29 +946,25 @@ function BuiltForTravellers() {
 }
 
 // ─────────────────────────────────────────────
-// 8. UPCOMING FEATURES (Data Rollover, Gift, Voice)
+// 9. UPCOMING FEATURES
 // ─────────────────────────────────────────────
-
-// ── Data Rollover ──
 function DataRolloverSection() {
   const steps = [
-    { pct: 100, label: "Trip 1 — Japan",       used: "3.2 GB", total: "5 GB", leftover: "1.8 GB", flag: "🇯🇵" },
-    { pct: 64,  label: "Trip 2 — Thailand",    used: "2.2 GB", total: "5 GB + 1.8 GB carried", leftover: "4.6 GB", flag: "🇹🇭" },
-    { pct: 38,  label: "Trip 3 — Indonesia",   used: "2.6 GB", total: "5 GB + 4.6 GB carried", leftover: "7.0 GB", flag: "🇮🇩" },
+    { pct: 100, label: "Trip 1 — Japan",     used: "3.2 GB", total: "5 GB", leftover: "1.8 GB", flag: "🇯🇵" },
+    { pct: 64,  label: "Trip 2 — Thailand",  used: "2.2 GB", total: "5 GB + 1.8 GB carried", leftover: "4.6 GB", flag: "🇹🇭" },
+    { pct: 38,  label: "Trip 3 — Indonesia", used: "2.6 GB", total: "5 GB + 4.6 GB carried", leftover: "7.0 GB", flag: "🇮🇩" },
   ];
 
   return (
-    <section className="py-24 sm:py-32 border-t" id="rollover" data-testid="section-rollover">
+    <section className="py-24 sm:py-32 border-t bg-card" id="rollover" data-testid="section-rollover">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-
-          {/* Left — copy */}
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-widest mb-5">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-bold uppercase tracking-widest mb-5">
               <TrendingUp className="w-3.5 h-3.5" />
               Coming Q3 2026
             </div>
-            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-rollover-title">
+            <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-rollover-title">
               Leftover data?<br />
               <span className="text-gradient">It rolls over.</span>
             </h2>
@@ -1042,34 +984,31 @@ function DataRolloverSection() {
                 </li>
               ))}
             </ul>
-            <div className="flex items-center gap-3">
-              <Link href="/signup">
-                <Button size="lg" data-testid="button-rollover-notify">
-                  Get notified when it's live
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </Link>
-            </div>
+            <Link href="/signup">
+              <Button size="lg" className="font-bold" data-testid="button-rollover-notify">
+                Get notified when it's live
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+            </Link>
           </div>
 
-          {/* Right — animated rollover card stack */}
           <div className="space-y-3" data-testid="rollover-demo">
             {steps.map((step, i) => (
               <div
                 key={i}
-                className={`rounded-2xl border p-5 transition-all ${i === 0 ? "opacity-50 bg-muted/30" : "bg-card"}`}
+                className={`rounded-2xl border p-5 ${i === 0 ? "opacity-50 bg-muted/30" : "bg-background"}`}
                 data-testid={`rollover-step-${i}`}
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2.5">
                     <span className="text-2xl leading-none">{step.flag}</span>
                     <div>
-                      <p className="font-semibold text-sm">{step.label}</p>
+                      <p className="font-bold text-sm">{step.label}</p>
                       <p className="text-xs text-muted-foreground">{step.total}</p>
                     </div>
                   </div>
                   {i > 0 && (
-                    <span className="text-xs font-semibold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
+                    <span className="text-xs font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
                       +{steps[i - 1].leftover} carried
                     </span>
                   )}
@@ -1082,19 +1021,18 @@ function DataRolloverSection() {
                   <div className="h-2 rounded-full bg-muted overflow-hidden">
                     <div
                       className={`h-full rounded-full bg-gradient-to-r ${i === 0 ? "from-muted-foreground/50 to-muted-foreground/30" : i === 1 ? "from-primary to-blue-400" : "from-emerald-500 to-teal-400"}`}
-                      style={{ width: `${i === 0 ? 100 - (100 * parseFloat(step.leftover) / 5) : 100 - (step.pct)}%` }}
+                      style={{ width: `${i === 0 ? 100 - (100 * parseFloat(step.leftover) / 5) : 100 - step.pct}%` }}
                     />
                   </div>
                 </div>
               </div>
             ))}
-
             <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
                 <TrendingUp className="w-4 h-4 text-primary" />
               </div>
               <div>
-                <p className="text-sm font-semibold">7.0 GB balance carried forward</p>
+                <p className="text-sm font-bold">7.0 GB balance carried forward</p>
                 <p className="text-xs text-muted-foreground">Ready for your next destination</p>
               </div>
             </div>
@@ -1105,9 +1043,8 @@ function DataRolloverSection() {
   );
 }
 
-// ── Gift an eSIM ──
 function GiftEsimSection() {
-  const [form, setForm] = useState({ recipientName: "", recipientEmail: "", message: "" });
+  const [form, setForm]       = useState({ recipientName: "", recipientEmail: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -1121,48 +1058,40 @@ function GiftEsimSection() {
   }
 
   return (
-    <section className="py-24 sm:py-32 border-t bg-card" id="gift" data-testid="section-gift">
+    <section className="py-24 sm:py-32 border-t" id="gift" data-testid="section-gift">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-
-          {/* Left — demo gift card UI */}
           <div className="order-2 lg:order-1" data-testid="gift-demo">
             <div className="relative max-w-sm mx-auto lg:mx-0">
-
-              {/* Gift envelope card */}
-              <div className="rounded-3xl border-2 border-primary/20 bg-gradient-to-br from-primary/20 via-violet-500/10 to-blue-500/10 p-8 text-center shadow-2xl shadow-primary/10">
+              <div className="rounded-3xl border-2 border-primary/20 bg-gradient-to-br from-primary/15 via-violet-500/10 to-blue-500/10 p-8 text-center shadow-2xl">
                 <div className="w-16 h-16 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center mx-auto mb-5">
                   <Gift className="w-8 h-8 text-primary" />
                 </div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-2">Gift eSIM</p>
-                <h3 className="text-xl font-bold mb-1">5 GB · 30 Days</h3>
+                <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">Gift eSIM</p>
+                <h3 className="font-display text-xl font-bold mb-1">5 GB · 30 Days</h3>
                 <p className="text-sm text-muted-foreground mb-4">Thailand · Southeast Asia</p>
-                <div className="rounded-xl bg-background/60 border p-3 mb-5">
+                <div className="rounded-xl bg-card border p-3 mb-5">
                   <p className="text-xs text-muted-foreground mb-1">To: Aisha Patel</p>
                   <p className="text-sm italic text-foreground/80">"Safe travels on your adventure! Stay connected 🌏"</p>
                 </div>
-                <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-semibold border border-primary/20">
+                <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-bold border border-primary/20">
                   <CheckCircle2 className="w-4 h-4" />
                   Delivered to inbox
                 </div>
               </div>
-
-              {/* Floating badge */}
               <div className="absolute -top-3 -right-3 bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg">
                 Instant delivery
               </div>
             </div>
           </div>
 
-          {/* Right — copy + form */}
           <div className="order-1 lg:order-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-widest mb-5">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-bold uppercase tracking-widest mb-5">
               <Gift className="w-3.5 h-3.5" />
               Available now
             </div>
-            <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-gift-title">
-              Send data to<br />
-              <span className="text-gradient">a loved one.</span>
+            <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-gift-title">
+              Send data to<br /><span className="text-gradient">a loved one.</span>
             </h2>
             <p className="text-muted-foreground text-lg leading-relaxed mb-8">
               Buy an eSIM plan as a gift. They get a link in their inbox to activate it when they're ready — no account needed.
@@ -1178,41 +1107,41 @@ function GiftEsimSection() {
               <form onSubmit={handleGift} className="space-y-3" data-testid="gift-form">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Recipient's name</label>
+                    <label className="text-xs font-bold text-muted-foreground mb-1.5 block">Recipient's name</label>
                     <input
                       type="text"
                       placeholder="Aisha Patel"
                       value={form.recipientName}
                       onChange={e => setForm(f => ({ ...f, recipientName: e.target.value }))}
-                      className="w-full rounded-xl border bg-muted/30 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      className="w-full rounded-xl border bg-card px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                       data-testid="input-gift-recipient-name"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Their email</label>
+                    <label className="text-xs font-bold text-muted-foreground mb-1.5 block">Their email</label>
                     <input
                       type="email"
                       placeholder="aisha@example.com"
                       required
                       value={form.recipientEmail}
                       onChange={e => setForm(f => ({ ...f, recipientEmail: e.target.value }))}
-                      className="w-full rounded-xl border bg-muted/30 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      className="w-full rounded-xl border bg-card px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                       data-testid="input-gift-recipient-email"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Personal message (optional)</label>
+                  <label className="text-xs font-bold text-muted-foreground mb-1.5 block">Personal message (optional)</label>
                   <textarea
                     rows={2}
                     placeholder="Safe travels on your adventure..."
                     value={form.message}
                     onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
-                    className="w-full rounded-xl border bg-muted/30 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+                    className="w-full rounded-xl border bg-card px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
                     data-testid="input-gift-message"
                   />
                 </div>
-                <Button type="submit" className="w-full" size="lg" disabled={loading} data-testid="button-gift-submit">
+                <Button type="submit" className="w-full font-bold" size="lg" disabled={loading} data-testid="button-gift-submit">
                   {loading ? (
                     <span className="flex items-center gap-2">
                       <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1237,7 +1166,6 @@ function GiftEsimSection() {
   );
 }
 
-// ── Voice Calling ──
 function VoiceCallingSection() {
   const features = [
     { icon: PhoneCall,   title: "Local number included",     desc: "Get a dedicated number for your destination — calls look local." },
@@ -1247,50 +1175,45 @@ function VoiceCallingSection() {
   ];
 
   return (
-    <section className="py-24 sm:py-32 border-t" id="voice" data-testid="section-voice">
+    <section className="py-24 sm:py-32 border-t bg-card" id="voice" data-testid="section-voice">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-14">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold uppercase tracking-widest mb-5">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-bold uppercase tracking-widest mb-5">
             <PhoneCall className="w-3.5 h-3.5" />
             Coming Q4 2026
           </div>
-          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4" data-testid="text-voice-title">
+          <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-4" data-testid="text-voice-title">
             Make calls with GlobeSIM.
           </h2>
           <p className="text-muted-foreground text-lg max-w-xl mx-auto leading-relaxed">
-            Your eSIM, your number — everywhere. Voice calling is coming to GlobeSIM so you can stay fully connected without juggling apps.
+            Your eSIM, your number — everywhere. Voice calling is coming so you can stay fully connected without juggling apps.
           </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
           {features.map((f, i) => (
-            <div
-              key={i}
-              className="rounded-2xl border bg-card p-6 flex flex-col gap-4"
-              data-testid={`card-voice-feature-${i}`}
-            >
+            <div key={i} className="rounded-2xl border bg-background p-6 flex flex-col gap-4" data-testid={`card-voice-feature-${i}`}>
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
                 <f.icon className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="font-semibold text-sm mb-1">{f.title}</p>
+                <p className="font-bold text-sm mb-1">{f.title}</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">{f.desc}</p>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Early access prompt */}
         <div className="max-w-2xl mx-auto rounded-2xl border border-primary/20 bg-primary/5 p-8 text-center" data-testid="card-voice-early-access">
           <div className="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center mx-auto mb-5">
             <PhoneCall className="w-7 h-7 text-primary" />
           </div>
-          <h3 className="text-xl font-bold mb-2">Get early access to voice calling</h3>
+          <h3 className="font-display text-xl font-bold mb-2">Get early access to voice calling</h3>
           <p className="text-muted-foreground text-sm mb-6 max-w-md mx-auto">
             Create a GlobeSIM account and we'll notify you the moment voice calling launches — early users get priority access and a free trial minute pack.
           </p>
           <Link href="/signup">
-            <Button size="lg" className="shadow-lg shadow-primary/20" data-testid="button-voice-signup">
+            <Button size="lg" className="font-bold shadow-lg shadow-primary/20" data-testid="button-voice-signup">
               Join early access
               <ArrowRight className="ml-2 w-4 h-4" />
             </Button>
@@ -1303,7 +1226,7 @@ function VoiceCallingSection() {
 }
 
 // ─────────────────────────────────────────────
-// 9. TESTIMONIALS + TRUST
+// 10. TESTIMONIALS
 // ─────────────────────────────────────────────
 function TestimonialsSection() {
   const testimonials = [
@@ -1333,34 +1256,34 @@ function TestimonialsSection() {
   return (
     <section className="py-24 sm:py-32 border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-14">
-          <div className="flex items-center justify-center gap-0.5 mb-4">
+        <div className="mb-14 max-w-xl">
+          <div className="flex items-center gap-0.5 mb-5">
             {Array.from({ length: 5 }).map((_, i) => (
               <Star key={i} className="w-5 h-5 fill-yellow-500 text-yellow-500" />
             ))}
+            <span className="ml-2 text-sm text-muted-foreground font-medium">4.9 / 5 · 5,000+ customers</span>
           </div>
-          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-testimonials-title">
-            Trusted by modern travellers
+          <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-testimonials-title">
+            Trusted by modern travellers.
           </h2>
-          <p className="mt-3 text-muted-foreground">4.9 / 5 · 5,000+ verified customers</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-14">
           {testimonials.map((t, idx) => (
-            <div key={idx} className="flex flex-col p-6 rounded-xl border bg-card" data-testid={`card-testimonial-${idx}`}>
-              <Quote className="w-6 h-6 text-primary/20 mb-4 flex-shrink-0" />
-              <p className="font-semibold text-base leading-snug mb-3 text-foreground" data-testid={`text-testimonial-headline-${idx}`}>
+            <div key={idx} className="flex flex-col p-7 rounded-2xl border bg-card" data-testid={`card-testimonial-${idx}`}>
+              <Quote className="w-7 h-7 text-primary/30 mb-5 flex-shrink-0" />
+              <p className="font-display font-bold text-lg leading-snug mb-3" data-testid={`text-testimonial-headline-${idx}`}>
                 "{t.quote}"
               </p>
               <p className="text-sm text-muted-foreground leading-relaxed flex-1 mb-6">
                 {t.full}
               </p>
               <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-9 h-9 rounded-full bg-primary/10 text-primary font-bold text-sm flex-shrink-0">
+                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary text-primary-foreground font-bold text-sm flex-shrink-0">
                   {t.initials}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold leading-tight" data-testid={`text-testimonial-name-${idx}`}>{t.name}</p>
+                  <p className="text-sm font-bold leading-tight" data-testid={`text-testimonial-name-${idx}`}>{t.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5" data-testid={`text-testimonial-context-${idx}`}>{t.context}</p>
                 </div>
               </div>
@@ -1368,8 +1291,7 @@ function TestimonialsSection() {
           ))}
         </div>
 
-        {/* Trust badges strip */}
-        <div className="flex flex-wrap sm:flex-nowrap items-stretch rounded-xl border bg-card divide-y sm:divide-y-0 sm:divide-x overflow-hidden">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { icon: Lock,        label: "Secure checkout",   sub: "SSL encrypted payments" },
             { icon: Zap,         label: "Instant delivery",  sub: "QR code by email" },
@@ -1378,12 +1300,14 @@ function TestimonialsSection() {
           ].map(({ icon: Icon, label, sub }) => (
             <div
               key={label}
-              className="flex-1 flex items-center gap-3 px-5 py-4 min-w-[50%] sm:min-w-0"
+              className="flex flex-col items-center text-center p-5 rounded-2xl border bg-card gap-3"
               data-testid={`trust-badge-${label.toLowerCase().replace(/\s/g, '-')}`}
             >
-              <Icon className="w-5 h-5 text-primary flex-shrink-0" />
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Icon className="w-5 h-5 text-primary" />
+              </div>
               <div>
-                <p className="text-sm font-semibold leading-tight">{label}</p>
+                <p className="text-sm font-bold leading-tight">{label}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
               </div>
             </div>
@@ -1395,78 +1319,57 @@ function TestimonialsSection() {
 }
 
 // ─────────────────────────────────────────────
-// 9. COVERAGE
+// 11. COVERAGE
 // ─────────────────────────────────────────────
 const coverageRegions = [
   {
     id: "europe",
     label: "Europe",
     countries: [
-      { name: "United Kingdom", flag: "🇬🇧" },
-      { name: "France",         flag: "🇫🇷" },
-      { name: "Germany",        flag: "🇩🇪" },
-      { name: "Spain",          flag: "🇪🇸" },
-      { name: "Italy",          flag: "🇮🇹" },
-      { name: "Portugal",       flag: "🇵🇹" },
-      { name: "Netherlands",    flag: "🇳🇱" },
-      { name: "Greece",         flag: "🇬🇷" },
-      { name: "Poland",         flag: "🇵🇱" },
-      { name: "Sweden",         flag: "🇸🇪" },
-      { name: "Switzerland",    flag: "🇨🇭" },
-      { name: "Austria",        flag: "🇦🇹" },
+      { name: "United Kingdom", flag: "🇬🇧" }, { name: "France",      flag: "🇫🇷" },
+      { name: "Germany",        flag: "🇩🇪" }, { name: "Spain",       flag: "🇪🇸" },
+      { name: "Italy",          flag: "🇮🇹" }, { name: "Portugal",    flag: "🇵🇹" },
+      { name: "Netherlands",    flag: "🇳🇱" }, { name: "Greece",      flag: "🇬🇷" },
+      { name: "Poland",         flag: "🇵🇱" }, { name: "Sweden",      flag: "🇸🇪" },
+      { name: "Switzerland",    flag: "🇨🇭" }, { name: "Austria",     flag: "🇦🇹" },
     ],
   },
   {
     id: "north-america",
     label: "North America",
     countries: [
-      { name: "United States", flag: "🇺🇸" },
-      { name: "Canada",        flag: "🇨🇦" },
-      { name: "Mexico",        flag: "🇲🇽" },
+      { name: "United States", flag: "🇺🇸" }, { name: "Canada", flag: "🇨🇦" }, { name: "Mexico", flag: "🇲🇽" },
     ],
   },
   {
     id: "africa",
     label: "Africa",
     countries: [
-      { name: "Nigeria",      flag: "🇳🇬" },
-      { name: "South Africa", flag: "🇿🇦" },
-      { name: "Kenya",        flag: "🇰🇪" },
-      { name: "Ghana",        flag: "🇬🇭" },
-      { name: "Egypt",        flag: "🇪🇬" },
-      { name: "Ethiopia",     flag: "🇪🇹" },
-      { name: "Tanzania",     flag: "🇹🇿" },
-      { name: "Uganda",       flag: "🇺🇬" },
+      { name: "Nigeria",      flag: "🇳🇬" }, { name: "South Africa", flag: "🇿🇦" },
+      { name: "Kenya",        flag: "🇰🇪" }, { name: "Ghana",        flag: "🇬🇭" },
+      { name: "Egypt",        flag: "🇪🇬" }, { name: "Ethiopia",     flag: "🇪🇹" },
+      { name: "Tanzania",     flag: "🇹🇿" }, { name: "Uganda",       flag: "🇺🇬" },
     ],
   },
   {
     id: "middle-east",
     label: "Middle East",
     countries: [
-      { name: "UAE",          flag: "🇦🇪" },
-      { name: "Saudi Arabia", flag: "🇸🇦" },
-      { name: "Qatar",        flag: "🇶🇦" },
-      { name: "Kuwait",       flag: "🇰🇼" },
-      { name: "Bahrain",      flag: "🇧🇭" },
-      { name: "Oman",         flag: "🇴🇲" },
-      { name: "Jordan",       flag: "🇯🇴" },
-      { name: "Lebanon",      flag: "🇱🇧" },
+      { name: "UAE",          flag: "🇦🇪" }, { name: "Saudi Arabia", flag: "🇸🇦" },
+      { name: "Qatar",        flag: "🇶🇦" }, { name: "Kuwait",       flag: "🇰🇼" },
+      { name: "Bahrain",      flag: "🇧🇭" }, { name: "Oman",         flag: "🇴🇲" },
+      { name: "Jordan",       flag: "🇯🇴" }, { name: "Lebanon",      flag: "🇱🇧" },
     ],
   },
   {
     id: "asia",
     label: "Asia",
     countries: [
-      { name: "Japan",       flag: "🇯🇵" },
-      { name: "Singapore",   flag: "🇸🇬" },
-      { name: "Thailand",    flag: "🇹🇭" },
-      { name: "South Korea", flag: "🇰🇷" },
-      { name: "Malaysia",    flag: "🇲🇾" },
-      { name: "Indonesia",   flag: "🇮🇩" },
-      { name: "India",       flag: "🇮🇳" },
-      { name: "Philippines", flag: "🇵🇭" },
-      { name: "Vietnam",     flag: "🇻🇳" },
-      { name: "Hong Kong",   flag: "🇭🇰" },
+      { name: "Japan",       flag: "🇯🇵" }, { name: "Singapore",   flag: "🇸🇬" },
+      { name: "Thailand",    flag: "🇹🇭" }, { name: "South Korea", flag: "🇰🇷" },
+      { name: "Malaysia",    flag: "🇲🇾" }, { name: "Indonesia",   flag: "🇮🇩" },
+      { name: "India",       flag: "🇮🇳" }, { name: "Philippines", flag: "🇵🇭" },
+      { name: "Vietnam",     flag: "🇻🇳" }, { name: "Hong Kong",   flag: "🇭🇰" },
     ],
   },
   {
@@ -1482,23 +1385,23 @@ function CoverageSection() {
   return (
     <section id="coverage" className="py-24 sm:py-32 border-t bg-card">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-14">
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">Coverage</p>
-          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-coverage-title">
-            190+ countries covered
+        <div className="mb-14 max-w-xl">
+          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Coverage</p>
+          <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-coverage-title">
+            190+ countries covered.
           </h2>
-          <p className="mt-4 text-muted-foreground max-w-sm mx-auto">
+          <p className="mt-4 text-muted-foreground max-w-sm leading-relaxed">
             From weekend city breaks to month-long adventures — wherever you go, we go with you.
           </p>
         </div>
 
         <Tabs defaultValue="europe">
-          <TabsList className="flex flex-wrap h-auto gap-1.5 mb-8 justify-center bg-transparent p-0">
+          <TabsList className="flex flex-wrap h-auto gap-1.5 mb-8 justify-start bg-transparent p-0">
             {coverageRegions.map((r) => (
               <TabsTrigger
                 key={r.id}
                 value={r.id}
-                className="rounded-full border px-4 py-1.5 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary"
+                className="rounded-full border px-4 py-1.5 text-sm font-bold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary"
                 data-testid={`tab-region-${r.id}`}
               >
                 {r.label}
@@ -1508,21 +1411,21 @@ function CoverageSection() {
 
           {coverageRegions.map((r) => (
             <TabsContent key={r.id} value={r.id}>
-              <div className="rounded-xl border bg-background p-6">
+              <div className="rounded-2xl border bg-background p-6">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 mb-7">
                   {r.countries.map((country) => (
                     <div
                       key={country.name}
-                      className="flex items-center gap-2.5 py-2.5 px-3 rounded-lg border bg-card"
+                      className="flex items-center gap-2.5 py-2.5 px-3 rounded-xl border bg-card"
                       data-testid={`coverage-country-${country.name.toLowerCase().replace(/\s/g, '-')}`}
                     >
                       <span className="text-base leading-none flex-shrink-0">{country.flag}</span>
-                      <span className="text-sm leading-tight">{country.name}</span>
+                      <span className="text-sm leading-tight font-medium">{country.name}</span>
                     </div>
                   ))}
                 </div>
                 <Link href="/destinations">
-                  <Button variant="outline" data-testid={`button-region-plans-${r.id}`}>
+                  <Button variant="outline" className="font-bold" data-testid={`button-region-plans-${r.id}`}>
                     Browse {r.label} Plans
                     <ArrowRight className="ml-2 w-4 h-4" />
                   </Button>
@@ -1537,7 +1440,7 @@ function CoverageSection() {
 }
 
 // ─────────────────────────────────────────────
-// 10. FAQ
+// 12. FAQ
 // ─────────────────────────────────────────────
 function FAQSection() {
   const faqs = [
@@ -1569,58 +1472,76 @@ function FAQSection() {
 
   return (
     <section id="faq" className="py-24 sm:py-32 border-t">
-      <div className="max-w-2xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-12">
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-3">FAQ</p>
-          <h2 className="text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-faq-title">
-            Frequently asked questions
-          </h2>
-          <p className="mt-4 text-muted-foreground">
-            Everything you need to know before you buy.
-          </p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">FAQ</p>
+            <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-6" data-testid="text-faq-title">
+              Questions?<br />We've got answers.
+            </h2>
+            <p className="text-muted-foreground leading-relaxed mb-8">
+              Everything you need to know before you buy. Can't find your answer?{" "}
+              <span className="text-foreground font-medium">Reply to any email from us</span> and we'll get back within a few hours.
+            </p>
+            <Link href="/destinations">
+              <Button size="lg" className="font-bold" data-testid="button-faq-cta">
+                Browse Plans
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+            </Link>
+          </div>
+
+          <Accordion type="single" collapsible className="w-full">
+            {faqs.map((faq, idx) => (
+              <AccordionItem key={idx} value={`faq-${idx}`} className="border-b">
+                <AccordionTrigger className="text-left font-bold py-5 hover:no-underline text-base" data-testid={`button-faq-${idx}`}>
+                  {faq.question}
+                </AccordionTrigger>
+                <AccordionContent className="pb-5">
+                  <p className="text-muted-foreground leading-relaxed text-sm">
+                    {faq.answer}
+                  </p>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         </div>
-        <Accordion type="single" collapsible className="w-full">
-          {faqs.map((faq, idx) => (
-            <AccordionItem key={idx} value={`faq-${idx}`} className="border-b">
-              <AccordionTrigger className="text-left font-medium py-5 hover:no-underline" data-testid={`button-faq-${idx}`}>
-                {faq.question}
-              </AccordionTrigger>
-              <AccordionContent className="pb-5">
-                <p className="text-muted-foreground leading-relaxed">
-                  {faq.answer}
-                </p>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
       </div>
     </section>
   );
 }
 
 // ─────────────────────────────────────────────
-// 11. FINAL CTA
+// 13. FINAL CTA
 // ─────────────────────────────────────────────
 function FinalCTA() {
   return (
-    <section className="py-24 sm:py-32 border-t bg-card">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
-        <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-4">Get started today</p>
-        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-5 leading-tight" data-testid="text-final-cta-title">
-          Get Connected Before You Land.
+    <section className="py-24 sm:py-32 border-t relative overflow-hidden bg-card">
+      {/* Background accent */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-blue-500/5 pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] opacity-10 pointer-events-none"
+        style={{ background: "radial-gradient(ellipse, #7c3aed 0%, transparent 70%)" }} />
+
+      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 text-center">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-bold uppercase tracking-widest mb-6">
+          <Zap className="w-3.5 h-3.5" />
+          Get started today
+        </div>
+        <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-[1.0]" data-testid="text-final-cta-title">
+          Get Connected<br />Before You Land.
         </h2>
         <p className="text-muted-foreground text-lg max-w-xl mx-auto mb-10 leading-relaxed" data-testid="text-final-cta-subtitle">
-          5,000+ travellers use GlobeSIM for fast, flexible data in 190+ countries. No contracts. No physical SIM. No surprises.
+          5,000+ travellers rely on GlobeSIM for fast, flexible data in 190+ countries. No contracts. No physical SIM. No surprises.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
           <Link href="/destinations">
-            <Button size="lg" className="px-8 text-base font-semibold shadow-md" data-testid="button-final-get-started">
+            <Button size="lg" className="h-13 px-8 text-base font-bold shadow-xl shadow-primary/30" data-testid="button-final-get-started">
               Get Your eSIM Now
               <ArrowRight className="ml-2 w-4 h-4" />
             </Button>
           </Link>
           <Link href="/destinations">
-            <Button size="lg" variant="outline" className="text-base" data-testid="button-final-browse-plans">
+            <Button size="lg" variant="outline" className="h-13 px-8 text-base font-bold" data-testid="button-final-browse-plans">
               Browse Plans
             </Button>
           </Link>
@@ -1629,8 +1550,8 @@ function FinalCTA() {
           {[
             "Instant delivery · No waiting",
             "Works immediately after activation",
-            "No contracts. No hidden fees.",
-            "Used by travellers across 190+ countries",
+            "No contracts or hidden fees",
+            "190+ countries covered",
           ].map((item) => (
             <div key={item} className="flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
@@ -1644,7 +1565,7 @@ function FinalCTA() {
 }
 
 // ─────────────────────────────────────────────
-// 12. FOOTER
+// 14. FOOTER
 // ─────────────────────────────────────────────
 function Footer() {
   const scrollTo = (id: string) => {
@@ -1654,14 +1575,14 @@ function Footer() {
 
   return (
     <footer className="border-t bg-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-14">
           <div className="col-span-2 sm:col-span-1">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary">
-                <Wifi className="w-4 h-4 text-primary-foreground" />
+            <div className="flex items-center gap-2.5 mb-5">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary">
+                <Wifi className="w-4 h-4 text-white" />
               </div>
-              <span className="font-bold text-lg" data-testid="text-footer-brand">GlobeSIM</span>
+              <span className="font-display font-bold text-lg" data-testid="text-footer-brand">GlobeSIM</span>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-[200px]" data-testid="text-footer-tagline">
               Instant global eSIM data for modern travellers.
@@ -1669,7 +1590,7 @@ function Footer() {
           </div>
 
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">Product</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">Product</p>
             <ul className="space-y-3">
               {[
                 { label: "Plans",        action: () => scrollTo("plans"),        testid: "footer-link-plans" },
@@ -1677,21 +1598,21 @@ function Footer() {
                 { label: "How It Works", action: () => scrollTo("how-it-works"), testid: "footer-link-how" },
               ].map((item) => (
                 <li key={item.label}>
-                  <button onClick={item.action} className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid={item.testid}>
+                  <button onClick={item.action} className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium" data-testid={item.testid}>
                     {item.label}
                   </button>
                 </li>
               ))}
               <li>
                 <Link href="/compatibility">
-                  <span className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer" data-testid="footer-link-compat">
+                  <span className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer font-medium" data-testid="footer-link-compat">
                     Compatibility
                   </span>
                 </Link>
               </li>
               <li>
                 <Link href="/orders">
-                  <span className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer" data-testid="footer-link-my-esims">
+                  <span className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer font-medium" data-testid="footer-link-my-esims">
                     My eSIMs
                   </span>
                 </Link>
@@ -1700,38 +1621,36 @@ function Footer() {
           </div>
 
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">Support</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">Support</p>
             <ul className="space-y-3">
               <li>
-                <button onClick={() => scrollTo("faq")} className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="footer-link-faq">
+                <button onClick={() => scrollTo("faq")} className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium" data-testid="footer-link-faq">
                   FAQ
                 </button>
               </li>
-              <li><span className="text-sm text-muted-foreground" data-testid="footer-link-contact">Contact</span></li>
+              <li><span className="text-sm text-muted-foreground font-medium" data-testid="footer-link-contact">Contact</span></li>
             </ul>
           </div>
 
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">Legal</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">Legal</p>
             <ul className="space-y-3">
-              <li><span className="text-sm text-muted-foreground" data-testid="text-footer-privacy">Privacy Policy</span></li>
-              <li><span className="text-sm text-muted-foreground" data-testid="text-footer-terms">Terms of Service</span></li>
+              <li><span className="text-sm text-muted-foreground font-medium" data-testid="text-footer-privacy">Privacy Policy</span></li>
+              <li><span className="text-sm text-muted-foreground font-medium" data-testid="text-footer-terms">Terms of Service</span></li>
             </ul>
           </div>
         </div>
 
-        <Separator className="mb-6" />
-
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="border-t pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-muted-foreground" data-testid="text-footer-copyright">
             &copy; 2026 GlobeSIM. All rights reserved.
           </p>
           <div className="flex items-center gap-2">
             <Link href="/destinations">
-              <Button size="sm" data-testid="button-footer-get-started">Get Started</Button>
+              <Button size="sm" className="font-bold" data-testid="button-footer-get-started">Get Started</Button>
             </Link>
             <Link href="/orders">
-              <Button size="sm" variant="outline" data-testid="button-footer-my-esims">My eSIMs</Button>
+              <Button size="sm" variant="outline" className="font-bold" data-testid="button-footer-my-esims">My eSIMs</Button>
             </Link>
           </div>
         </div>
@@ -1741,7 +1660,7 @@ function Footer() {
 }
 
 // ─────────────────────────────────────────────
-// 13. MOBILE STICKY CTA
+// 15. MOBILE STICKY CTA
 // ─────────────────────────────────────────────
 function MobileStickyCTA() {
   return (
@@ -1751,13 +1670,13 @@ function MobileStickyCTA() {
     >
       <div className="flex gap-2">
         <Link href="/destinations" className="flex-1">
-          <Button className="w-full font-semibold text-sm" size="default" data-testid="button-mobile-sticky-esim">
+          <Button className="w-full font-bold text-sm" size="default" data-testid="button-mobile-sticky-esim">
             Get eSIM
             <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
           </Button>
         </Link>
         <Link href="/destinations" className="flex-1">
-          <Button variant="outline" className="w-full font-semibold text-sm" size="default" data-testid="button-mobile-sticky-plans">
+          <Button variant="outline" className="w-full font-bold text-sm" size="default" data-testid="button-mobile-sticky-plans">
             View Plans
           </Button>
         </Link>
@@ -1774,6 +1693,7 @@ export default function Home() {
     <div className="min-h-screen pb-20 sm:pb-0">
       <HeroSection />
       <HowItWorks />
+      <PlanFinder />
       <PopularDestinations />
       <WhyGlobeSIM />
       <BundlesSection />
