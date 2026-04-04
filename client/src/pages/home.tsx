@@ -135,25 +135,25 @@ function HeroSection() {
             {/* Eyebrow */}
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-white/70 text-xs font-semibold uppercase tracking-widest mb-6 backdrop-blur-sm">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Get connected before you land
+              Instant eSIM &nbsp;·&nbsp; 190+ countries &nbsp;·&nbsp; From $7.99
             </div>
 
             <h1
               className="font-display text-5xl sm:text-6xl lg:text-[4.5rem] xl:text-[5.5rem] font-bold text-white leading-[1.0] tracking-tight mb-6"
               data-testid="text-hero-title"
             >
-              Global eSIM data in
+              Land anywhere.
               <br />
-              <span className="text-gradient-bright">60 seconds</span>
+              <span className="text-gradient-bright">Stay online.</span>
               <br />
-              — from $7.99
+              From $7.99.
             </h1>
 
             <p
               className="text-white/60 text-lg sm:text-xl max-w-lg leading-relaxed mb-8"
               data-testid="text-hero-subtitle"
             >
-              Stay connected in 190+ countries the moment you land. No roaming fees. No SIM swaps. No apps required.
+              Your eSIM is ready the instant you check out. Scan the QR, skip the airport queues, and land with data already working.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 mb-8">
@@ -182,9 +182,9 @@ function HeroSection() {
             {/* Trust bullets */}
             <div className="flex flex-col gap-2 mb-4" data-testid="trust-bullets">
               {[
-                "Instant activation via QR code",
-                "Works in 190+ countries worldwide",
-                "Pay once — no contracts or hidden fees",
+                "QR code delivered to your inbox in seconds",
+                "Your regular number stays fully active",
+                "One flat price — no daily fees, no bill shock",
               ].map((b) => (
                 <div key={b} className="flex items-center gap-2.5 text-white/60 text-sm">
                   <CheckCircle2 className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
@@ -313,8 +313,8 @@ function HeroSection() {
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               {[
                 { icon: Star,        label: "4.9/5 · 5,000+ travellers" },
-                { icon: Zap,         label: "Instant delivery" },
-                { icon: Signal,      label: "Tier-1 global networks" },
+                { icon: Zap,         label: "Instant QR delivery" },
+                { icon: Signal,      label: "Vodafone · T-Mobile · Orange" },
                 { icon: ShieldCheck, label: "24/7 support" },
               ].map(({ icon: Icon, label }) => (
                 <div key={label} className="flex items-center gap-1.5 text-white/45" data-testid={`trust-bar-${label.toLowerCase().replace(/[\s+/·]/g, '-')}`}>
@@ -362,7 +362,7 @@ function HowItWorks() {
   ];
 
   return (
-    <section id="how-it-works" className="py-24 sm:py-32 border-t">
+    <section id="how-it-works" className="py-16 sm:py-20 border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="mb-16 max-w-xl">
           <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">How it works</p>
@@ -475,10 +475,10 @@ function PlanFinder() {
         <div className="mb-12">
           <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Plan Finder</p>
           <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-plan-finder-title">
-            Find the Right eSIM<br />in Seconds
+            Find your plan.<br />Done in 30 seconds.
           </h2>
           <p className="mt-4 text-muted-foreground max-w-md leading-relaxed">
-            Choose where you're going, how much data you need, and how long you'll be away. We'll match you to the best plan.
+            Pick your destination, data allowance, and trip length — we'll show you the best plan at the sharpest price.
           </p>
         </div>
 
@@ -713,7 +713,7 @@ function WhyKonex() {
             Built for how<br />people actually travel.
           </h2>
           <p className="text-muted-foreground text-lg leading-relaxed">
-            Fast, transparent, and reliable — with no lock-in, no roaming fees, and no physical SIM required.
+            No roaming fees. No lock-in. No plastic SIM. Just fast, reliable data wherever you're heading.
           </p>
         </div>
 
@@ -1399,7 +1399,7 @@ function CoverageSection() {
             190+ countries covered.
           </h2>
           <p className="mt-4 text-muted-foreground max-w-sm leading-relaxed">
-            From weekend city breaks to long-haul trips, KONEX keeps you connected across the world.
+            From a weekend break in Europe to a month across Southeast Asia — Konex works the moment you land, everywhere on the list.
           </p>
         </div>
 
