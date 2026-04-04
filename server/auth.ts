@@ -5,7 +5,7 @@ import { db } from "./storage";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
-const SECRET = process.env.SESSION_SECRET || "globesim-dev-secret";
+const SECRET = process.env.SESSION_SECRET || "konex-dev-secret";
 const COOKIE_NAME = "globe_session";
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
 

@@ -47,7 +47,7 @@ export async function getOrCreateStripeCustomer(
   const customer = await stripe.customers.create({
     email,
     name: name || undefined,
-    metadata: { userId: userId || '', source: 'globesim' },
+    metadata: { userId: userId || '', source: 'konex' },
   });
 
   if (userId) {
@@ -213,7 +213,7 @@ export async function createPlanCheckoutSession(
         unit_amount: Math.round(finalPriceUsd * 100),
         product_data: {
           name: `${params.destination} eSIM — ${params.dataAmount} · ${params.validity}`,
-          description: `GlobeSIM plan for ${params.destination}. Coverage: ${params.region}.`,
+          description: `Konex eSIM plan for ${params.destination}. Coverage: ${params.region}.`,
           metadata: {
             planId: params.planId,
             destination: params.destination,
@@ -325,7 +325,7 @@ export async function createCountryPlanCheckoutSession(
           unit_amount: Math.round(pricing.retailPriceUsd * 100),
           product_data: {
             name: productName,
-            description: `GlobeSIM eSIM plan for ${params.countryName}. ${params.dataLabel} data valid for ${params.validityLabel}.`,
+            description: `Konex eSIM plan for ${params.countryName}. ${params.dataLabel} data valid for ${params.validityLabel}.`,
             metadata: {
               normalizedPlanId: np.id,
               destination: params.countryName,
@@ -403,7 +403,7 @@ export async function createTopupCheckoutSession(
           currency: params.currency.toLowerCase(),
           unit_amount: Math.round(params.price * 100),
           product_data: {
-            name: `GlobeSIM Top-Up — ${params.optionName}`,
+            name: `Konex Top-Up — ${params.optionName}`,
             description: `Top-up for your active eSIM (Order: ${params.orderId})`,
           },
         },

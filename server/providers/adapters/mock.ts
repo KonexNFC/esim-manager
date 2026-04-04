@@ -91,9 +91,9 @@ export class MockProviderAdapter implements ProviderAdapter {
     return {
       providerEsimId,
       iccid,
-      qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=LPA:1$esim.globesim.com$${iccid}`,
-      activationUrl: `https://esim.globesim.com/activate/${iccid}`,
-      manualCode: `LPA:1$esim.globesim.com$${iccid}`,
+      qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=LPA:1$esim.konexesim.com$${iccid}`,
+      activationUrl: `https://esim.konexesim.com/activate/${iccid}`,
+      manualCode: `LPA:1$esim.konexesim.com$${iccid}`,
       activationStatus: 'issued',
       dataTotalMb,
       dataUsedMb: 0,
@@ -135,9 +135,9 @@ export class MockProviderAdapter implements ProviderAdapter {
     const fakeIccid = `89${seed.toString().padStart(17, '0').slice(0, 17)}`;
     return {
       providerEsimId,
-      qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=LPA:1$esim.globesim.com$${fakeIccid}`,
-      manualCode: `LPA:1$esim.globesim.com$${fakeIccid}`,
-      activationUrl: `https://esim.globesim.com/activate/${fakeIccid}`,
+      qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=LPA:1$esim.konexesim.com$${fakeIccid}`,
+      manualCode: `LPA:1$esim.konexesim.com$${fakeIccid}`,
+      activationUrl: `https://esim.konexesim.com/activate/${fakeIccid}`,
     };
   }
 
@@ -152,8 +152,8 @@ export class MockProviderAdapter implements ProviderAdapter {
     return {
       providerEsimId, activationStatus,
       dataTotalMb, dataUsedMb, dataRemainingMb, daysRemaining, expiresAt,
-      qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=LPA:1$esim.globesim.com$${fakeIccid}`,
-      manualCode: `LPA:1$esim.globesim.com$${fakeIccid}`,
+      qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=LPA:1$esim.konexesim.com$${fakeIccid}`,
+      manualCode: `LPA:1$esim.konexesim.com$${fakeIccid}`,
       lastSyncedAt: new Date(),
     };
   }

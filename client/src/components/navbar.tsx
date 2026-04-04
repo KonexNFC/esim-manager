@@ -28,7 +28,7 @@ export function Navbar() {
               className="font-bold text-base tracking-tight hidden sm:inline text-foreground"
               data-testid="text-brand-name"
             >
-              GlobeSIM
+              Konex
             </span>
           </div>
         </Link>

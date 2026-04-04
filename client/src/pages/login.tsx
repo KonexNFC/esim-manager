@@ -62,7 +62,7 @@ export default function Login() {
               <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary">
                 <Wifi className="w-4 h-4 text-primary-foreground" />
               </div>
-              <span className="font-semibold text-base tracking-tight">GlobeSIM</span>
+              <span className="font-semibold text-base tracking-tight">Konex</span>
             </div>
           </Link>
 

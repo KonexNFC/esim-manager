@@ -326,7 +326,7 @@ export class DatabaseStorage implements IStorage {
 
   async createOrder(order: InsertOrder, providerIccid?: string, providerQrCode?: string): Promise<Order> {
     const iccid = providerIccid || `89${Array.from({ length: 17 }, () => Math.floor(Math.random() * 10)).join("")}`;
-    const qrCode = providerQrCode || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=LPA:1$esim.globesim.com$${iccid}`;
+    const qrCode = providerQrCode || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=LPA:1$esim.konexesim.com$${iccid}`;
 
     const [created] = await db.insert(orders).values({
       ...order,

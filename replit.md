@@ -1,13 +1,13 @@
-# GlobeSIM - eSIM Marketplace
+# Konex - eSIM Marketplace
 
 ## Overview
-GlobeSIM is a production-ready eSIM marketplace enabling users to browse, purchase, and manage eSIM data plans. It offers instant eSIM activation, a comprehensive customer account dashboard, and top-up functionalities. The platform ensures reliable post-payment eSIM provisioning via Stripe webhooks and features multi-provider routing for optimal plan selection. The project aims to be a leading global platform for seamless mobile connectivity through eSIM technology, continuously expanding its provider integrations and features.
+Konex (konexesim.com) is a production-ready eSIM marketplace enabling users to browse, purchase, and manage eSIM data plans. It offers instant eSIM activation, a comprehensive customer account dashboard, and top-up functionalities. The platform ensures reliable post-payment eSIM provisioning via Stripe webhooks and features multi-provider routing for optimal plan selection. The project aims to be a leading global platform for seamless mobile connectivity through eSIM technology, continuously expanding its provider integrations and features.
 
 ## User Preferences
 I prefer detailed explanations. I want iterative development where I am asked before major changes are made. I like functional programming paradigms where it makes sense, but pragmatism is key.
 
 ## System Architecture
-GlobeSIM is built with a modern web stack. The **frontend** uses React with TypeScript, Vite, Tailwind CSS, and shadcn/ui. The **backend** is an Express.js application in TypeScript. **PostgreSQL** with Drizzle ORM manages data persistence.
+Konex is built with a modern web stack. The **frontend** uses React with TypeScript, Vite, Tailwind CSS, and shadcn/ui. The **backend** is an Express.js application in TypeScript. **PostgreSQL** with Drizzle ORM manages data persistence.
 
 **UI/UX Design:**
 -   Premium landing page with feature showcases.

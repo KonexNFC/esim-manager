@@ -243,7 +243,7 @@ export default function CheckoutSuccess() {
               </div>
               <a
                 href={order.qrCode}
-                download="globesim-esim-qrcode.png"
+                download="konex-esim-qrcode.png"
                 data-testid="link-download-qr"
               >
                 <Button variant="outline" size="sm" className="mt-1">

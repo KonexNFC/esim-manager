@@ -651,7 +651,7 @@ export default function Dashboard() {
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4 mb-8">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-1.5">My GlobeSIM</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-1.5">My Konex</p>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight" data-testid="text-dashboard-greeting">
             Welcome back, {user.name.split(" ")[0]}
           </h1>

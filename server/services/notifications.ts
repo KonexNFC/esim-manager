@@ -4,12 +4,12 @@
 //
 // Required env vars:
 //   RESEND_API_KEY       — your Resend API key (re_...)
-//   EMAIL_FROM_ADDRESS   — verified sender (default: noreply@globesim.app)
+//   EMAIL_FROM_ADDRESS   — verified sender (default: noreply@konexesim.com)
 //   APP_BASE_URL         — used for dashboard links
 
 const RESEND_API = 'https://api.resend.com/emails';
 
-const FROM = process.env.EMAIL_FROM_ADDRESS || 'GlobeSIM <noreply@globesim.app>';
+const FROM = process.env.EMAIL_FROM_ADDRESS || 'Konex <noreply@konexesim.com>';
 
 const BASE_URL =
   process.env.APP_BASE_URL ||
@@ -130,7 +130,7 @@ function layout(content: string, title: string): string {
         <!-- Header -->
         <tr>
           <td style="background:linear-gradient(135deg,#5b21b6 0%,#7c3aed 100%);padding:28px 32px;text-align:center;">
-            <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">🌐 GlobeSIM</h1>
+            <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">🌐 Konex</h1>
             <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:13px;">Your global connectivity partner</p>
           </td>
         </tr>
@@ -147,7 +147,7 @@ function layout(content: string, title: string): string {
           <td style="background:#f9f9f9;border-top:1px solid #ebebeb;padding:20px 32px;text-align:center;">
             <p style="margin:0;color:#888;font-size:12px;line-height:1.6;">
               Questions? Reply to this email or visit <a href="${BASE_URL}" style="color:#7c3aed;text-decoration:none;">${BASE_URL}</a><br/>
-              GlobeSIM — eSIM connectivity for 190+ destinations
+              Konex — eSIM connectivity for 190+ destinations
             </p>
           </td>
         </tr>
@@ -192,7 +192,7 @@ export async function sendEsimReadyEmail(data: EsimReadyData): Promise<void> {
 
   const content = `
     ${heading(`Your eSIM is ready to install! 🎉`)}
-    ${subheading(`Hi${displayName}, your GlobeSIM for <strong>${destination}</strong> has been activated and is ready to use.`)}
+    ${subheading(`Hi${displayName}, your Konex for <strong>${destination}</strong> has been activated and is ready to use.`)}
 
     <!-- QR Code -->
     <div style="text-align:center;margin:28px 0;">
@@ -244,7 +244,7 @@ export async function sendEsimReadyEmail(data: EsimReadyData): Promise<void> {
     <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 16px;margin-bottom:24px;">
       <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#92400e;">💡 Tips for the best experience</p>
       <ul style="margin:0;padding-left:18px;color:#78350f;font-size:13px;line-height:1.8;">
-        <li>Enable data roaming for your GlobeSIM line when abroad</li>
+        <li>Enable data roaming for your Konex line when abroad</li>
         <li>Keep Wi-Fi on when installing — you need internet to download the profile</li>
         <li>Your eSIM validity starts when you first use data, not on install</li>
         <li>If the QR code scan fails, you can enter the manual code in your device settings</li>
@@ -257,7 +257,7 @@ export async function sendEsimReadyEmail(data: EsimReadyData): Promise<void> {
 
   await sendEmail(
     data.email,
-    `Your GlobeSIM for ${data.destination} is ready to install 🌐`,
+    `Your Konex for ${data.destination} is ready to install 🌐`,
     layout(content, 'Your eSIM is Ready'),
   );
 }
@@ -291,7 +291,7 @@ export async function sendPurchaseConfirmation(data: PurchaseConfirmationData): 
 
   await sendEmail(
     data.email,
-    `Your GlobeSIM order is confirmed — ${data.destination}`,
+    `Your Konex order is confirmed — ${data.destination}`,
     layout(content, 'Order Confirmed'),
   );
 }
@@ -327,7 +327,7 @@ export async function sendFulfillmentFailedEmail(data: FulfillmentFailedData): P
 
   await sendEmail(
     data.email,
-    `Action required — your GlobeSIM eSIM could not be activated`,
+    `Action required — your Konex eSIM could not be activated`,
     layout(content, 'eSIM Activation Issue'),
   );
 }
@@ -353,7 +353,7 @@ export async function sendTopupConfirmation(data: TopupConfirmationData): Promis
 
   await sendEmail(
     data.email,
-    `Top-up confirmed — your GlobeSIM has been updated`,
+    `Top-up confirmed — your Konex has been updated`,
     layout(content, 'Top-up Confirmed'),
   );
 }
@@ -393,7 +393,7 @@ export async function sendPaymentFailedEmail(email: string, orderId: string): Pr
     ${callToAction(`${BASE_URL}`, 'Try Again →')}
   `;
 
-  await sendEmail(email, 'Payment not completed — GlobeSIM', layout(content, 'Payment Failed'));
+  await sendEmail(email, 'Payment not completed — Konex', layout(content, 'Payment Failed'));
 }
 
 // ─── Lifecycle Alerts ─────────────────────────────────────────────────────────
@@ -403,7 +403,7 @@ export async function sendLowDataAlert(email: string, orderId: string, dataRemai
 
   const content = `
     ${heading('Running low on data 📶')}
-    ${subheading(`You have <strong>${gbRemaining} GB</strong> remaining on your GlobeSIM.`)}
+    ${subheading(`You have <strong>${gbRemaining} GB</strong> remaining on your Konex.`)}
 
     <p style="font-size:14px;color:#444;line-height:1.7;">
       Don't get caught without data! Top up now to keep connected.
@@ -412,7 +412,7 @@ export async function sendLowDataAlert(email: string, orderId: string, dataRemai
     ${callToAction(`${BASE_URL}/dashboard`, 'Top Up Now →')}
   `;
 
-  await sendEmail(email, `Running low on data — top up your GlobeSIM`, layout(content, 'Low Data Alert'));
+  await sendEmail(email, `Running low on data — top up your Konex`, layout(content, 'Low Data Alert'));
 }
 
 export async function sendExpiryReminder(email: string, orderId: string, daysRemaining: number): Promise<void> {
@@ -427,7 +427,7 @@ export async function sendExpiryReminder(email: string, orderId: string, daysRem
     ${callToAction(`${BASE_URL}/dashboard`, 'Manage My eSIM →')}
   `;
 
-  await sendEmail(email, `Your GlobeSIM expires in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`, layout(content, 'eSIM Expiry Reminder'));
+  await sendEmail(email, `Your Konex expires in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`, layout(content, 'eSIM Expiry Reminder'));
 }
 
 // ─── Magic Login ──────────────────────────────────────────────────────────────
@@ -435,14 +435,14 @@ export async function sendExpiryReminder(email: string, orderId: string, daysRem
 export async function sendMagicLoginEmail(data: MagicLoginData): Promise<void> {
   const content = `
     ${heading('Your sign-in link 🔐')}
-    ${subheading('Click the button below to sign in to GlobeSIM. This link expires in ' + data.expiresInMinutes + ' minutes.')}
+    ${subheading('Click the button below to sign in to Konex. This link expires in ' + data.expiresInMinutes + ' minutes.')}
 
-    ${callToAction(data.loginUrl, 'Sign In to GlobeSIM →')}
+    ${callToAction(data.loginUrl, 'Sign In to Konex →')}
 
     <p style="text-align:center;margin:12px 0 0;font-size:12px;color:#aaa;">
       If you didn't request this, you can safely ignore this email.
     </p>
   `;
 
-  await sendEmail(data.email, 'Your GlobeSIM sign-in link', layout(content, 'Sign In'));
+  await sendEmail(data.email, 'Your Konex sign-in link', layout(content, 'Sign In'));
 }

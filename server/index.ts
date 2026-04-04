@@ -224,7 +224,7 @@ async function initStripe() {
             "customer.created",
             "customer.updated",
           ],
-          description: "GlobeSIM managed webhook",
+          description: "Konex managed webhook",
         });
         if ((created as any).secret) setWebhookSigningSecret((created as any).secret);
         console.log("[Stripe] Webhook created:", created.url, "— signing secret captured");

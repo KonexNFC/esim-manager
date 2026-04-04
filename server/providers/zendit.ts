@@ -266,7 +266,7 @@ export class ZenditProvider implements EsimProvider {
     if (!this.apiKey) throw new Error("Zendit provider not configured");
     if (!planDetails.providerRef) throw new Error("Zendit requires an offerId (providerRef) to purchase");
 
-    const transactionId = `globesim-${randomUUID()}`;
+    const transactionId = `konex-${randomUUID()}`;
 
     // 1. Create purchase
     const purchaseRes = await fetch(`${this.baseUrl}/esim/purchases`, {

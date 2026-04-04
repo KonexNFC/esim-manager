@@ -656,7 +656,7 @@ function PopularDestinations() {
 // ─────────────────────────────────────────────
 // 5. WHY GLOBESIM
 // ─────────────────────────────────────────────
-function WhyGlobeSIM() {
+function WhyKonex() {
   const benefits = [
     {
       icon: Banknote,
@@ -706,7 +706,7 @@ function WhyGlobeSIM() {
     <section className="py-24 sm:py-32 border-t bg-card">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="mb-14 max-w-2xl">
-          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Why GlobeSIM</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Why Konex</p>
           <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.0]" data-testid="text-benefits-title">
             Built for how<br />people actually travel.
           </h2>
@@ -907,7 +907,7 @@ function BuiltForTravellers() {
               Optimised for the world's most popular corridors.
             </h2>
             <p className="text-muted-foreground leading-relaxed mb-8">
-              GlobeSIM isn't a generic eSIM reseller. We've built pricing, coverage, and plans around the routes real travellers actually take.
+              Konex isn't a generic eSIM reseller. We've built pricing, coverage, and plans around the routes real travellers actually take.
             </p>
             <div className="flex flex-wrap gap-2.5">
               {["No app required", "Works worldwide", "No contracts", "Instant activation"].map((item) => (
@@ -973,7 +973,7 @@ function DataRolloverSection() {
             </p>
             <ul className="space-y-3 mb-8">
               {[
-                "Rollover applies to all future trips with GlobeSIM",
+                "Rollover applies to all future trips with Konex",
                 "No manual action required — it's automatic",
                 "Pooled balance visible in your dashboard",
                 "Works across any destination",
@@ -1183,7 +1183,7 @@ function VoiceCallingSection() {
             Coming Q4 2026
           </div>
           <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-4" data-testid="text-voice-title">
-            Make calls with GlobeSIM.
+            Make calls with Konex.
           </h2>
           <p className="text-muted-foreground text-lg max-w-xl mx-auto leading-relaxed">
             Your eSIM, your number — everywhere. Voice calling is coming so you can stay fully connected without juggling apps.
@@ -1210,7 +1210,7 @@ function VoiceCallingSection() {
           </div>
           <h3 className="font-display text-xl font-bold mb-2">Get early access to voice calling</h3>
           <p className="text-muted-foreground text-sm mb-6 max-w-md mx-auto">
-            Create a GlobeSIM account and we'll notify you the moment voice calling launches — early users get priority access and a free trial minute pack.
+            Create a Konex account and we'll notify you the moment voice calling launches — early users get priority access and a free trial minute pack.
           </p>
           <Link href="/signup">
             <Button size="lg" className="font-bold shadow-lg shadow-primary/20" data-testid="button-voice-signup">
@@ -1241,7 +1241,7 @@ function TestimonialsSection() {
       name: "James O.",
       context: "Manchester → Lagos",
       quote: "Cut my connectivity costs in half.",
-      full: "I travel back to Nigeria four times a year. Switching to GlobeSIM saved me significantly — and the signal is just as reliable as any local SIM.",
+      full: "I travel back to Nigeria four times a year. Switching to Konex saved me significantly — and the signal is just as reliable as any local SIM.",
       initials: "JO",
     },
     {
@@ -1454,18 +1454,18 @@ function FAQSection() {
     },
     {
       question: "Can I keep my regular number?",
-      answer: "Yes. Your existing SIM card and phone number remain fully active. The eSIM adds a separate data line — you'll still receive calls and messages on your regular number while using GlobeSIM for data.",
+      answer: "Yes. Your existing SIM card and phone number remain fully active. The eSIM adds a separate data line — you'll still receive calls and messages on your regular number while using Konex for data.",
     },
     {
-      question: "Does GlobeSIM work on iPhone and Android?",
-      answer: "Yes. GlobeSIM works with most eSIM-compatible devices: iPhone XS and newer, Samsung Galaxy S20 and newer, Google Pixel 3 and newer, and many others. Your device must be carrier-unlocked. Use our compatibility checker to confirm before you buy.",
+      question: "Does Konex work on iPhone and Android?",
+      answer: "Yes. Konex works with most eSIM-compatible devices: iPhone XS and newer, Samsung Galaxy S20 and newer, Google Pixel 3 and newer, and many others. Your device must be carrier-unlocked. Use our compatibility checker to confirm before you buy.",
     },
     {
       question: "What happens if I run out of data?",
       answer: "You can purchase a top-up plan for the same destination at any time. Simply find your destination, select a plan, and check out. Your additional data is delivered instantly — no setup needed.",
     },
     {
-      question: "Can I use GlobeSIM in multiple countries?",
+      question: "Can I use Konex in multiple countries?",
       answer: "Yes. Our regional plans cover multiple countries in one purchase — ideal for European trips, Middle East travel, or multi-stop tours. Global plans cover 190+ countries with a single eSIM.",
     },
   ];
@@ -1531,7 +1531,7 @@ function FinalCTA() {
           Get Connected<br />Before You Land.
         </h2>
         <p className="text-muted-foreground text-lg max-w-xl mx-auto mb-10 leading-relaxed" data-testid="text-final-cta-subtitle">
-          5,000+ travellers rely on GlobeSIM for fast, flexible data in 190+ countries. No contracts. No physical SIM. No surprises.
+          5,000+ travellers rely on Konex for fast, flexible data in 190+ countries. No contracts. No physical SIM. No surprises.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
           <Link href="/destinations">
@@ -1582,7 +1582,7 @@ function Footer() {
               <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary">
                 <Wifi className="w-4 h-4 text-white" />
               </div>
-              <span className="font-display font-bold text-lg" data-testid="text-footer-brand">GlobeSIM</span>
+              <span className="font-display font-bold text-lg" data-testid="text-footer-brand">Konex</span>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-[200px]" data-testid="text-footer-tagline">
               Instant global eSIM data for modern travellers.
@@ -1643,7 +1643,7 @@ function Footer() {
 
         <div className="border-t pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-muted-foreground" data-testid="text-footer-copyright">
-            &copy; 2026 GlobeSIM. All rights reserved.
+            &copy; 2026 Konex. All rights reserved.
           </p>
           <div className="flex items-center gap-2">
             <Link href="/destinations">
@@ -1695,7 +1695,7 @@ export default function Home() {
       <HowItWorks />
       <PlanFinder />
       <PopularDestinations />
-      <WhyGlobeSIM />
+      <WhyKonex />
       <BundlesSection />
       <CompatibilitySection />
       <BuiltForTravellers />
