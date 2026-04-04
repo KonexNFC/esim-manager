@@ -1,0 +1,353 @@
+Update the current GlobeSIM homepage and rebrand it to KONEX (eSIM).
+
+IMPORTANT
+Do not rebuild the whole app.
+Do not touch checkout, dashboard, admin, provider routing, or backend systems unless needed for homepage data display.
+This task is only to improve the homepage conversion flow, simplify the narrative, and apply the new KONEX eSIM brand name.
+
+PRIMARY GOAL
+Turn the homepage into a tighter, higher-converting funnel with less decision fatigue and stronger buy intent.
+
+REBRAND REQUIREMENTS
+Replace all homepage brand references from:
+- GlobeSIM
+to:
+- KONEX
+
+Use:
+- KONEX as the main brand wordmark
+- “KONEX eSIM” where context requires clarity
+Keep the current premium visual direction, but update text and labels to the KONEX brand.
+
+==================================================
+1. RESTRUCTURE THE HOMEPAGE INTO A CONVERSION FUNNEL
+==================================================
+
+Reorder the homepage sections into this exact priority:
+
+1. Hero (buy intent)
+2. Plan Finder (conversion tool)
+3. Popular Plans (price anchoring)
+4. Coverage (trust)
+5. Social Proof (validation)
+6. Differentiation / Why KONEX (why choose us vs generic eSIM brands)
+7. Final CTA
+
+Everything else should be pushed lower on the page or deprioritised.
+
+==================================================
+2. HERO SECTION — REWRITE FOR CONVERSION
+==================================================
+
+Replace the current hero messaging with a stronger conversion-led version.
+
+Use:
+
+Eyebrow:
+GET CONNECTED BEFORE YOU LAND
+
+Headline:
+Global Data in 60 Seconds — From $7.99
+
+Subheadline:
+Instant eSIM for 190+ countries. No roaming fees. No SIM swaps. Activated before you land.
+
+Primary CTA:
+Get eSIM Now
+
+Secondary CTA:
+View Plans
+
+Trust bullets under CTA:
+- Instant QR delivery
+- Works in 190+ countries
+- Keep your regular number
+- No contracts or hidden fees
+
+Add a small trust line:
+5,000+ travellers use KONEX for fast, flexible travel data
+
+If current hero card on the right exists, keep it, but make sure it supports the conversion goal.
+It should show a short list of popular plans with visible pricing.
+
+Example cards:
+- United Kingdom — 10 GB • 30 days — $18
+- Europe — 5 GB • 15 days — $14
+- UAE — 3 GB • 7 days — $11
+- Nigeria — 5 GB • 30 days — $16
+
+==================================================
+3. PLAN FINDER — MAKE IT THE MAIN CONVERSION TOOL
+==================================================
+
+Keep the existing plan finder but improve it.
+
+Requirements:
+- Place it directly after the hero
+- Make it feel like the main buying tool
+- Stronger visual emphasis
+- Selecting destination/data/duration should immediately show a recommended plan or price preview if already supported
+- If instant dynamic result is not yet fully available, show a clean preview state ready for connection
+
+Use stronger copy:
+
+Section eyebrow:
+PLAN FINDER
+
+Section title:
+Find the Right eSIM in Seconds
+
+Section subtext:
+Choose where you’re going, how much data you need, and how long you’ll be away. We’ll match you to the best plan.
+
+Primary button:
+Find My Plan
+
+If current button says “Get eSIM”, update it to:
+Find My Plan
+
+==================================================
+4. POPULAR PLANS — MOVE HIGHER
+==================================================
+
+Move destination cards / popular plan cards up so they sit immediately after the plan finder.
+
+This section should serve as price anchoring and decision support.
+
+Use:
+
+Eyebrow:
+POPULAR DESTINATIONS
+
+Section title:
+Where do you want to go?
+
+Add top destinations with visible “From $X” pricing.
+Keep the visual destination card grid if already implemented.
+
+Add a button:
+Browse all destinations
+
+Do not bury this lower down the page.
+
+==================================================
+5. COVERAGE SECTION — KEEP, BUT TIGHTEN
+==================================================
+
+Keep the coverage section high on the page, after popular plans.
+
+Use it as a trust layer, not a feature dump.
+
+Headline:
+190+ countries covered
+
+Subheadline:
+From weekend city breaks to long-haul trips, KONEX keeps you connected across the world.
+
+Keep region tabs:
+- Europe
+- North America
+- Africa
+- Middle East
+- Asia
+- Global
+
+Make sure this section feels concise and confidence-building, not overloaded.
+
+==================================================
+6. SOCIAL PROOF — KEEP AS VALIDATION
+==================================================
+
+Keep testimonials and trust bar, but make them a validation layer after coverage.
+
+Use:
+- strong headline
+- 3 concise testimonials
+- trust row:
+  - Secure checkout
+  - Instant delivery
+  - Reliable coverage
+  - 24/7 support
+
+Keep this section clean and believable.
+Do not overload it with too much text.
+
+==================================================
+7. DIFFERENTIATION SECTION — MOVE “WHY KONEX” HIGHER THAN SECONDARY FEATURES
+==================================================
+
+Create or refine a strong section explaining why KONEX is different.
+
+This should come after social proof and before the final CTA.
+
+Use:
+
+Eyebrow:
+WHY KONEX
+
+Headline:
+Built for how people actually travel
+
+Subheadline:
+Fast, transparent, and reliable — with no lock-in, no roaming fees, and no physical SIM required.
+
+Feature cards should focus on core differentiators only:
+- No roaming fees — ever
+- Activated in under 60 seconds
+- Keep your existing number
+- Regional and global plans
+- Tier 1 global networks
+- 100% digital — no plastic
+
+If this section already exists, simplify and tighten it.
+
+==================================================
+8. MOVE NON-CORE FEATURES LOWER ON THE PAGE
+==================================================
+
+The following sections should NOT appear in the main conversion path above the fold or mid-page priority area:
+
+- Voice calling teaser
+- Rollover data teaser
+- Gift eSIM
+- Any future / coming soon feature blocks
+
+Move them much lower on the homepage, after the final CTA, or reduce their prominence significantly.
+
+These are secondary / future / optional narratives and should not distract from the primary purchase flow.
+
+Specifically:
+- Voice calling is not relevant to first conversion and should be pushed down
+- Rollover data is useful but not core enough to interrupt the sales path
+- Gift eSIM is a secondary use case and should not compete with the core buy flow
+
+Do not delete them unless necessary.
+Just deprioritise them visually and structurally.
+
+==================================================
+9. REMOVE DECISION FATIGUE
+==================================================
+
+Audit the homepage for unnecessary narrative competition.
+
+Reduce the feeling of:
+- too many sections
+- too many offers
+- too many product directions
+
+The homepage should clearly answer in this order:
+1. What is KONEX?
+2. Why should I trust it?
+3. What plan should I buy?
+4. Where does it work?
+5. Why choose KONEX over alternatives?
+6. Buy now
+
+If any section interrupts this flow, move it lower.
+
+==================================================
+10. CTA CONSISTENCY
+==================================================
+
+Standardise CTA language across the homepage.
+
+Use only these primary CTA patterns:
+- Get eSIM Now
+- Find My Plan
+- View Plans
+- Browse all destinations
+
+Avoid weaker or vague CTA labels such as:
+- Get Connected
+- Learn More
+- Explore More
+
+Make CTA language direct and purchase-oriented.
+
+==================================================
+11. NAVIGATION / HEADER
+==================================================
+
+Update homepage header branding to KONEX.
+
+Keep navigation concise and aligned to the new funnel:
+- Plans
+- How It Works
+- Coverage
+- FAQ
+- Dashboard
+
+Primary header CTA:
+Get eSIM Now
+
+Keep the premium header style and existing dark/light mode behaviour if present.
+
+==================================================
+12. FINAL CTA
+==================================================
+
+After the Why KONEX section, add or refine a strong closing CTA section.
+
+Use:
+
+Headline:
+Get travel data before you land
+
+Copy:
+Choose your destination, activate in minutes, and stay connected in 190+ countries with KONEX eSIM.
+
+Primary CTA:
+Get eSIM Now
+
+Secondary CTA:
+View Plans
+
+==================================================
+13. VISUAL / UX RULES
+==================================================
+
+Do not redesign the brand from scratch.
+Keep the premium visual direction already present.
+
+But improve:
+- section hierarchy
+- spacing rhythm
+- content focus
+- CTA prominence
+- conversion flow
+
+The page should feel:
+- more focused
+- less crowded
+- more commercially intentional
+- easier to scan
+- more direct
+
+==================================================
+14. IMPLEMENTATION NOTES
+==================================================
+
+- Preserve existing reusable components where possible
+- Reorder sections instead of rebuilding unnecessarily
+- Update copy in place
+- Keep all existing working functionality intact
+- Only adjust lower-priority sections enough to reduce distraction
+- Do not break links, plan cards, or current UI interactions
+
+==================================================
+15. DELIVERABLE
+==================================================
+
+Return a refined KONEX homepage with:
+- updated brand name
+- simplified conversion-focused structure
+- reordered sections
+- stronger hero
+- stronger plan finder positioning
+- higher placement for popular plans
+- coverage as trust section
+- testimonials as validation section
+- clear Why KONEX section
+- secondary features pushed down
+
+The final result should feel like a sharper, more focused eSIM sales funnel rather than a feature-heavy brand page.

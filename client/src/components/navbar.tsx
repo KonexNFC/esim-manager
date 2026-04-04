@@ -29,8 +29,8 @@ export function Navbar() {
           <nav className="flex items-center gap-0.5">
             {[
               { label: "Plans",        id: "plans"        },
-              { label: "How It Works", id: "how-it-works" },
               { label: "Coverage",     id: "coverage"     },
+              { label: "How It Works", id: "how-it-works" },
               { label: "FAQ",          id: "faq"          },
             ].map(item => (
               <button
@@ -65,9 +65,9 @@ export function Navbar() {
               <Button
                 size="sm"
                 className="ml-1 bg-primary hover:bg-primary/90 text-white font-semibold shadow-lg shadow-primary/25"
-                data-testid="nav-get-connected"
+                data-testid="nav-get-esim"
               >
-                Get Connected
+                Get eSIM Now
                 <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
               </Button>
             </Link>

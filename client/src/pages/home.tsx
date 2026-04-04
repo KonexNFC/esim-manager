@@ -132,28 +132,28 @@ function HeroSection() {
 
           {/* Left: Copy */}
           <div>
-            {/* Pill badge */}
+            {/* Eyebrow */}
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-white/70 text-xs font-semibold uppercase tracking-widest mb-6 backdrop-blur-sm">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              190+ countries · Instant activation
+              Get connected before you land
             </div>
 
             <h1
               className="font-display text-5xl sm:text-6xl lg:text-[4.5rem] xl:text-[5.5rem] font-bold text-white leading-[1.0] tracking-tight mb-6"
               data-testid="text-hero-title"
             >
-              Land Anywhere.
+              Global Data in
               <br />
-              <span className="text-gradient-bright">Get Data in</span>
+              <span className="text-gradient-bright">60 Seconds</span>
               <br />
-              60 Seconds.
+              — From $7.99
             </h1>
 
             <p
               className="text-white/60 text-lg sm:text-xl max-w-lg leading-relaxed mb-8"
               data-testid="text-hero-subtitle"
             >
-              No roaming fees. No SIM cards. Instant global connectivity the moment you touch down.
+              Instant eSIM for 190+ countries. No roaming fees. No SIM swaps. Activated before you land.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 mb-8">
@@ -161,9 +161,9 @@ function HeroSection() {
                 <Button
                   size="lg"
                   className="h-12 px-7 text-base font-bold shadow-xl shadow-primary/30 bg-primary hover:bg-primary/90"
-                  data-testid="button-get-connected"
+                  data-testid="button-get-esim"
                 >
-                  Get Connected Now
+                  Get eSIM Now
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
               </Link>
@@ -180,11 +180,12 @@ function HeroSection() {
             </div>
 
             {/* Trust bullets */}
-            <div className="flex flex-col gap-2" data-testid="trust-bullets">
+            <div className="flex flex-col gap-2 mb-4" data-testid="trust-bullets">
               {[
-                "Works instantly on arrival — no setup queues",
-                "Keep your number · WhatsApp, calls & texts stay active",
-                "QR code delivered to your email in seconds",
+                "Instant QR delivery",
+                "Works in 190+ countries",
+                "Keep your regular number",
+                "No contracts or hidden fees",
               ].map((b) => (
                 <div key={b} className="flex items-center gap-2.5 text-white/60 text-sm">
                   <CheckCircle2 className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
@@ -192,6 +193,11 @@ function HeroSection() {
                 </div>
               ))}
             </div>
+
+            {/* Social proof micro-line */}
+            <p className="text-white/30 text-xs font-medium" data-testid="text-hero-social-proof">
+              5,000+ travellers use KONEX for fast, flexible travel data
+            </p>
 
             {/* Quick plan finder */}
             <div
@@ -234,7 +240,7 @@ function HeroSection() {
                 onClick={handleHeroFind}
                 data-testid="button-hero-get-esim"
               >
-                Find My eSIM
+                Find My Plan
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
             </div>
@@ -475,10 +481,10 @@ function PlanFinder() {
         <div className="mb-12">
           <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Plan Finder</p>
           <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-plan-finder-title">
-            Find the right eSIM<br />in seconds.
+            Find the Right eSIM<br />in Seconds
           </h2>
           <p className="mt-4 text-muted-foreground max-w-md leading-relaxed">
-            Tell us where you're headed and how long you're going. We'll match you to the best plan.
+            Choose where you're going, how much data you need, and how long you'll be away. We'll match you to the best plan.
           </p>
         </div>
 
@@ -557,7 +563,7 @@ function PlanFinder() {
                       <p className="text-xs text-muted-foreground mt-0.5">one-off · no subscription</p>
                     </div>
                     <Button size="lg" className="font-bold flex-shrink-0" onClick={handleFind} data-testid="button-see-plans">
-                      See Plans
+                      Find My Plan
                       <ArrowRight className="ml-2 w-4 h-4" />
                     </Button>
                   </div>
@@ -619,7 +625,7 @@ function PopularDestinations() {
           </div>
           <Link href="/destinations">
             <Button variant="outline" size="lg" className="font-bold" data-testid="button-popular-browse-all">
-              Browse all
+              Browse all destinations
               <ArrowRight className="ml-2 w-4 h-4" />
             </Button>
           </Link>
@@ -708,9 +714,12 @@ function WhyKonex() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="mb-14 max-w-2xl">
           <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Why Konex</p>
-          <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.0]" data-testid="text-benefits-title">
+          <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.0] mb-5" data-testid="text-benefits-title">
             Built for how<br />people actually travel.
           </h2>
+          <p className="text-muted-foreground text-lg leading-relaxed">
+            Fast, transparent, and reliable — with no lock-in, no roaming fees, and no physical SIM required.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -957,7 +966,7 @@ function DataRolloverSection() {
   ];
 
   return (
-    <section className="py-24 sm:py-32 border-t bg-card" id="rollover" data-testid="section-rollover">
+    <section className="py-16 sm:py-20 border-t bg-card/50" id="rollover" data-testid="section-rollover">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           <div>
@@ -1059,7 +1068,7 @@ function GiftEsimSection() {
   }
 
   return (
-    <section className="py-24 sm:py-32 border-t" id="gift" data-testid="section-gift">
+    <section className="py-16 sm:py-20 border-t opacity-90" id="gift" data-testid="section-gift">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           <div className="order-2 lg:order-1" data-testid="gift-demo">
@@ -1176,7 +1185,7 @@ function VoiceCallingSection() {
   ];
 
   return (
-    <section className="py-24 sm:py-32 border-t bg-card" id="voice" data-testid="section-voice">
+    <section className="py-16 sm:py-20 border-t bg-card/50" id="voice" data-testid="section-voice">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-14">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-bold uppercase tracking-widest mb-5">
@@ -1392,7 +1401,7 @@ function CoverageSection() {
             190+ countries covered.
           </h2>
           <p className="mt-4 text-muted-foreground max-w-sm leading-relaxed">
-            From weekend city breaks to month-long adventures — wherever you go, we go with you.
+            From weekend city breaks to long-haul trips, KONEX keeps you connected across the world.
           </p>
         </div>
 
@@ -1524,26 +1533,22 @@ function FinalCTA() {
         style={{ background: "radial-gradient(ellipse, #7c3aed 0%, transparent 70%)" }} />
 
       <div className="relative max-w-4xl mx-auto px-4 sm:px-6 text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-bold uppercase tracking-widest mb-6">
-          <Zap className="w-3.5 h-3.5" />
-          Get started today
-        </div>
         <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-[1.0]" data-testid="text-final-cta-title">
-          Get Connected<br />Before You Land.
+          Get travel data<br />before you land.
         </h2>
         <p className="text-muted-foreground text-lg max-w-xl mx-auto mb-10 leading-relaxed" data-testid="text-final-cta-subtitle">
-          5,000+ travellers rely on Konex for fast, flexible data in 190+ countries. No contracts. No physical SIM. No surprises.
+          Choose your destination, activate in minutes, and stay connected in 190+ countries with KONEX eSIM.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
           <Link href="/destinations">
             <Button size="lg" className="h-13 px-8 text-base font-bold shadow-xl shadow-primary/30" data-testid="button-final-get-started">
-              Get Your eSIM Now
+              Get eSIM Now
               <ArrowRight className="ml-2 w-4 h-4" />
             </Button>
           </Link>
           <Link href="/destinations">
             <Button size="lg" variant="outline" className="h-13 px-8 text-base font-bold" data-testid="button-final-browse-plans">
-              Browse Plans
+              View Plans
             </Button>
           </Link>
         </div>
@@ -1669,7 +1674,7 @@ function MobileStickyCTA() {
       <div className="flex gap-2">
         <Link href="/destinations" className="flex-1">
           <Button className="w-full font-bold text-sm" size="default" data-testid="button-mobile-sticky-esim">
-            Get eSIM
+            Get eSIM Now
             <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
           </Button>
         </Link>
@@ -1689,21 +1694,23 @@ function MobileStickyCTA() {
 export default function Home() {
   return (
     <div className="min-h-screen pb-20 sm:pb-0">
+      {/* Primary conversion funnel */}
       <HeroSection />
-      <HowItWorks />
       <PlanFinder />
       <PopularDestinations />
+      <CoverageSection />
+      <TestimonialsSection />
       <WhyKonex />
+      <FinalCTA />
+      {/* Secondary / supporting content */}
+      <HowItWorks />
       <BundlesSection />
       <CompatibilitySection />
       <BuiltForTravellers />
       <DataRolloverSection />
       <GiftEsimSection />
       <VoiceCallingSection />
-      <TestimonialsSection />
-      <CoverageSection />
       <FAQSection />
-      <FinalCTA />
       <Footer />
       <MobileStickyCTA />
     </div>
