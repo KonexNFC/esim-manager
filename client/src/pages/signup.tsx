@@ -163,7 +163,7 @@ export default function Signup() {
           <div className="space-y-4">
             {[
               { icon: Globe,       title: "190+ countries",        sub: "One account for all your destinations" },
-              { icon: Wifi,        title: "Instant eSIM delivery", sub: "QR code in your inbox in seconds"      },
+              { icon: Zap,         title: "Instant eSIM delivery", sub: "QR code in your inbox in seconds"      },
               { icon: ShieldCheck, title: "Manage everything",     sub: "Top up, track usage, view history"     },
             ].map(f => (
               <div key={f.title} className="flex items-start gap-3">

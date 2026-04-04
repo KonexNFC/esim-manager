@@ -138,7 +138,7 @@ export default function Login() {
           </div>
           <div className="space-y-4">
             {[
-              { icon: Wifi,        title: "Instant activation",    sub: "QR code delivered the moment you pay" },
+              { icon: Zap,         title: "Instant activation",    sub: "QR code delivered the moment you pay" },
               { icon: Globe,       title: "190+ countries",        sub: "One account, global coverage"         },
               { icon: ShieldCheck, title: "Secure & private",      sub: "Your data is always encrypted"        },
             ].map(f => (
