@@ -1,8 +1,9 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
-import { Wifi, Search, Smartphone, ArrowRight, LayoutDashboard, LogIn } from "lucide-react";
+import { Search, Smartphone, ArrowRight, LayoutDashboard, LogIn } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { KonexLogo } from "./konex-logo";
 
 export function Navbar() {
   const [location] = useLocation();
@@ -20,17 +21,7 @@ export function Navbar() {
 
         {/* Logo */}
         <Link href="/" data-testid="link-home">
-          <div className="flex items-center gap-2.5 cursor-pointer">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary">
-              <Wifi className="w-4 h-4 text-white" />
-            </div>
-            <span
-              className="font-bold text-base tracking-tight hidden sm:inline text-foreground"
-              data-testid="text-brand-name"
-            >
-              Konex
-            </span>
-          </div>
+          <KonexLogo size="md" data-testid="text-brand-name" className="cursor-pointer [&>span]:hidden sm:[&>span]:inline" />
         </Link>
 
         {/* Home nav */}

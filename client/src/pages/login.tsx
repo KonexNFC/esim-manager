@@ -3,7 +3,8 @@ import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Wifi, ArrowRight, Eye, EyeOff, ShieldCheck, Globe, Zap } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, ShieldCheck, Globe, Zap } from "lucide-react";
+import { KonexLogo } from "@/components/konex-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -58,12 +59,7 @@ export default function Login() {
 
           {/* Brand */}
           <Link href="/">
-            <div className="flex items-center gap-2 mb-10 w-fit cursor-pointer">
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary">
-                <Wifi className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <span className="font-semibold text-base tracking-tight">Konex</span>
-            </div>
+            <KonexLogo size="md" className="mb-10 w-fit cursor-pointer" />
           </Link>
 
           <div className="mb-8">

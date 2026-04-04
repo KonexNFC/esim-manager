@@ -3,7 +3,8 @@ import { Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Wifi, CheckCircle, ArrowLeft } from "lucide-react";
+import { CheckCircle, ArrowLeft } from "lucide-react";
+import { KonexLogo } from "@/components/konex-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -30,12 +31,7 @@ export default function ForgotPassword() {
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-16">
       <div className="w-full max-w-md">
-        <div className="flex items-center gap-2 mb-10">
-          <div className="flex items-center justify-center w-9 h-9 rounded-md bg-primary">
-            <Wifi className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <span className="font-semibold text-lg tracking-tight">Konex</span>
-        </div>
+        <KonexLogo size="md" className="mb-10" />
 
         {sent ? (
           <div className="text-center" data-testid="reset-success">
