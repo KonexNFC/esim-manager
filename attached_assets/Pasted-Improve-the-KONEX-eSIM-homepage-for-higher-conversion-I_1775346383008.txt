@@ -1,0 +1,432 @@
+Improve the KONEX eSIM homepage for higher conversion.
+
+IMPORTANT
+Do not rebuild the entire site.
+Do not touch checkout, dashboard, admin, provider logic, or backend systems unless needed for homepage display data.
+Only improve the homepage copy, hero section, section order emphasis, and conversion messaging.
+
+PRIMARY GOAL
+Turn the homepage into a sharper, higher-converting sales funnel with:
+- stronger hero messaging
+- clearer value proposition
+- stronger trust
+- better pricing visibility
+- stronger differentiation
+- better CTA clarity
+
+Keep the current premium visual design language and existing brand identity.
+Brand name is KONEX.
+
+==================================================
+1. HERO SECTION — FULL UPGRADE
+==================================================
+
+Replace the current hero copy with this exact structure:
+
+Eyebrow:
+GET CONNECTED BEFORE YOU LAND
+
+Headline:
+Global eSIM data in 60 seconds — from $7.99
+
+Subheadline:
+Stay connected in 190+ countries the moment you land. No roaming fees. No SIM swaps. No apps required.
+
+Benefits under subheadline:
+- Instant activation via QR code
+- Works in 190+ countries worldwide
+- Pay once — no contracts or hidden fees
+
+Primary CTA:
+Get eSIM Now
+
+Secondary CTA:
+View Plans
+
+Trust strip under CTA:
+- 4.9/5 from 5,000+ travellers
+- Instant delivery
+- Tier-1 global networks
+- 24/7 support
+
+If the hero currently has a right-side pricing card or plan preview, keep it and upgrade it.
+
+Hero right-side pricing card should clearly show:
+
+POPULAR PLANS
+Starting from $9
+
+- United Kingdom
+  10 GB • 30 days
+  $18
+
+- Europe
+  5 GB • 15 days
+  $14
+
+- UAE
+  3 GB • 7 days
+  $11
+
+- Nigeria
+  5 GB • 30 days
+  $16
+
+Include:
+- Instant QR tag
+- Browse All Plans button
+
+Make sure the hero is the strongest visual and commercial section on the page.
+
+==================================================
+2. HOMEPAGE COPY TIGHTENING
+==================================================
+
+Audit homepage copy and rewrite weaker generic wording into stronger conversion-focused wording.
+
+Use these rules:
+- be direct
+- be commercial
+- be clear
+- avoid fluff
+- avoid vague phrases like “stay connected” if stronger copy can be used
+- use outcome-based language
+
+Examples of preferred phrasing:
+- “Land with data already working”
+- “No roaming fees”
+- “Instant QR delivery”
+- “Activated before you land”
+- “One eSIM for your whole trip”
+
+==================================================
+3. WHY KONEX SECTION — REWRITE
+==================================================
+
+Keep or refine the Why KONEX section with this exact copy direction.
+
+Eyebrow:
+WHY KONEX
+
+Headline:
+Built for how people actually travel
+
+Subheadline:
+Fast, transparent, and reliable — with no lock-in, no roaming fees, and no physical SIM required.
+
+Use these six feature cards:
+1. No roaming fees — ever
+   One fixed price. No per-minute charges, no bill shock when you land. What you pay at checkout is all you pay.
+
+2. Activated in under 60 seconds
+   Your QR code arrives the instant you check out. Scan it from your phone settings and you're online in minutes.
+
+3. Keep your existing number
+   Your regular SIM stays fully active. Calls, texts, and WhatsApp all work on your main number — your eSIM handles data.
+
+4. Regional & global plans
+   One eSIM, multiple countries. Cover all of Europe, the Middle East, or Southeast Asia with a single purchase.
+
+5. Tier 1 global networks
+   Routed through Vodafone, T-Mobile, Orange, and other Tier 1 carriers for strong, reliable signal wherever you go.
+
+6. 100% digital — no plastic
+   No SIM card. No post. No carrier store. Buy online, install digitally, travel. That’s it.
+
+==================================================
+4. HOW IT WORKS SECTION — REWRITE
+==================================================
+
+Refine the How It Works section.
+
+Eyebrow:
+HOW IT WORKS
+
+Headline:
+Online in 60 seconds
+
+3 steps:
+1. Choose your plan
+   Pick your destination, data size, and trip length. Done in 30 seconds.
+
+2. Get your QR instantly
+   Your QR code lands in your inbox the moment payment clears. No waiting.
+
+3. Scan and go
+   Open phone Settings, scan the QR, and you're online. That’s it.
+
+Keep the current clean visual cards if they already exist.
+
+==================================================
+5. POPULAR DESTINATIONS SECTION — IMPROVE COPY
+==================================================
+
+Keep the destination cards section but tighten it.
+
+Eyebrow:
+POPULAR DESTINATIONS
+
+Headline:
+Where do you want to go?
+
+Keep pricing badges like:
+FROM £7.99
+FROM £12.99
+etc.
+
+Add a short supporting line above or below the grid if useful:
+Choose from our most popular destinations and get connected before you land.
+
+Keep the Browse all destinations CTA.
+
+==================================================
+6. COVERAGE SECTION — REWRITE
+==================================================
+
+Keep the current coverage section and rewrite to:
+
+Eyebrow:
+COVERAGE
+
+Headline:
+190+ countries covered
+
+Subheadline:
+From weekend city breaks to long-haul trips, KONEX keeps you connected across the world.
+
+Keep regional tabs:
+- Europe
+- North America
+- Africa
+- Middle East
+- Asia
+- Global
+
+Keep the “Browse Europe Plans” style CTA.
+
+==================================================
+7. TRUST / TESTIMONIALS SECTION — STRENGTHEN
+==================================================
+
+Keep testimonials section but strengthen the heading and intro.
+
+Headline:
+Trusted by modern travellers
+
+Subheadline:
+4.9 / 5 from 5,000+ customers
+
+Keep three testimonials and use copy like:
+
+1.
+“Activated before I even left the airport. Seamless.”
+I scanned the QR on the plane and had working data before I’d collected my luggage. Far better than queueing at an airport kiosk.
+— Sarah K.
+London → Lisbon, Porto, Seville
+
+2.
+“Cut my connectivity costs in half.”
+I travel back to Nigeria four times a year. Switching to Konex saved me significantly — and the signal is just as reliable as any local SIM.
+— James O.
+Manchester → Lagos
+
+3.
+“Fast data, first-time install, zero issues.”
+The QR worked first try and the setup guide was clear. Recommended it to my whole team before our Dubai conference — everyone was happy.
+— Priya M.
+Birmingham → Dubai, Abu Dhabi
+
+Keep trust cards below:
+- Secure checkout
+- Instant delivery
+- Reliable coverage
+- 24/7 support
+
+==================================================
+8. ROUTES / DIFFERENTIATION SECTION — REFINE
+==================================================
+
+Keep the routes section because it is a real differentiator.
+
+Eyebrow:
+BUILT FOR REAL ROUTES
+
+Headline:
+Optimised for the world’s most popular travel corridors
+
+Subheadline:
+Konex isn’t a generic eSIM reseller. We’ve built pricing, coverage, and plans around the routes real travellers actually take.
+
+Keep examples:
+- UK → Europe
+- UK ↔ Nigeria
+- UK → Dubai / UAE
+- Multi-stop global
+
+Keep small supporting chips:
+- No app required
+- Works worldwide
+- No contracts
+- Instant activation
+
+==================================================
+9. BUNDLES SECTION — KEEP AND POLISH
+==================================================
+
+Keep bundles section and refine the heading.
+
+Eyebrow:
+TRAVEL BUNDLES
+
+Headline:
+Bundles built for your route
+
+Subheadline:
+Pre-configured for the most popular travel corridors — buy once, stay connected throughout.
+
+Keep three bundle cards:
+- Europe Pack
+- UK ↔ Nigeria Pack
+- Global Traveller Pack
+
+Keep badges:
+- Most Popular
+- Best Value
+- Premium
+
+Make sure pricing remains prominent:
+From $14
+From $16
+From $29
+
+==================================================
+10. COMPATIBILITY SECTION — IMPROVE
+==================================================
+
+Keep the device compatibility section.
+
+Eyebrow:
+COMPATIBILITY
+
+Headline:
+Works with most modern devices
+
+Subheadline:
+Compatible with most eSIM-enabled iPhones and Android devices released since 2018. Your device must be carrier-unlocked.
+
+Bullet list:
+- iPhone XS and newer — including all iPhone 14, 15, and 16 models
+- Samsung Galaxy S20 series and newer
+- Google Pixel 3 and newer
+- Selected OnePlus, Motorola, and Xiaomi devices
+
+Device checker card:
+Headline:
+Not sure if your phone is compatible?
+
+Body:
+Our device checker covers 60+ models across Apple, Samsung, Google, and more. Takes under 30 seconds to confirm eSIM support.
+
+Buttons:
+- Check your device
+- Open Device Checker
+
+==================================================
+11. FINAL CTA SECTION — REWRITE
+==================================================
+
+Refine the final CTA section.
+
+Headline:
+Get travel data before you land
+
+Body:
+Choose your destination, activate in minutes, and stay connected in 190+ countries with KONEX eSIM.
+
+Buttons:
+- Get eSIM Now
+- View Plans
+
+Trust microcopy below if helpful:
+Instant delivery • No roaming fees • No contracts
+
+==================================================
+12. DEPRIORITISE SECONDARY / FUTURE FEATURES
+==================================================
+
+The following sections should remain lower priority and should not distract from the main conversion flow:
+- Voice calling
+- Rollover data
+- Gift eSIM
+
+Do not remove them completely if already built.
+But reduce their prominence:
+- push them lower on the homepage
+- make sure they appear after the primary conversion sections
+- they should not interrupt the main purchase journey
+
+The main homepage journey should feel like:
+1. Hero
+2. Plan finder
+3. Popular destinations
+4. Coverage
+5. Social proof
+6. Why KONEX
+7. Routes / bundles
+8. Compatibility
+9. Final CTA
+10. Secondary / future features
+11. FAQ
+12. Footer
+
+==================================================
+13. CTA CONSISTENCY
+==================================================
+
+Standardise CTA labels across homepage.
+
+Use only these CTA types:
+- Get eSIM Now
+- View Plans
+- Find My Plan
+- Browse all destinations
+- View Bundle
+- Check your device
+
+Remove weaker or inconsistent CTA wording where possible.
+
+==================================================
+14. VISUAL / UX REFINEMENT
+==================================================
+
+Do not redesign the brand.
+Keep the current premium Konex look and feel.
+
+But improve:
+- copy clarity
+- hierarchy
+- consistency
+- section rhythm
+- conversion intent
+
+Ensure:
+- strong spacing
+- easy scanning
+- clearer commercial language
+- premium but direct tone
+
+==================================================
+15. DELIVERABLE
+==================================================
+
+Return an updated KONEX homepage with:
+- rewritten copy
+- stronger hero
+- improved commercial clarity
+- tighter conversion flow
+- improved CTA wording
+- refined trust and differentiation messaging
+- secondary features pushed lower
+
+Do not rebuild the entire site.
+Improve the current implementation in place.

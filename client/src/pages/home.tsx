@@ -25,7 +25,7 @@ import {
 import {
   ArrowRight, Globe, Zap, Smartphone,
   Wifi, Star, Lock, CheckCircle2,
-  Signal, Quote, Users, Radio,
+  Signal, Quote, Radio,
   QrCode, MapPin, Banknote, ShieldCheck,
   Package, TrendingUp, Timer, Gift, PhoneCall, ChevronRight,
 } from "lucide-react";
@@ -142,18 +142,18 @@ function HeroSection() {
               className="font-display text-5xl sm:text-6xl lg:text-[4.5rem] xl:text-[5.5rem] font-bold text-white leading-[1.0] tracking-tight mb-6"
               data-testid="text-hero-title"
             >
-              Global Data in
+              Global eSIM data in
               <br />
-              <span className="text-gradient-bright">60 Seconds</span>
+              <span className="text-gradient-bright">60 seconds</span>
               <br />
-              — From $7.99
+              — from $7.99
             </h1>
 
             <p
               className="text-white/60 text-lg sm:text-xl max-w-lg leading-relaxed mb-8"
               data-testid="text-hero-subtitle"
             >
-              Instant eSIM for 190+ countries. No roaming fees. No SIM swaps. Activated before you land.
+              Stay connected in 190+ countries the moment you land. No roaming fees. No SIM swaps. No apps required.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 mb-8">
@@ -182,10 +182,9 @@ function HeroSection() {
             {/* Trust bullets */}
             <div className="flex flex-col gap-2 mb-4" data-testid="trust-bullets">
               {[
-                "Instant QR delivery",
-                "Works in 190+ countries",
-                "Keep your regular number",
-                "No contracts or hidden fees",
+                "Instant activation via QR code",
+                "Works in 190+ countries worldwide",
+                "Pay once — no contracts or hidden fees",
               ].map((b) => (
                 <div key={b} className="flex items-center gap-2.5 text-white/60 text-sm">
                   <CheckCircle2 className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
@@ -193,11 +192,6 @@ function HeroSection() {
                 </div>
               ))}
             </div>
-
-            {/* Social proof micro-line */}
-            <p className="text-white/30 text-xs font-medium" data-testid="text-hero-social-proof">
-              5,000+ travellers use KONEX for fast, flexible travel data
-            </p>
 
             {/* Quick plan finder */}
             <div
@@ -318,12 +312,12 @@ function HeroSection() {
           <div className="flex flex-col sm:flex-row items-center gap-4 justify-between">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               {[
-                { icon: Lock,        label: "Secure checkout" },
+                { icon: Star,        label: "4.9/5 · 5,000+ travellers" },
                 { icon: Zap,         label: "Instant delivery" },
-                { icon: Users,       label: "5,000+ travellers" },
+                { icon: Signal,      label: "Tier-1 global networks" },
                 { icon: ShieldCheck, label: "24/7 support" },
               ].map(({ icon: Icon, label }) => (
-                <div key={label} className="flex items-center gap-1.5 text-white/45" data-testid={`trust-bar-${label.toLowerCase().replace(/[\s+]/g, '-')}`}>
+                <div key={label} className="flex items-center gap-1.5 text-white/45" data-testid={`trust-bar-${label.toLowerCase().replace(/[\s+/·]/g, '-')}`}>
                   <Icon className="w-3.5 h-3.5" />
                   <span className="text-xs font-medium">{label}</span>
                 </div>
@@ -619,12 +613,13 @@ function PopularDestinations() {
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Popular Destinations</p>
-            <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight">
+            <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-3">
               Where do you<br />want to go?
             </h2>
+            <p className="text-muted-foreground text-sm">Choose from our most popular destinations and get connected before you land.</p>
           </div>
           <Link href="/destinations">
-            <Button variant="outline" size="lg" className="font-bold" data-testid="button-popular-browse-all">
+            <Button variant="outline" size="lg" className="font-bold flex-shrink-0" data-testid="button-popular-browse-all">
               Browse all destinations
               <ArrowRight className="ml-2 w-4 h-4" />
             </Button>
@@ -787,9 +782,12 @@ function BundlesSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="mb-14 max-w-xl">
           <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Travel Bundles</p>
-          <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-bundles-title">
+          <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-4" data-testid="text-bundles-title">
             Bundles built<br />for your route.
           </h2>
+          <p className="text-muted-foreground leading-relaxed">
+            Pre-configured for the most popular travel corridors — buy once, stay connected throughout.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -914,7 +912,7 @@ function BuiltForTravellers() {
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Built for real routes</p>
             <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-built-for-title">
-              Optimised for the world's most popular corridors.
+              Optimised for the world's most popular travel corridors
             </h2>
             <p className="text-muted-foreground leading-relaxed mb-8">
               Konex isn't a generic eSIM reseller. We've built pricing, coverage, and plans around the routes real travellers actually take.
@@ -1552,19 +1550,9 @@ function FinalCTA() {
             </Button>
           </Link>
         </div>
-        <div className="flex flex-wrap justify-center gap-x-6 gap-y-2.5 text-sm text-muted-foreground">
-          {[
-            "Instant delivery · No waiting",
-            "Works immediately after activation",
-            "No contracts or hidden fees",
-            "190+ countries covered",
-          ].map((item) => (
-            <div key={item} className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
-              <span>{item}</span>
-            </div>
-          ))}
-        </div>
+        <p className="text-sm text-muted-foreground" data-testid="text-final-microcopy">
+          Instant delivery &nbsp;·&nbsp; No roaming fees &nbsp;·&nbsp; No contracts
+        </p>
       </div>
     </section>
   );
@@ -1701,15 +1689,15 @@ export default function Home() {
       <CoverageSection />
       <TestimonialsSection />
       <WhyKonex />
-      <FinalCTA />
-      {/* Secondary / supporting content */}
-      <HowItWorks />
+      <BuiltForTravellers />
       <BundlesSection />
       <CompatibilitySection />
-      <BuiltForTravellers />
+      <FinalCTA />
+      {/* Secondary / future features */}
       <DataRolloverSection />
       <GiftEsimSection />
       <VoiceCallingSection />
+      <HowItWorks />
       <FAQSection />
       <Footer />
       <MobileStickyCTA />
