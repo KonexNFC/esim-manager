@@ -442,24 +442,26 @@ function getTripBuckets(profile: DestinationProfile): TripBucket[] {
     daysMin: 1, daysMax: 999, isUnlimited: true,
   };
   if (profile === "holiday_travel") {
+    // Holiday: city-breaks → week stays → longer holidays
     return [
-      { id: "short",    label: "Short trips",   icon: Timer,      description: "Up to 3 days",              daysMin: 1,  daysMax: 4  },
-      { id: "standard", label: "Standard trips", icon: Gauge,      description: "5–14 days — best for most", daysMin: 4,  daysMax: 15 },
-      { id: "extended", label: "Extended trips", icon: TrendingUp, description: "Two weeks or more",         daysMin: 14, daysMax: 35 },
+      { id: "short",    label: "City break",    icon: Timer,      description: "1–4 days",       daysMin: 1,  daysMax: 4  },
+      { id: "standard", label: "Week away",      icon: Gauge,      description: "5–14 days",      daysMin: 5,  daysMax: 14 },
+      { id: "extended", label: "Long holiday",   icon: TrendingUp, description: "15–35 days",     daysMin: 15, daysMax: 35 },
       unlimitedBucket,
     ];
   }
+  // Business/diaspora/default: quick trips → standard work trips → long stays
   return [
-    { id: "short",    label: "Short trips",   icon: Timer,      description: "Up to 7 days",              daysMin: 1,  daysMax: 8  },
-    { id: "standard", label: "Standard trips", icon: Gauge,      description: "7–14 days — best for most", daysMin: 7,  daysMax: 15 },
-    { id: "extended", label: "Extended trips", icon: TrendingUp, description: "Two weeks or more",         daysMin: 14, daysMax: 35 },
+    { id: "short",    label: "Quick trip",    icon: Timer,      description: "1–7 days",       daysMin: 1,  daysMax: 7  },
+    { id: "standard", label: "Standard trip", icon: Gauge,      description: "8–14 days",      daysMin: 8,  daysMax: 14 },
+    { id: "extended", label: "Extended stay", icon: TrendingUp, description: "15–35 days",     daysMin: 15, daysMax: 35 },
     unlimitedBucket,
   ];
 }
 
 // ─── Plan curation logic ───────────────────────────────────────────────────────
 
-type PlanBadge = "Most Popular" | "Best Value" | "Unlimited" | "Best for short trips" | "Best for longer stays";
+type PlanBadge = "Most Popular" | "Best Value" | "Unlimited";
 
 interface CuratedPlan extends CountryPlan {
   badge?: PlanBadge;
@@ -469,15 +471,48 @@ interface CuratedPlan extends CountryPlan {
 }
 
 function getUseCase(plan: CountryPlan, bucketId: string): string {
-  if (plan.isUnlimited) return "Ideal for streaming, hotspot, and remote work";
-  const gb = plan.dataAmountGb;
-  if (bucketId === "short") {
-    return gb <= 2 ? "Great for WhatsApp, maps, and light browsing" : "Plenty of data for a quick trip";
+  if (plan.isUnlimited) {
+    if (plan.validityDays <= 3)  return "Unlimited data for a short burst — ideal for streaming and hotspot";
+    if (plan.validityDays <= 7)  return "Full-speed data all week — stream, video call, and share a hotspot";
+    if (plan.validityDays <= 14) return "Two weeks of unlimited data — remote work or extended travel";
+    return "Long-stay unlimited plan — no data anxiety for the whole trip";
   }
-  if (bucketId === "extended") return "Ideal for longer stays and regular use";
-  if (gb <= 3)  return "Best for messaging, maps, and essential use";
-  if (gb <= 8)  return "Great for browsing, social media, and video calls";
-  return "Plenty of data for streaming and daily use";
+  const gb = plan.dataAmountGb;
+  const days = plan.validityDays;
+  if (bucketId === "short") {
+    if (gb <= 1)  return "Light use — WhatsApp, maps, and ride-hailing";
+    if (gb <= 3)  return "Plenty for a quick trip — social media and navigation";
+    return `${gb} GB for ${days} days — browse, stream clips, and stay connected`;
+  }
+  if (bucketId === "extended") {
+    if (gb <= 10) return "Enough for regular daily use across a longer stay";
+    if (gb <= 20) return "Solid data for extended travel — browsing, video calls, and social";
+    return "Heavy data for a long trip — stream, work, and share without worry";
+  }
+  // standard
+  if (gb <= 3)  return "Good for navigation, messaging, and light browsing";
+  if (gb <= 8)  return "Great balance — social media, video calls, and everyday browsing";
+  if (gb <= 15) return "Generous data — stream, work remotely, and stay connected all week";
+  return `${gb} GB for ${days} days — ideal if you use data heavily while abroad`;
+}
+
+// Score a plan for curation: lower is better.
+// Balances cost-per-GB with provider breadth. Ignores plans with too little data for context.
+function planScore(p: CountryPlan): number {
+  if (p.dataAmountGb <= 0) return 9999;
+  const ppgb = p.estimatedPriceUsd / p.dataAmountGb;
+  return ppgb / Math.max(1, p.providerCount);
+}
+
+// Checks whether two plans are different enough to justify showing both in a bucket.
+function meaningfullyDifferent(primary: CountryPlan, candidate: CountryPlan): boolean {
+  const dataDiff   = Math.abs(candidate.dataAmountGb - primary.dataAmountGb);
+  const validDiff  = Math.abs(candidate.validityDays - primary.validityDays);
+  const priceDiff  = primary.estimatedPriceUsd > 0
+    ? Math.abs(candidate.estimatedPriceUsd - primary.estimatedPriceUsd) / primary.estimatedPriceUsd
+    : 0;
+  // Require: meaningfully different data amount OR different validity tier AND a noticeable price step
+  return (dataDiff >= 2 || validDiff >= 3) && priceDiff >= 0.15;
 }
 
 function buildCuratedPlans(allPlans: CountryPlan[], profile: DestinationProfile): CuratedPlan[] {
@@ -485,62 +520,108 @@ function buildCuratedPlans(allPlans: CountryPlan[], profile: DestinationProfile)
   const used = new Set<string>();
   const result: CuratedPlan[] = [];
 
-  // Strip noise: hide < 0.5 GB fixed-data plans
-  const viable = allPlans.filter(p => p.isUnlimited || p.dataAmountGb >= 0.5);
+  // Minimum noise floor: skip plans under 1 GB fixed data (genuinely useless for most travellers)
+  // If the destination has very few plans, fall back to 0.5 GB floor.
+  const pool1gb   = allPlans.filter(p => p.isUnlimited || p.dataAmountGb >= 1.0);
+  const pool      = pool1gb.length >= 4 ? pool1gb : allPlans.filter(p => p.isUnlimited || p.dataAmountGb >= 0.5);
 
   for (const bucket of buckets) {
     if (bucket.isUnlimited) {
-      const unlimiteds = viable
+      // Prefer commercially useful validity durations: 7d > 5d > 10d > 14d > 3d > 30d > others
+      const PREFERRED_DAYS = [7, 5, 10, 14, 3, 30, 1, 2];
+      const unlimiteds = pool
         .filter(p => p.isUnlimited && !used.has(p.normalizedPlanId))
-        .sort((a, b) => a.estimatedPriceUsd - b.estimatedPriceUsd)
-        .slice(0, 2);
-      unlimiteds.forEach(p => {
-        used.add(p.normalizedPlanId);
-        result.push({ ...p, bucketId: bucket.id, badge: undefined, useCase: getUseCase(p, bucket.id), isHighlighted: false });
-      });
-    } else {
-      const matching = viable
-        .filter(p => !p.isUnlimited && p.validityDays >= bucket.daysMin - 1 && p.validityDays <= bucket.daysMax + 2 && !used.has(p.normalizedPlanId))
-        // Score: best cost-per-GB weighted by provider availability
         .sort((a, b) => {
-          const scoreA = (a.dataAmountGb > 0 ? a.estimatedPriceUsd / a.dataAmountGb : 999) / Math.max(1, a.providerCount);
-          const scoreB = (b.dataAmountGb > 0 ? b.estimatedPriceUsd / b.dataAmountGb : 999) / Math.max(1, b.providerCount);
-          return scoreA - scoreB;
-        })
-        .slice(0, 2);
-      matching.forEach(p => {
-        used.add(p.normalizedPlanId);
-        result.push({ ...p, bucketId: bucket.id, badge: undefined, useCase: getUseCase(p, bucket.id), isHighlighted: false });
-      });
+          const ai = PREFERRED_DAYS.indexOf(a.validityDays);
+          const bi = PREFERRED_DAYS.indexOf(b.validityDays);
+          const ap = ai === -1 ? 99 : ai;
+          const bp = bi === -1 ? 99 : bi;
+          if (ap !== bp) return ap - bp;
+          if (a.providerCount !== b.providerCount) return b.providerCount - a.providerCount;
+          return a.estimatedPriceUsd - b.estimatedPriceUsd;
+        });
+
+      const primary = unlimiteds[0];
+      if (!primary) continue;
+      used.add(primary.normalizedPlanId);
+      result.push({ ...primary, bucketId: bucket.id, badge: undefined, useCase: getUseCase(primary, bucket.id), isHighlighted: false });
+
+      // Second unlimited only if a clearly different validity tier (≥3 days apart)
+      const secondary = unlimiteds.slice(1).find(p => Math.abs(p.validityDays - primary.validityDays) >= 3);
+      if (secondary) {
+        used.add(secondary.normalizedPlanId);
+        result.push({ ...secondary, bucketId: bucket.id, badge: undefined, useCase: getUseCase(secondary, bucket.id), isHighlighted: false });
+      }
+    } else {
+      // Fixed-data bucket: exact non-overlapping day ranges (set in getTripBuckets)
+      const matching = pool
+        .filter(p => !p.isUnlimited && p.validityDays >= bucket.daysMin && p.validityDays <= bucket.daysMax && !used.has(p.normalizedPlanId))
+        .sort((a, b) => planScore(a) - planScore(b));
+
+      if (matching.length === 0) continue;
+
+      const primary = matching[0];
+      used.add(primary.normalizedPlanId);
+      result.push({ ...primary, bucketId: bucket.id, badge: undefined, useCase: getUseCase(primary, bucket.id), isHighlighted: false });
+
+      // Second card only when it's meaningfully different from the primary
+      const secondary = matching.slice(1).find(p => meaningfullyDifferent(primary, p));
+      if (secondary) {
+        used.add(secondary.normalizedPlanId);
+        result.push({ ...secondary, bucketId: bucket.id, badge: undefined, useCase: getUseCase(secondary, bucket.id), isHighlighted: false });
+      }
     }
   }
 
-  // Apply pricing psychology labels
-  const nonUnlimited = result.filter(p => !p.isUnlimited);
+  // Assign badges with smarter logic
+  assignCuratedBadges(result);
+  return result;
+}
 
-  // Most Popular = highest provider count (broadest availability)
-  if (nonUnlimited.length > 0) {
-    const pop = [...nonUnlimited].sort((a, b) => b.providerCount - a.providerCount)[0];
-    pop.badge = "Most Popular";
-    pop.isHighlighted = true;
+function assignCuratedBadges(plans: CuratedPlan[]): void {
+  const nonUnlimited = plans.filter(p => !p.isUnlimited);
+  const unlimitedPlans = plans.filter(p => p.isUnlimited);
+
+  // Most Popular: target the standard bucket — that's where most travellers land.
+  // Within standard, prefer highest provider count (broadest availability = proven popularity).
+  const standardPlans = nonUnlimited.filter(p => p.bucketId === "standard");
+  const popularPool   = standardPlans.length > 0 ? standardPlans : nonUnlimited;
+  const mostPopular   = popularPool.length > 0
+    ? [...popularPool].sort((a, b) => b.providerCount - a.providerCount)[0]
+    : null;
+
+  if (mostPopular) {
+    mostPopular.badge = "Most Popular";
+    mostPopular.isHighlighted = true;
   }
 
-  // Best Value = best cost-per-GB among remaining non-highlighted
+  // Best Value: best $/GB in a DIFFERENT bucket from Most Popular.
+  // Only award if it's genuinely ≥10% cheaper per GB than the Most Popular plan.
   const forValue = nonUnlimited.filter(p => !p.isHighlighted);
   if (forValue.length > 0) {
-    const bv = forValue.sort((a, b) => {
-      const ppA = a.dataAmountGb > 0 ? a.estimatedPriceUsd / a.dataAmountGb : 999;
-      const ppB = b.dataAmountGb > 0 ? b.estimatedPriceUsd / b.dataAmountGb : 999;
+    const diffBucket = forValue.filter(p => p.bucketId !== mostPopular?.bucketId);
+    const candidates = diffBucket.length > 0 ? diffBucket : forValue;
+    const bestValue  = [...candidates].sort((a, b) => {
+      const ppA = a.dataAmountGb > 0 ? a.estimatedPriceUsd / a.dataAmountGb : 9999;
+      const ppB = b.dataAmountGb > 0 ? b.estimatedPriceUsd / b.dataAmountGb : 9999;
       return ppA - ppB;
     })[0];
-    bv.badge = "Best Value";
+
+    const bvPpgb = bestValue.dataAmountGb > 0 ? bestValue.estimatedPriceUsd / bestValue.dataAmountGb : 9999;
+    const mpPpgb = mostPopular && mostPopular.dataAmountGb > 0
+      ? mostPopular.estimatedPriceUsd / mostPopular.dataAmountGb
+      : 9999;
+
+    // Award if the candidate is at least 10% cheaper per GB — otherwise it's not "best value"
+    if (bvPpgb < mpPpgb * 0.90 || !mostPopular) {
+      bestValue.badge = "Best Value";
+    }
   }
 
-  // First unlimited gets "Unlimited" badge
-  const firstUnlimited = result.find(p => p.isUnlimited && !p.badge);
-  if (firstUnlimited) firstUnlimited.badge = "Unlimited";
-
-  return result;
+  // Unlimited badge: first (primary) unlimited pick only
+  if (unlimitedPlans.length > 0) {
+    unlimitedPlans[0].badge = "Unlimited";
+  }
 }
 
 // ─── Curated plan card ─────────────────────────────────────────────────────────
@@ -560,16 +641,26 @@ function CuratedPlanCard({
     ? `${isApprox ? "≈ " : ""}${fmt(plan.estimatedPriceUsd / plan.dataAmountGb)}/GB`
     : null;
 
+  const isMostPopular = plan.badge === "Most Popular" || isHighlightedByCalc;
+  const isBestValue   = plan.badge === "Best Value";
+  const isUnlimitedBadge = plan.badge === "Unlimited";
+
   const badgeColor =
-    plan.badge === "Most Popular" || isHighlightedByCalc ? "bg-primary text-primary-foreground"
-    : plan.badge === "Best Value" ? "bg-emerald-500 text-white"
-    : plan.badge === "Unlimited" ? "bg-violet-500 text-white"
+    isMostPopular      ? "bg-primary text-primary-foreground"
+    : isBestValue      ? "bg-emerald-500 text-white"
+    : isUnlimitedBadge ? "bg-violet-600 text-white"
     : "bg-muted text-foreground";
 
   return (
     <Card
       className={`relative flex flex-col p-5 transition-all duration-200 ${
-        highlighted ? "ring-2 ring-primary shadow-lg" : "hover:border-primary/40"
+        isMostPopular
+          ? "ring-2 ring-primary shadow-lg bg-primary/[0.03]"
+          : isBestValue
+          ? "ring-1 ring-emerald-500/40 hover:ring-emerald-500/60"
+          : isUnlimitedBadge
+          ? "ring-1 ring-violet-500/30 hover:ring-violet-500/50"
+          : "hover:border-primary/40"
       }`}
       data-testid={`card-plan-${plan.normalizedPlanId}`}
     >
@@ -577,11 +668,10 @@ function CuratedPlanCard({
       {(plan.badge || isHighlightedByCalc) && (
         <div className="absolute -top-3 left-4">
           <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${badgeColor}`}>
+            {isMostPopular && <><Star className="w-3 h-3" /> Most Popular</>}
+            {isBestValue   && <><Check className="w-3 h-3" /> Best Value</>}
+            {isUnlimitedBadge && <><Zap className="w-3 h-3" /> Unlimited</>}
             {isHighlightedByCalc && !plan.badge && <><Star className="w-3 h-3" /> Recommended</>}
-            {plan.badge === "Most Popular" && <><Star className="w-3 h-3" /> Most Popular</>}
-            {plan.badge === "Best Value" && <><Check className="w-3 h-3" /> Best Value</>}
-            {plan.badge === "Unlimited" && <><Zap className="w-3 h-3" /> Unlimited</>}
-            {plan.badge && !["Most Popular","Best Value","Unlimited"].includes(plan.badge) && plan.badge}
           </span>
         </div>
       )}
@@ -599,7 +689,7 @@ function CuratedPlanCard({
         </p>
       </div>
 
-      {/* Data + validity + providers */}
+      {/* Data + validity */}
       <div className="flex items-center gap-3 mb-3">
         <div className="flex-1">
           <p className="font-bold text-sm leading-tight">{plan.dataLabel}</p>
@@ -633,6 +723,140 @@ function CuratedPlanCard({
         Select Plan
       </Button>
     </Card>
+  );
+}
+
+// ─── All plans comparison table ────────────────────────────────────────────────
+
+function AllPlansTable({
+  plans,
+  curatedIds,
+  highlightedPlanId,
+  isApprox,
+  fmt,
+  onSelect,
+}: {
+  plans: CountryPlan[];
+  curatedIds: Set<string>;
+  highlightedPlanId: string | null;
+  isApprox: boolean;
+  fmt: (v: number) => string;
+  onSelect: (p: CountryPlan) => void;
+}) {
+  // Split and sort: fixed data sorted by validity then data; unlimited by validity
+  const fixedPlans = [...plans.filter(p => !p.isUnlimited)].sort((a, b) => {
+    if (a.validityDays !== b.validityDays) return a.validityDays - b.validityDays;
+    return a.dataAmountGb - b.dataAmountGb;
+  });
+  const unlimitedPlans = [...plans.filter(p => p.isUnlimited)].sort((a, b) => a.validityDays - b.validityDays);
+
+  const ColHeader = ({ label, right }: { label: string; right?: boolean }) => (
+    <th className={`px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground ${right ? "text-right" : "text-left"}`}>
+      {label}
+    </th>
+  );
+
+  const renderRows = (rows: CountryPlan[]) =>
+    rows.map((plan, idx) => {
+      const isCurated    = curatedIds.has(plan.normalizedPlanId);
+      const isRec        = highlightedPlanId === plan.normalizedPlanId;
+      const ppgb         = !plan.isUnlimited && plan.dataAmountGb > 0
+        ? `${isApprox ? "≈ " : ""}${fmt(plan.estimatedPriceUsd / plan.dataAmountGb)}`
+        : "—";
+      const rowBg        = isRec
+        ? "bg-primary/5"
+        : idx % 2 === 0 ? "" : "bg-muted/20";
+
+      return (
+        <tr
+          key={plan.normalizedPlanId}
+          className={`border-b last:border-0 transition-colors hover:bg-muted/30 ${rowBg}`}
+          data-testid={`row-plan-${plan.normalizedPlanId}`}
+        >
+          <td className="px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-sm">{plan.dataLabel}</span>
+              {isCurated && (
+                <span className="text-[10px] text-primary font-bold leading-none">★</span>
+              )}
+            </div>
+          </td>
+          <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">
+            {plan.validityLabel}
+          </td>
+          <td className="px-4 py-3 text-sm text-right font-bold whitespace-nowrap">
+            {isApprox ? "≈ " : ""}{fmt(plan.estimatedPriceUsd)}
+            {isApprox && (
+              <div className="text-[10px] text-muted-foreground font-normal">${plan.estimatedPriceUsd.toFixed(2)}</div>
+            )}
+          </td>
+          <td className="px-4 py-3 text-xs text-right text-muted-foreground hidden sm:table-cell whitespace-nowrap">
+            {ppgb}
+          </td>
+          <td className="px-4 py-3 text-right">
+            <Button
+              size="sm"
+              variant={isRec ? "default" : "outline"}
+              className="h-7 text-xs px-3"
+              onClick={() => onSelect(plan)}
+              data-testid={`button-buy-plan-${plan.normalizedPlanId}`}
+            >
+              Select
+            </Button>
+          </td>
+        </tr>
+      );
+    });
+
+  return (
+    <div className="mt-5 space-y-5">
+      {/* Fixed data plans */}
+      {fixedPlans.length > 0 && (
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+            Fixed data plans ({fixedPlans.length})
+          </p>
+          <div className="rounded-xl border overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-muted/40 border-b">
+                  <ColHeader label="Data" />
+                  <ColHeader label="Validity" />
+                  <ColHeader label="Price" right />
+                  <ColHeader label="$/GB" right />
+                  <th className="px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>{renderRows(fixedPlans)}</tbody>
+            </table>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-1.5 ml-1">★ highlighted in recommended plans above</p>
+        </div>
+      )}
+
+      {/* Unlimited plans */}
+      {unlimitedPlans.length > 0 && (
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+            Unlimited plans ({unlimitedPlans.length})
+          </p>
+          <div className="rounded-xl border overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-muted/40 border-b">
+                  <ColHeader label="Data" />
+                  <ColHeader label="Validity" />
+                  <ColHeader label="Price" right />
+                  <ColHeader label="$/GB" right />
+                  <th className="px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>{renderRows(unlimitedPlans)}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -715,64 +939,18 @@ function CuratedPlansSection({
             data-testid="button-toggle-all-plans"
           >
             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showAll ? "rotate-180" : ""}`} />
-            {showAll ? "Hide full plan list" : `Compare all ${totalPlans} plans`}
+            {showAll ? "Hide full plan list" : `View all ${totalPlans} plans`}
           </button>
 
           {showAll && (
-            <div className="mt-5">
-              <p className="text-xs text-muted-foreground mb-4 uppercase tracking-widest font-bold">All available plans</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {plans.map(plan => {
-                  const isHighlighted = highlightedPlanId === plan.normalizedPlanId;
-                  return (
-                    <Card
-                      key={plan.normalizedPlanId}
-                      className={`p-5 flex flex-col relative transition-shadow ${isHighlighted ? "ring-2 ring-primary shadow-lg" : ""}`}
-                      data-testid={`card-plan-all-${plan.normalizedPlanId}`}
-                    >
-                      {isHighlighted && (
-                        <Badge className="absolute -top-2 right-3 bg-primary text-primary-foreground">
-                          <Star className="w-3 h-3 mr-1" /> Recommended
-                        </Badge>
-                      )}
-                      {plan.isUnlimited && !isHighlighted && (
-                        <Badge variant="secondary" className="absolute top-3 left-3 text-xs">Unlimited</Badge>
-                      )}
-                      <div className="mb-3 mt-1">
-                        <div className="flex items-baseline gap-2 flex-wrap">
-                          <span className="text-2xl font-bold">
-                            {isApprox ? "≈ " : ""}{fmt(plan.estimatedPriceUsd)}
-                          </span>
-                          <PricePerGb dataAmountGb={plan.dataAmountGb} price={plan.estimatedPriceUsd} isUnlimited={plan.isUnlimited} />
-                        </div>
-                        {isApprox && (
-                          <p className="text-[11px] text-muted-foreground">${plan.estimatedPriceUsd.toFixed(2)} USD</p>
-                        )}
-                      </div>
-                      <div className="space-y-2 flex-1 mb-4">
-                        <FeatureRow icon={<Wifi />} label={plan.dataLabel} sub="Data" />
-                        <FeatureRow icon={<Clock />} label={plan.validityLabel} sub="Validity" />
-                        <FeatureRow icon={<Globe />} label={countryName} sub="Coverage" />
-                        {plan.providerCount > 1 && (
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                            {plan.providerCount} providers available
-                          </div>
-                        )}
-                      </div>
-                      <Button
-                        className="w-full"
-                        variant={isHighlighted ? "default" : "outline"}
-                        onClick={() => onSelect(plan)}
-                        data-testid={`button-buy-plan-${plan.normalizedPlanId}`}
-                      >
-                        Select Plan
-                      </Button>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
+            <AllPlansTable
+              plans={plans}
+              curatedIds={new Set(curated.map(c => c.normalizedPlanId))}
+              highlightedPlanId={highlightedPlanId}
+              isApprox={isApprox}
+              fmt={fmt}
+              onSelect={onSelect}
+            />
           )}
         </div>
       )}
