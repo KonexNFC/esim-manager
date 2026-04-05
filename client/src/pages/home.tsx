@@ -1636,8 +1636,16 @@ function Footer() {
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">Legal</p>
             <ul className="space-y-3">
-              <li><span className="text-sm text-muted-foreground font-medium" data-testid="text-footer-privacy">Privacy Policy</span></li>
-              <li><span className="text-sm text-muted-foreground font-medium" data-testid="text-footer-terms">Terms of Service</span></li>
+              <li>
+                <Link href="/privacy">
+                  <span className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium cursor-pointer" data-testid="text-footer-privacy">Privacy Policy</span>
+                </Link>
+              </li>
+              <li>
+                <Link href="/terms">
+                  <span className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium cursor-pointer" data-testid="text-footer-terms">Terms of Service</span>
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
