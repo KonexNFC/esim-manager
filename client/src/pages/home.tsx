@@ -645,10 +645,10 @@ function HeroSection() {
                 <Zap className="w-3.5 h-3.5" />
                 <span className="text-xs font-medium">Instant QR delivery</span>
               </div>
-              <div className="flex items-center gap-2.5 text-white/40" data-testid="trust-bar-networks">
-                <SiVodafone className="h-3.5 w-auto" title="Vodafone" />
-                <SiTmobile  className="h-3.5 w-auto" title="T-Mobile" />
-                <SiOrange   className="h-3.5 w-auto" title="Orange" />
+              <div className="flex items-center gap-2.5" data-testid="trust-bar-networks">
+                <SiVodafone className="h-3.5 w-auto" style={{ color: "#E60000" }} title="Vodafone" />
+                <SiTmobile  className="h-3.5 w-auto" style={{ color: "#E20074" }} title="T-Mobile" />
+                <SiOrange   className="h-3.5 w-auto" style={{ color: "#FF7900" }} title="Orange" />
               </div>
               <div className="flex items-center gap-1.5 text-white/45" data-testid="trust-bar-support">
                 <ShieldCheck className="w-3.5 h-3.5" />
@@ -656,11 +656,11 @@ function HeroSection() {
               </div>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0" data-testid="payment-icons">
-              <SiVisa       className="h-4 w-auto text-white/40" data-testid="payment-icon-visa" />
-              <SiMastercard className="h-4 w-auto text-white/40" data-testid="payment-icon-mc" />
-              <SiApplepay   className="h-5 w-auto text-white/40" data-testid="payment-icon-apple-pay" />
-              <SiGooglepay  className="h-5 w-auto text-white/40" data-testid="payment-icon-google-pay" />
-              <SiStripe     className="h-4 w-auto text-white/40" data-testid="payment-icon-stripe" />
+              <SiVisa       className="h-4 w-auto" style={{ color: "#1A73E8" }} data-testid="payment-icon-visa" />
+              <SiMastercard className="h-4 w-auto" style={{ color: "#EB001B" }} data-testid="payment-icon-mc" />
+              <SiApplepay   className="h-5 w-auto" style={{ color: "#FFFFFF" }} data-testid="payment-icon-apple-pay" />
+              <SiGooglepay  className="h-5 w-auto" style={{ color: "#4285F4" }} data-testid="payment-icon-google-pay" />
+              <SiStripe     className="h-4 w-auto" style={{ color: "#635BFF" }} data-testid="payment-icon-stripe" />
             </div>
           </div>
         </div>
