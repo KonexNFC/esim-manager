@@ -181,8 +181,10 @@ export default function Destinations() {
   const [search, setSearch] = useState("");
   const [selectedRegion, setSelectedRegion] = useState("All");
 
-  const { data, isLoading } = useQuery<CountriesResponse>({
+  const { data, isLoading, isError, refetch } = useQuery<CountriesResponse>({
     queryKey: ["/api/countries"],
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
   });
 
   const regionButtons = useMemo(() => {
@@ -245,8 +247,19 @@ export default function Destinations() {
         <p className="text-muted-foreground mt-2">
           {isLoading
             ? "Loading available destinations…"
+            : isError
+            ? "Unable to load destinations — please try again."
             : `eSIM plans available in ${data?.total ?? 0} countries plus regional & global packs`}
         </p>
+        {isError && (
+          <button
+            onClick={() => refetch()}
+            className="mt-3 inline-flex items-center gap-2 text-sm text-primary font-semibold hover:underline"
+            data-testid="button-retry-countries"
+          >
+            Retry
+          </button>
+        )}
       </div>
 
       {/* Search + region filters */}
