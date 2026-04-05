@@ -1,9 +1,48 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
-import { Search, Smartphone, ArrowRight, LayoutDashboard, LogIn } from "lucide-react";
+import { Search, Smartphone, ArrowRight, LayoutDashboard, LogIn, ChevronDown } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { KonexLogo } from "./konex-logo";
+import { useCurrency, CURRENCIES } from "@/lib/currency";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+function CurrencySelector() {
+  const { currency, setCurrencyCode } = useCurrency();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground gap-1"
+          data-testid="button-currency-selector"
+        >
+          {currency.code}
+          <ChevronDown className="w-3 h-3 opacity-60" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52 max-h-80 overflow-y-auto">
+        {CURRENCIES.map(c => (
+          <DropdownMenuItem
+            key={c.code}
+            onClick={() => setCurrencyCode(c.code)}
+            className={`flex items-center justify-between text-sm cursor-pointer ${c.code === currency.code ? "text-primary font-semibold" : ""}`}
+            data-testid={`currency-option-${c.code}`}
+          >
+            <span>{c.symbol} {c.name}</span>
+            <span className="text-xs text-muted-foreground ml-2">{c.code}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function Navbar() {
   const [location] = useLocation();
@@ -71,6 +110,7 @@ export function Navbar() {
                 <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
               </Button>
             </Link>
+            <CurrencySelector />
             <ThemeToggle />
           </nav>
         ) : (
@@ -123,6 +163,7 @@ export function Navbar() {
                 </Link>
               )
             )}
+            <CurrencySelector />
             <ThemeToggle />
           </nav>
         )}

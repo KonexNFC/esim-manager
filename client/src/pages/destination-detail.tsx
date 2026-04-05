@@ -14,6 +14,7 @@ import {
 import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useCurrency } from "@/lib/currency";
 import type { Destination, Plan } from "@shared/schema";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -253,12 +254,38 @@ function DataCalculatorNew({ plans, onHighlight }: { plans: CountryPlan[]; onHig
 }
 
 function PricePerGb({ dataAmountGb, price, isUnlimited }: { dataAmountGb: number; price: number; isUnlimited: boolean }) {
+  const { fmt, isApprox } = useCurrency();
   if (isUnlimited || dataAmountGb <= 0) return null;
-  const ppgb = price / dataAmountGb;
+  const ppgbUsd = price / dataAmountGb;
   return (
     <span className="text-xs text-muted-foreground" data-testid="text-price-per-gb">
-      ${ppgb.toFixed(2)}/GB
+      {isApprox ? "≈ " : ""}{fmt(ppgbUsd)}/GB
     </span>
+  );
+}
+
+// ─── Currency-aware price summary for checkout modal ─────────────────────────────
+
+function CheckoutPriceSummary({ usd }: { usd: number }) {
+  const { fmt, isApprox, currency } = useCurrency();
+  return (
+    <div className="bg-muted/50 rounded-lg p-3 mb-4">
+      <div className="flex justify-between text-sm items-end">
+        <span className="text-muted-foreground">Estimated price</span>
+        <div className="text-right">
+          <span className="font-bold text-lg">{isApprox ? "≈ " : ""}{fmt(usd)}</span>
+          {isApprox && (
+            <p className="text-[11px] text-muted-foreground">${usd.toFixed(2)} USD</p>
+          )}
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+        <Lock className="w-3 h-3" />
+        {isApprox
+          ? `Checkout processed in USD · ${currency.code} is approximate`
+          : "Final price confirmed at checkout"}
+      </p>
+    </div>
   );
 }
 
@@ -325,16 +352,7 @@ function CheckoutModal({
           </div>
         </div>
 
-        <div className="bg-muted/50 rounded-lg p-3 mb-4">
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Estimated price</span>
-            <span className="font-bold text-lg">${plan.estimatedPriceUsd.toFixed(2)}</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-            <Lock className="w-3 h-3" />
-            Final price confirmed at checkout
-          </p>
-        </div>
+        <CheckoutPriceSummary usd={plan.estimatedPriceUsd} />
 
         <form onSubmit={handleSubmit} className="space-y-3">
           {!me && (
@@ -537,8 +555,9 @@ function CuratedPlanCard({
   onSelect: (p: CountryPlan) => void;
 }) {
   const highlighted = plan.isHighlighted || isHighlightedByCalc;
+  const { fmt, isApprox } = useCurrency();
   const ppgb = !plan.isUnlimited && plan.dataAmountGb > 0
-    ? `$${(plan.estimatedPriceUsd / plan.dataAmountGb).toFixed(2)}/GB`
+    ? `${isApprox ? "≈ " : ""}${fmt(plan.estimatedPriceUsd / plan.dataAmountGb)}/GB`
     : null;
 
   const badgeColor =
@@ -569,13 +588,15 @@ function CuratedPlanCard({
 
       {/* Price */}
       <div className="mt-2 mb-3">
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-baseline gap-2 flex-wrap">
           <span className="text-3xl font-bold" data-testid={`text-plan-price-${plan.normalizedPlanId}`}>
-            ${plan.estimatedPriceUsd.toFixed(2)}
+            {isApprox ? "≈ " : ""}{fmt(plan.estimatedPriceUsd)}
           </span>
           {ppgb && <span className="text-xs text-muted-foreground">{ppgb}</span>}
         </div>
-        <p className="text-[11px] text-muted-foreground">one-time payment</p>
+        <p className="text-[11px] text-muted-foreground">
+          {isApprox ? `$${plan.estimatedPriceUsd.toFixed(2)} USD · ` : ""}one-time payment
+        </p>
       </div>
 
       {/* Data + validity + providers */}
@@ -633,6 +654,7 @@ function CuratedPlansSection({
   onHighlight: (id: string | null) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
+  const { fmt, isApprox } = useCurrency();
   const profile = getDestinationProfile(countryCode);
   const buckets = getTripBuckets(profile);
   const curated = useMemo(() => buildCuratedPlans(plans, profile), [plans, profile]);
@@ -717,10 +739,15 @@ function CuratedPlansSection({
                         <Badge variant="secondary" className="absolute top-3 left-3 text-xs">Unlimited</Badge>
                       )}
                       <div className="mb-3 mt-1">
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-2xl font-bold">${plan.estimatedPriceUsd.toFixed(2)}</span>
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <span className="text-2xl font-bold">
+                            {isApprox ? "≈ " : ""}{fmt(plan.estimatedPriceUsd)}
+                          </span>
                           <PricePerGb dataAmountGb={plan.dataAmountGb} price={plan.estimatedPriceUsd} isUnlimited={plan.isUnlimited} />
                         </div>
+                        {isApprox && (
+                          <p className="text-[11px] text-muted-foreground">${plan.estimatedPriceUsd.toFixed(2)} USD</p>
+                        )}
                       </div>
                       <div className="space-y-2 flex-1 mb-4">
                         <FeatureRow icon={<Wifi />} label={plan.dataLabel} sub="Data" />

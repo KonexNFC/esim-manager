@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useCurrency } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { KonexLogo } from "@/components/konex-logo";
@@ -424,6 +425,7 @@ function PlanFinder() {
   const [selectedCountry, setSelectedCountry] = useState<{ name: string; flagEmoji: string } | undefined>();
   const [size, setSize]         = useState<string>("");
   const [duration, setDuration] = useState<string>("");
+  const { fmt, isApprox } = useCurrency();
 
   const { data: plansData } = useQuery<{ countryCode: string; plans: CountryPlanEntry[] }>({
     queryKey: ["/api/countries", countryCode, "plans"],
@@ -460,13 +462,14 @@ function PlanFinder() {
   })();
 
   const planPrice = () => {
-    if (matchedPlan) return `$${matchedPlan.estimatedPriceUsd.toFixed(2)}`;
-    if (size === "Unlimited") return "$22.99";
-    if (size === "10 GB")     return "$16.99";
-    if (size === "5 GB")      return "$12.99";
-    if (size === "3 GB")      return "$8.99";
-    if (size === "1 GB")      return "$5.99";
-    return "$12.99";
+    const prefix = isApprox ? "≈ " : "";
+    if (matchedPlan) return `${prefix}${fmt(matchedPlan.estimatedPriceUsd)}`;
+    if (size === "Unlimited") return `${prefix}${fmt(22.99)}`;
+    if (size === "10 GB")     return `${prefix}${fmt(16.99)}`;
+    if (size === "5 GB")      return `${prefix}${fmt(12.99)}`;
+    if (size === "3 GB")      return `${prefix}${fmt(8.99)}`;
+    if (size === "1 GB")      return `${prefix}${fmt(5.99)}`;
+    return `${prefix}${fmt(12.99)}`;
   };
 
   const perfectFor = (): string[] => {

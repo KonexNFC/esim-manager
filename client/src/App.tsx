@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/lib/theme";
 import { AuthProvider } from "@/lib/auth";
+import { CurrencyProvider } from "@/lib/currency";
 import { Navbar } from "@/components/navbar";
 import Home from "@/pages/home";
 import Destinations from "@/pages/destinations";
@@ -47,17 +48,19 @@ function Router() {
 function App() {
   return (
     <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <TooltipProvider>
-            <div className="min-h-screen bg-background text-foreground">
-              <Navbar />
-              <Router />
-            </div>
-            <Toaster />
-          </TooltipProvider>
-        </AuthProvider>
-      </QueryClientProvider>
+      <CurrencyProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <TooltipProvider>
+              <div className="min-h-screen bg-background text-foreground">
+                <Navbar />
+                <Router />
+              </div>
+              <Toaster />
+            </TooltipProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </CurrencyProvider>
     </ThemeProvider>
   );
 }
