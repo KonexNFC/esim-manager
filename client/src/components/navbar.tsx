@@ -60,7 +60,7 @@ export function Navbar() {
 
         {/* Logo */}
         <Link href="/" data-testid="link-home">
-          <KonexLogo size="md" data-testid="text-brand-name" className="cursor-pointer [&>span]:hidden sm:[&>span]:inline" />
+          <KonexLogo size="md" data-testid="text-brand-name" className="cursor-pointer" />
         </Link>
 
         {/* Home nav */}
@@ -106,7 +106,7 @@ export function Navbar() {
                 className="ml-1 bg-primary hover:bg-primary/90 text-white font-semibold shadow-lg shadow-primary/25"
                 data-testid="nav-get-esim"
               >
-                Get eSIM Now
+                Get eSIM<span className="hidden min-[380px]:inline"> Now</span>
                 <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
               </Button>
             </Link>
