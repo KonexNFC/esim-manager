@@ -30,7 +30,7 @@ import {
   Package, TrendingUp, Timer, Gift, PhoneCall, ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
-import { SiVisa, SiMastercard, SiApplepay, SiStripe } from "react-icons/si";
+import { SiVisa, SiMastercard, SiApplepay, SiStripe, SiGooglepay, SiVodafone, SiTmobile, SiOrange } from "react-icons/si";
 import type { Destination, Plan } from "@shared/schema";
 import { CountryCombobox } from "@/components/country-combobox";
 
@@ -311,22 +311,29 @@ function HeroSection() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5">
           <div className="flex flex-col sm:flex-row items-center gap-4 justify-between">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-              {[
-                { icon: Star,        label: "4.9/5 · 5,000+ travellers" },
-                { icon: Zap,         label: "Instant QR delivery" },
-                { icon: Signal,      label: "Vodafone · T-Mobile · Orange" },
-                { icon: ShieldCheck, label: "24/7 support" },
-              ].map(({ icon: Icon, label }) => (
-                <div key={label} className="flex items-center gap-1.5 text-white/45" data-testid={`trust-bar-${label.toLowerCase().replace(/[\s+/·]/g, '-')}`}>
-                  <Icon className="w-3.5 h-3.5" />
-                  <span className="text-xs font-medium">{label}</span>
-                </div>
-              ))}
+              <div className="flex items-center gap-1.5 text-white/45" data-testid="trust-bar-rating">
+                <Star className="w-3.5 h-3.5" />
+                <span className="text-xs font-medium">4.9/5 · 5,000+ travellers</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-white/45" data-testid="trust-bar-delivery">
+                <Zap className="w-3.5 h-3.5" />
+                <span className="text-xs font-medium">Instant QR delivery</span>
+              </div>
+              <div className="flex items-center gap-2.5 text-white/40" data-testid="trust-bar-networks">
+                <SiVodafone className="h-3.5 w-auto" title="Vodafone" />
+                <SiTmobile  className="h-3.5 w-auto" title="T-Mobile" />
+                <SiOrange   className="h-3.5 w-auto" title="Orange" />
+              </div>
+              <div className="flex items-center gap-1.5 text-white/45" data-testid="trust-bar-support">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span className="text-xs font-medium">24/7 support</span>
+              </div>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0" data-testid="payment-icons">
               <SiVisa       className="h-4 w-auto text-white/40" data-testid="payment-icon-visa" />
               <SiMastercard className="h-4 w-auto text-white/40" data-testid="payment-icon-mc" />
-              <SiApplepay   className="h-4 w-auto text-white/40" data-testid="payment-icon-apple-pay" />
+              <SiApplepay   className="h-5 w-auto text-white/40" data-testid="payment-icon-apple-pay" />
+              <SiGooglepay  className="h-5 w-auto text-white/40" data-testid="payment-icon-google-pay" />
               <SiStripe     className="h-4 w-auto text-white/40" data-testid="payment-icon-stripe" />
             </div>
           </div>
