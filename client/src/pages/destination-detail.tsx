@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   ArrowLeft, Wifi, Clock, Globe, Check, Zap, Star,
-  Smartphone, BarChart2, ShoppingCart, Lock
+  Smartphone, BarChart2, ShoppingCart, Lock, ChevronDown,
+  Flame, Gauge, Timer, TrendingUp,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -379,6 +380,379 @@ function CheckoutModal({
   );
 }
 
+// ─── Destination profile classification ───────────────────────────────────────
+
+type DestinationProfile = "business_travel" | "holiday_travel" | "default_travel";
+
+// Urban / work / diaspora corridors — 1-7 day short-trip rhythm
+const BUSINESS_CODES = new Set([
+  "NG","US","AE","CA","SG","HK","JP","DE","NL","AU","ZA","KE","GH",
+  "QA","KW","BH","SA","OM","JO","LB","IN","CN","KR","RU","BR","AR",
+  "GB","SE","NO","DK","FI","CH","AT","BE","PL","CZ","HU","RO",
+]);
+
+// Leisure / city-break / beach destinations — shorter stays, leisure data use
+const HOLIDAY_CODES = new Set([
+  "ES","IT","PT","GR","TR","TH","ID","MX","MA","EG","HR","CY","MT",
+  "PH","VN","KH","LK","MV","MU","GE","AL","ME","RS","SI","SK",
+  "IS","IE","LT","LV","EE","BG","MK","BA","XK","RE","NC","FJ",
+]);
+
+function getDestinationProfile(code: string): DestinationProfile {
+  const c = code.toUpperCase();
+  if (BUSINESS_CODES.has(c)) return "business_travel";
+  if (HOLIDAY_CODES.has(c)) return "holiday_travel";
+  return "default_travel";
+}
+
+// ─── Trip bucket definitions ───────────────────────────────────────────────────
+
+interface TripBucket {
+  id: "short" | "standard" | "extended" | "unlimited";
+  label: string;
+  description: string;
+  icon: React.ElementType;
+  daysMin: number;
+  daysMax: number;
+  isUnlimited?: boolean;
+}
+
+function getTripBuckets(profile: DestinationProfile): TripBucket[] {
+  const unlimitedBucket: TripBucket = {
+    id: "unlimited", label: "Heavy usage", icon: Flame,
+    description: "Streaming, hotspot, or remote work",
+    daysMin: 1, daysMax: 999, isUnlimited: true,
+  };
+  if (profile === "holiday_travel") {
+    return [
+      { id: "short",    label: "Short trips",   icon: Timer,      description: "Up to 3 days",              daysMin: 1,  daysMax: 4  },
+      { id: "standard", label: "Standard trips", icon: Gauge,      description: "5–14 days — best for most", daysMin: 4,  daysMax: 15 },
+      { id: "extended", label: "Extended trips", icon: TrendingUp, description: "Two weeks or more",         daysMin: 14, daysMax: 35 },
+      unlimitedBucket,
+    ];
+  }
+  return [
+    { id: "short",    label: "Short trips",   icon: Timer,      description: "Up to 7 days",              daysMin: 1,  daysMax: 8  },
+    { id: "standard", label: "Standard trips", icon: Gauge,      description: "7–14 days — best for most", daysMin: 7,  daysMax: 15 },
+    { id: "extended", label: "Extended trips", icon: TrendingUp, description: "Two weeks or more",         daysMin: 14, daysMax: 35 },
+    unlimitedBucket,
+  ];
+}
+
+// ─── Plan curation logic ───────────────────────────────────────────────────────
+
+type PlanBadge = "Most Popular" | "Best Value" | "Unlimited" | "Best for short trips" | "Best for longer stays";
+
+interface CuratedPlan extends CountryPlan {
+  badge?: PlanBadge;
+  useCase: string;
+  bucketId: string;
+  isHighlighted: boolean;
+}
+
+function getUseCase(plan: CountryPlan, bucketId: string): string {
+  if (plan.isUnlimited) return "Ideal for streaming, hotspot, and remote work";
+  const gb = plan.dataAmountGb;
+  if (bucketId === "short") {
+    return gb <= 2 ? "Great for WhatsApp, maps, and light browsing" : "Plenty of data for a quick trip";
+  }
+  if (bucketId === "extended") return "Ideal for longer stays and regular use";
+  if (gb <= 3)  return "Best for messaging, maps, and essential use";
+  if (gb <= 8)  return "Great for browsing, social media, and video calls";
+  return "Plenty of data for streaming and daily use";
+}
+
+function buildCuratedPlans(allPlans: CountryPlan[], profile: DestinationProfile): CuratedPlan[] {
+  const buckets = getTripBuckets(profile);
+  const used = new Set<string>();
+  const result: CuratedPlan[] = [];
+
+  // Strip noise: hide < 0.5 GB fixed-data plans
+  const viable = allPlans.filter(p => p.isUnlimited || p.dataAmountGb >= 0.5);
+
+  for (const bucket of buckets) {
+    if (bucket.isUnlimited) {
+      const unlimiteds = viable
+        .filter(p => p.isUnlimited && !used.has(p.normalizedPlanId))
+        .sort((a, b) => a.estimatedPriceUsd - b.estimatedPriceUsd)
+        .slice(0, 2);
+      unlimiteds.forEach(p => {
+        used.add(p.normalizedPlanId);
+        result.push({ ...p, bucketId: bucket.id, badge: undefined, useCase: getUseCase(p, bucket.id), isHighlighted: false });
+      });
+    } else {
+      const matching = viable
+        .filter(p => !p.isUnlimited && p.validityDays >= bucket.daysMin - 1 && p.validityDays <= bucket.daysMax + 2 && !used.has(p.normalizedPlanId))
+        // Score: best cost-per-GB weighted by provider availability
+        .sort((a, b) => {
+          const scoreA = (a.dataAmountGb > 0 ? a.estimatedPriceUsd / a.dataAmountGb : 999) / Math.max(1, a.providerCount);
+          const scoreB = (b.dataAmountGb > 0 ? b.estimatedPriceUsd / b.dataAmountGb : 999) / Math.max(1, b.providerCount);
+          return scoreA - scoreB;
+        })
+        .slice(0, 2);
+      matching.forEach(p => {
+        used.add(p.normalizedPlanId);
+        result.push({ ...p, bucketId: bucket.id, badge: undefined, useCase: getUseCase(p, bucket.id), isHighlighted: false });
+      });
+    }
+  }
+
+  // Apply pricing psychology labels
+  const nonUnlimited = result.filter(p => !p.isUnlimited);
+
+  // Most Popular = highest provider count (broadest availability)
+  if (nonUnlimited.length > 0) {
+    const pop = [...nonUnlimited].sort((a, b) => b.providerCount - a.providerCount)[0];
+    pop.badge = "Most Popular";
+    pop.isHighlighted = true;
+  }
+
+  // Best Value = best cost-per-GB among remaining non-highlighted
+  const forValue = nonUnlimited.filter(p => !p.isHighlighted);
+  if (forValue.length > 0) {
+    const bv = forValue.sort((a, b) => {
+      const ppA = a.dataAmountGb > 0 ? a.estimatedPriceUsd / a.dataAmountGb : 999;
+      const ppB = b.dataAmountGb > 0 ? b.estimatedPriceUsd / b.dataAmountGb : 999;
+      return ppA - ppB;
+    })[0];
+    bv.badge = "Best Value";
+  }
+
+  // First unlimited gets "Unlimited" badge
+  const firstUnlimited = result.find(p => p.isUnlimited && !p.badge);
+  if (firstUnlimited) firstUnlimited.badge = "Unlimited";
+
+  return result;
+}
+
+// ─── Curated plan card ─────────────────────────────────────────────────────────
+
+function CuratedPlanCard({
+  plan,
+  isHighlightedByCalc,
+  onSelect,
+}: {
+  plan: CuratedPlan;
+  isHighlightedByCalc: boolean;
+  onSelect: (p: CountryPlan) => void;
+}) {
+  const highlighted = plan.isHighlighted || isHighlightedByCalc;
+  const ppgb = !plan.isUnlimited && plan.dataAmountGb > 0
+    ? `$${(plan.estimatedPriceUsd / plan.dataAmountGb).toFixed(2)}/GB`
+    : null;
+
+  const badgeColor =
+    plan.badge === "Most Popular" || isHighlightedByCalc ? "bg-primary text-primary-foreground"
+    : plan.badge === "Best Value" ? "bg-emerald-500 text-white"
+    : plan.badge === "Unlimited" ? "bg-violet-500 text-white"
+    : "bg-muted text-foreground";
+
+  return (
+    <Card
+      className={`relative flex flex-col p-5 transition-all duration-200 ${
+        highlighted ? "ring-2 ring-primary shadow-lg" : "hover:border-primary/40"
+      }`}
+      data-testid={`card-plan-${plan.normalizedPlanId}`}
+    >
+      {/* Badge */}
+      {(plan.badge || isHighlightedByCalc) && (
+        <div className="absolute -top-3 left-4">
+          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${badgeColor}`}>
+            {isHighlightedByCalc && !plan.badge && <><Star className="w-3 h-3" /> Recommended</>}
+            {plan.badge === "Most Popular" && <><Star className="w-3 h-3" /> Most Popular</>}
+            {plan.badge === "Best Value" && <><Check className="w-3 h-3" /> Best Value</>}
+            {plan.badge === "Unlimited" && <><Zap className="w-3 h-3" /> Unlimited</>}
+            {plan.badge && !["Most Popular","Best Value","Unlimited"].includes(plan.badge) && plan.badge}
+          </span>
+        </div>
+      )}
+
+      {/* Price */}
+      <div className="mt-2 mb-3">
+        <div className="flex items-baseline gap-2">
+          <span className="text-3xl font-bold" data-testid={`text-plan-price-${plan.normalizedPlanId}`}>
+            ${plan.estimatedPriceUsd.toFixed(2)}
+          </span>
+          {ppgb && <span className="text-xs text-muted-foreground">{ppgb}</span>}
+        </div>
+        <p className="text-[11px] text-muted-foreground">one-time payment</p>
+      </div>
+
+      {/* Data + validity + providers */}
+      <div className="flex items-center gap-3 mb-3">
+        <div className="flex-1">
+          <p className="font-bold text-sm leading-tight">{plan.dataLabel}</p>
+          <p className="text-[11px] text-muted-foreground">data</p>
+        </div>
+        <div className="w-px h-8 bg-border flex-shrink-0" />
+        <div className="flex-1">
+          <p className="font-bold text-sm leading-tight">{plan.validityLabel}</p>
+          <p className="text-[11px] text-muted-foreground">validity</p>
+        </div>
+        {plan.providerCount > 1 && (
+          <>
+            <div className="w-px h-8 bg-border flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-bold text-sm leading-tight">{plan.providerCount}</p>
+              <p className="text-[11px] text-muted-foreground">providers</p>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Use case */}
+      <p className="text-xs text-muted-foreground flex-1 mb-4 leading-relaxed">{plan.useCase}</p>
+
+      <Button
+        className="w-full"
+        variant={highlighted ? "default" : "outline"}
+        onClick={() => onSelect(plan)}
+        data-testid={`button-select-plan-${plan.normalizedPlanId}`}
+      >
+        Select Plan
+      </Button>
+    </Card>
+  );
+}
+
+// ─── Curated plans section ─────────────────────────────────────────────────────
+
+function CuratedPlansSection({
+  plans,
+  countryCode,
+  countryName,
+  highlightedPlanId,
+  onSelect,
+  onHighlight,
+}: {
+  plans: CountryPlan[];
+  countryCode: string;
+  countryName: string;
+  highlightedPlanId: string | null;
+  onSelect: (p: CountryPlan) => void;
+  onHighlight: (id: string | null) => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const profile = getDestinationProfile(countryCode);
+  const buckets = getTripBuckets(profile);
+  const curated = useMemo(() => buildCuratedPlans(plans, profile), [plans, profile]);
+
+  const totalPlans = plans.length;
+  const curatedCount = curated.length;
+
+  return (
+    <div>
+      {/* Section header */}
+      <div className="mb-7">
+        <h2 className="text-xl font-bold mb-1" data-testid="text-curated-title">
+          Recommended plans for {countryName}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Pick the right plan based on how long you're staying and how much data you need.
+        </p>
+      </div>
+
+      {/* Grouped buckets */}
+      <div className="space-y-7 mb-8">
+        {buckets.map(bucket => {
+          const bucketPlans = curated.filter(p => p.bucketId === bucket.id);
+          if (bucketPlans.length === 0) return null;
+          const BucketIcon = bucket.icon;
+          return (
+            <div key={bucket.id} data-testid={`section-bucket-${bucket.id}`}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <BucketIcon className="w-3.5 h-3.5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold leading-tight">{bucket.label}</p>
+                  <p className="text-xs text-muted-foreground">{bucket.description}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {bucketPlans.map(plan => (
+                  <CuratedPlanCard
+                    key={plan.normalizedPlanId}
+                    plan={plan}
+                    isHighlightedByCalc={highlightedPlanId === plan.normalizedPlanId}
+                    onSelect={onSelect}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* View all plans toggle */}
+      {totalPlans > curatedCount && (
+        <div className="border-t pt-5">
+          <button
+            onClick={() => setShowAll(v => !v)}
+            className="flex items-center gap-2 text-sm font-medium text-primary hover:underline underline-offset-2 transition-colors"
+            data-testid="button-toggle-all-plans"
+          >
+            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showAll ? "rotate-180" : ""}`} />
+            {showAll ? "Hide full plan list" : `Compare all ${totalPlans} plans`}
+          </button>
+
+          {showAll && (
+            <div className="mt-5">
+              <p className="text-xs text-muted-foreground mb-4 uppercase tracking-widest font-bold">All available plans</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {plans.map(plan => {
+                  const isHighlighted = highlightedPlanId === plan.normalizedPlanId;
+                  return (
+                    <Card
+                      key={plan.normalizedPlanId}
+                      className={`p-5 flex flex-col relative transition-shadow ${isHighlighted ? "ring-2 ring-primary shadow-lg" : ""}`}
+                      data-testid={`card-plan-all-${plan.normalizedPlanId}`}
+                    >
+                      {isHighlighted && (
+                        <Badge className="absolute -top-2 right-3 bg-primary text-primary-foreground">
+                          <Star className="w-3 h-3 mr-1" /> Recommended
+                        </Badge>
+                      )}
+                      {plan.isUnlimited && !isHighlighted && (
+                        <Badge variant="secondary" className="absolute top-3 left-3 text-xs">Unlimited</Badge>
+                      )}
+                      <div className="mb-3 mt-1">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-2xl font-bold">${plan.estimatedPriceUsd.toFixed(2)}</span>
+                          <PricePerGb dataAmountGb={plan.dataAmountGb} price={plan.estimatedPriceUsd} isUnlimited={plan.isUnlimited} />
+                        </div>
+                      </div>
+                      <div className="space-y-2 flex-1 mb-4">
+                        <FeatureRow icon={<Wifi />} label={plan.dataLabel} sub="Data" />
+                        <FeatureRow icon={<Clock />} label={plan.validityLabel} sub="Validity" />
+                        <FeatureRow icon={<Globe />} label={countryName} sub="Coverage" />
+                        {plan.providerCount > 1 && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                            {plan.providerCount} providers available
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        className="w-full"
+                        variant={isHighlighted ? "default" : "outline"}
+                        onClick={() => onSelect(plan)}
+                        data-testid={`button-buy-plan-${plan.normalizedPlanId}`}
+                      >
+                        Select Plan
+                      </Button>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Legacy mode (UUID-based destinations) ────────────────────────────────────
 
 function LegacyDetail({ destId }: { destId: string }) {
@@ -566,77 +940,15 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
         )}
       </div>
 
-      {plans.length > 0 && (
-        <DataCalculatorNew plans={plans} onHighlight={setHighlightedPlanId} />
-      )}
-
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-1">Available Plans</h2>
-        <p className="text-sm text-muted-foreground">
-          {plans.length} plan{plans.length !== 1 ? "s" : ""} — sorted by data amount
-        </p>
-      </div>
-
       {plans.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {plans.map(plan => {
-            const isHighlighted = highlightedPlanId === plan.normalizedPlanId;
-            return (
-              <Card
-                key={plan.normalizedPlanId}
-                className={`p-5 flex flex-col relative transition-shadow ${isHighlighted ? "ring-2 ring-primary shadow-lg" : ""}`}
-                data-testid={`card-plan-${plan.normalizedPlanId}`}
-              >
-                {isHighlighted && (
-                  <Badge className="absolute -top-2 right-3 bg-primary text-primary-foreground">
-                    <Star className="w-3 h-3 mr-1" /> Recommended
-                  </Badge>
-                )}
-
-                {plan.isUnlimited && (
-                  <Badge variant="secondary" className="absolute top-3 left-3 text-xs">
-                    Unlimited
-                  </Badge>
-                )}
-
-                <div className="mb-3 mt-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-bold" data-testid={`text-plan-price-${plan.normalizedPlanId}`}>
-                      ${plan.estimatedPriceUsd.toFixed(2)}
-                    </span>
-                    <span className="text-sm text-muted-foreground">USD</span>
-                    <PricePerGb
-                      dataAmountGb={plan.dataAmountGb}
-                      price={plan.estimatedPriceUsd}
-                      isUnlimited={plan.isUnlimited}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2 flex-1 mb-5">
-                  <FeatureRow icon={<Wifi />} label={plan.dataLabel} sub="Data" />
-                  <FeatureRow icon={<Clock />} label={plan.validityLabel} sub="Validity" />
-                  <FeatureRow icon={<Globe />} label={meta.name} sub="Coverage" />
-                  {plan.providerCount > 1 && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                      Available from {plan.providerCount} providers
-                    </div>
-                  )}
-                </div>
-
-                <Button
-                  className="w-full"
-                  variant={isHighlighted ? "default" : "outline"}
-                  onClick={() => setCheckoutPlan(plan)}
-                  data-testid={`button-buy-plan-${plan.normalizedPlanId}`}
-                >
-                  Select Plan
-                </Button>
-              </Card>
-            );
-          })}
-        </div>
+        <CuratedPlansSection
+          plans={plans}
+          countryCode={code}
+          countryName={meta.name}
+          highlightedPlanId={highlightedPlanId}
+          onSelect={setCheckoutPlan}
+          onHighlight={setHighlightedPlanId}
+        />
       ) : (
         <EmptyPlans />
       )}
