@@ -85,16 +85,16 @@ export function Navbar() {
             {!isLoading && (
               user ? (
                 <Link href="/dashboard">
-                  <Button size="sm" variant="ghost" className="ml-1 hidden sm:flex" data-testid="nav-dashboard">
-                    <LayoutDashboard className="w-3.5 h-3.5 mr-1.5" />
-                    Dashboard
+                  <Button size="sm" variant="ghost" className="ml-1" data-testid="nav-dashboard">
+                    <LayoutDashboard className="w-3.5 h-3.5 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Dashboard</span>
                   </Button>
                 </Link>
               ) : (
                 <Link href="/login">
-                  <Button size="sm" variant="ghost" className="ml-1 hidden sm:flex" data-testid="nav-login">
-                    <LogIn className="w-3.5 h-3.5 mr-1.5" />
-                    Log In
+                  <Button size="sm" variant="ghost" className="ml-1" data-testid="nav-login">
+                    <LogIn className="w-3.5 h-3.5 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Log In</span>
                   </Button>
                 </Link>
               )
@@ -158,7 +158,7 @@ export function Navbar() {
                     data-testid="link-login"
                   >
                     <LogIn className="w-4 h-4 mr-1.5" />
-                    <span className="hidden sm:inline">Log In</span>
+                    Log In
                   </Button>
                 </Link>
               )
