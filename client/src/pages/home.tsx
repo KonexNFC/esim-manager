@@ -426,6 +426,7 @@ function QuickCountriesGrid() {
 // 1. HERO
 // ─────────────────────────────────────────────
 function HeroSection() {
+  useEffect(() => { document.title = "Konex eSIM – Instant Data Plans for 190+ Countries"; }, []);
   const [, navigate] = useLocation();
   const [heroCode, setHeroCode]         = useState<string>("");
   const [heroSize, setHeroSize]         = useState<string>("");

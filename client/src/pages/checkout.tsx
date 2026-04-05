@@ -49,6 +49,7 @@ const nextSteps = [
 ];
 
 export default function Checkout() {
+  useEffect(() => { document.title = "Checkout | Konex eSIM"; }, []);
   const [, params] = useRoute("/checkout/:planId");
   const [, navigate] = useLocation();
   const { toast } = useToast();

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -29,6 +29,7 @@ function parseApiError(err: any, fallback: string): string {
 }
 
 export default function Signup() {
+  useEffect(() => { document.title = "Create Account | Konex eSIM"; }, []);
   const [, navigate] = useLocation();
   const { signup } = useAuth();
   const { toast } = useToast();

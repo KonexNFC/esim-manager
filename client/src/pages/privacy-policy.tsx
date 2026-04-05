@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Shield } from "lucide-react";
@@ -29,6 +30,7 @@ function Ul({ items }: { items: string[] }) {
 }
 
 export default function PrivacyPolicy() {
+  useEffect(() => { document.title = "Privacy Policy | Konex eSIM"; }, []);
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
       <Link href="/">

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -118,6 +118,7 @@ const requirements = [
 ];
 
 export default function Compatibility() {
+  useEffect(() => { document.title = "eSIM Device Compatibility | Konex eSIM"; }, []);
   const [search, setSearch] = useState("");
   const [selectedBrand, setSelectedBrand] = useState("All");
   const [showAll, setShowAll] = useState(false);

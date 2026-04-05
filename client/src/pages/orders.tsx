@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { Package, ChevronRight, Wifi, Search, Globe } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Order } from "@shared/schema";
 
 function OrderCard({ order }: { order: Order & { planName?: string; destinationName?: string; flagEmoji?: string; dataAmount?: string; validity?: string } }) {
@@ -53,6 +53,7 @@ function OrderCard({ order }: { order: Order & { planName?: string; destinationN
 }
 
 export default function Orders() {
+  useEffect(() => { document.title = "My Orders | Konex eSIM"; }, []);
   const [emailSearch, setEmailSearch] = useState("");
   const [searchSubmitted, setSearchSubmitted] = useState("");
 

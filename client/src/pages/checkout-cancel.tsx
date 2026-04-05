@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { XCircle, ArrowLeft, RotateCcw, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ const reasons = [
 ];
 
 export default function CheckoutCancel() {
+  useEffect(() => { document.title = "Payment Cancelled | Konex eSIM"; }, []);
   const [location] = useLocation();
   const params = new URLSearchParams(location.split("?")[1] || "");
   const planId = params.get("planId");

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,6 +13,7 @@ const schema = z.object({ email: z.string().email("Enter a valid email") });
 type FormData = z.infer<typeof schema>;
 
 export default function ForgotPassword() {
+  useEffect(() => { document.title = "Reset Password | Konex eSIM"; }, []);
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
 

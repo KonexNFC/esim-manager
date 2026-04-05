@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useRoute, Link } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -115,6 +116,7 @@ function OrderDetailSkeleton() {
 
 // ─── Main ─────────────────────────────────────────────
 export default function OrderDetail() {
+  useEffect(() => { document.title = "Order Details | Konex eSIM"; }, []);
   const [, params] = useRoute("/orders/:id");
   const { toast } = useToast();
   const orderId = params?.id;

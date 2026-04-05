@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Globe } from "lucide-react";
 
 export default function NotFound() {
+  useEffect(() => { document.title = "Page Not Found | Konex eSIM"; }, []);
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
       <Globe className="w-16 h-16 text-muted-foreground mb-6" />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -571,6 +571,7 @@ function EsimCardSkeleton() {
 type Tab = "esims" | "orders" | "settings";
 
 export default function Dashboard() {
+  useEffect(() => { document.title = "My eSIMs | Konex eSIM"; }, []);
   const [, navigate] = useLocation();
   const { user, isLoading: authLoading, logout } = useAuth();
   const { toast } = useToast();

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -51,6 +51,7 @@ const installSteps = [
 // ─── Main component ───────────────────────────────────
 
 export default function CheckoutSuccess() {
+  useEffect(() => { document.title = "Order Confirmed | Konex eSIM"; }, []);
   const [location] = useLocation();
   const { user } = useAuth();
 

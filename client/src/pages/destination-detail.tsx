@@ -11,7 +11,7 @@ import {
   Smartphone, BarChart2, ShoppingCart, Lock, ChevronDown,
   Flame, Gauge, Timer, TrendingUp,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useCurrency } from "@/lib/currency";
@@ -982,6 +982,14 @@ function LegacyDetail({ destId }: { destId: string }) {
     },
   });
 
+  useEffect(() => {
+    if (destination?.name) {
+      document.title = `${destination.name} eSIM Plans | Konex eSIM`;
+    } else {
+      document.title = "Konex eSIM | Instant Data Plans for 190+ Countries";
+    }
+  }, [destination?.name]);
+
   const isLoading = destLoading || plansLoading;
 
   if (isLoading) return <LoadingSkeleton />;
@@ -1090,6 +1098,14 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
       return res.json();
     },
   });
+
+  useEffect(() => {
+    if (meta?.name) {
+      document.title = `${meta.name} eSIM Plans | Konex eSIM`;
+    } else {
+      document.title = "Konex eSIM | Instant Data Plans for 190+ Countries";
+    }
+  }, [meta?.name]);
 
   const isLoading = metaLoading || plansLoading;
   if (isLoading) return <LoadingSkeleton />;

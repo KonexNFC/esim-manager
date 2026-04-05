@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { Search, Globe, SlidersHorizontal, X, Star } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 interface AvailableCountry {
   countryCode: string;
@@ -171,6 +171,7 @@ function CountryGrid({ countries }: { countries: AvailableCountry[] }) {
 }
 
 export default function Destinations() {
+  useEffect(() => { document.title = "Browse eSIM Plans by Country | Konex eSIM"; }, []);
   const [search, setSearch] = useState("");
   const [selectedRegion, setSelectedRegion] = useState("All");
 
