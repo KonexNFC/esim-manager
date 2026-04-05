@@ -201,6 +201,22 @@ const FESTIVAL_EVENTS: FestivalEvent[] = [
   },
 ];
 
+// ─── Flag helpers ─────────────────────────────────────────────────────────────
+function flagUrl(code: string) {
+  return `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
+}
+
+function FlagImg({ code, name, className = "" }: { code: string; name: string; className?: string }) {
+  return (
+    <img
+      src={flagUrl(code)}
+      alt={name}
+      loading="lazy"
+      className={`object-cover ${className}`}
+    />
+  );
+}
+
 // ─── Quick countries data ──────────────────────────────────────────────────────
 const QUICK_COUNTRIES = [
   { code: "GB", flag: "🇬🇧", name: "United Kingdom",  from: "$11" },
@@ -407,8 +423,8 @@ function QuickCountriesGrid() {
               data-testid={`card-quick-country-${c.code}`}
             >
               {/* Circular flag */}
-              <div className="w-9 h-9 rounded-full flex items-center justify-center bg-muted/50 border text-xl leading-none flex-shrink-0 overflow-hidden">
-                <span>{c.flag}</span>
+              <div className="w-9 h-9 rounded-full flex-shrink-0 overflow-hidden border bg-muted/20">
+                <FlagImg code={c.code} name={c.name} className="w-full h-full" />
               </div>
               <div className="min-w-0">
                 <p className="font-semibold text-sm leading-tight truncate">{c.name}</p>
@@ -623,7 +639,9 @@ function HeroSection() {
             {flagStrip.map((item) => (
               <Link key={item.code} href={`/destinations/${item.code}`} data-testid={`flag-strip-${item.code.toLowerCase()}`}>
                 <div className="flex items-center gap-1.5 hover:opacity-75 transition-opacity cursor-pointer">
-                  <span className="text-base leading-none">{item.flag}</span>
+                  <div className="w-5 h-3.5 rounded-[2px] overflow-hidden flex-shrink-0 shadow-sm">
+                    <FlagImg code={item.code} name={item.label} className="w-full h-full" />
+                  </div>
                   <span className="text-white/40 text-xs font-medium">{item.label}</span>
                 </div>
               </Link>
@@ -1086,7 +1104,9 @@ function PopularDestinations() {
                   <p className="text-white font-bold text-xs">{regionFromPrice[dest.region] ?? "£9.99"}</p>
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 p-4">
-                  <p className="text-xl leading-none mb-1.5">{dest.flagEmoji}</p>
+                  <div className="w-7 h-5 rounded-sm overflow-hidden mb-1.5 shadow-md border border-white/20">
+                    <FlagImg code={dest.countryCode} name={dest.name} className="w-full h-full" />
+                  </div>
                   <p className="font-bold text-white text-sm leading-tight">{dest.name}</p>
                   <p className="text-white/50 text-xs mt-0.5">{dest.region}</p>
                 </div>
@@ -1778,57 +1798,57 @@ const coverageRegions = [
     id: "europe",
     label: "Europe",
     countries: [
-      { name: "United Kingdom", flag: "🇬🇧" }, { name: "France",      flag: "🇫🇷" },
-      { name: "Germany",        flag: "🇩🇪" }, { name: "Spain",       flag: "🇪🇸" },
-      { name: "Italy",          flag: "🇮🇹" }, { name: "Portugal",    flag: "🇵🇹" },
-      { name: "Netherlands",    flag: "🇳🇱" }, { name: "Greece",      flag: "🇬🇷" },
-      { name: "Poland",         flag: "🇵🇱" }, { name: "Sweden",      flag: "🇸🇪" },
-      { name: "Switzerland",    flag: "🇨🇭" }, { name: "Austria",     flag: "🇦🇹" },
+      { name: "United Kingdom", code: "GB" }, { name: "France",      code: "FR" },
+      { name: "Germany",        code: "DE" }, { name: "Spain",       code: "ES" },
+      { name: "Italy",          code: "IT" }, { name: "Portugal",    code: "PT" },
+      { name: "Netherlands",    code: "NL" }, { name: "Greece",      code: "GR" },
+      { name: "Poland",         code: "PL" }, { name: "Sweden",      code: "SE" },
+      { name: "Switzerland",    code: "CH" }, { name: "Austria",     code: "AT" },
     ],
   },
   {
     id: "north-america",
     label: "North America",
     countries: [
-      { name: "United States", flag: "🇺🇸" }, { name: "Canada", flag: "🇨🇦" }, { name: "Mexico", flag: "🇲🇽" },
+      { name: "United States", code: "US" }, { name: "Canada", code: "CA" }, { name: "Mexico", code: "MX" },
     ],
   },
   {
     id: "africa",
     label: "Africa",
     countries: [
-      { name: "Nigeria",      flag: "🇳🇬" }, { name: "South Africa", flag: "🇿🇦" },
-      { name: "Kenya",        flag: "🇰🇪" }, { name: "Ghana",        flag: "🇬🇭" },
-      { name: "Egypt",        flag: "🇪🇬" }, { name: "Ethiopia",     flag: "🇪🇹" },
-      { name: "Tanzania",     flag: "🇹🇿" }, { name: "Uganda",       flag: "🇺🇬" },
+      { name: "Nigeria",      code: "NG" }, { name: "South Africa", code: "ZA" },
+      { name: "Kenya",        code: "KE" }, { name: "Ghana",        code: "GH" },
+      { name: "Egypt",        code: "EG" }, { name: "Ethiopia",     code: "ET" },
+      { name: "Tanzania",     code: "TZ" }, { name: "Uganda",       code: "UG" },
     ],
   },
   {
     id: "middle-east",
     label: "Middle East",
     countries: [
-      { name: "UAE",          flag: "🇦🇪" }, { name: "Saudi Arabia", flag: "🇸🇦" },
-      { name: "Qatar",        flag: "🇶🇦" }, { name: "Kuwait",       flag: "🇰🇼" },
-      { name: "Bahrain",      flag: "🇧🇭" }, { name: "Oman",         flag: "🇴🇲" },
-      { name: "Jordan",       flag: "🇯🇴" }, { name: "Lebanon",      flag: "🇱🇧" },
+      { name: "UAE",          code: "AE" }, { name: "Saudi Arabia", code: "SA" },
+      { name: "Qatar",        code: "QA" }, { name: "Kuwait",       code: "KW" },
+      { name: "Bahrain",      code: "BH" }, { name: "Oman",         code: "OM" },
+      { name: "Jordan",       code: "JO" }, { name: "Lebanon",      code: "LB" },
     ],
   },
   {
     id: "asia",
     label: "Asia",
     countries: [
-      { name: "Japan",       flag: "🇯🇵" }, { name: "Singapore",   flag: "🇸🇬" },
-      { name: "Thailand",    flag: "🇹🇭" }, { name: "South Korea", flag: "🇰🇷" },
-      { name: "Malaysia",    flag: "🇲🇾" }, { name: "Indonesia",   flag: "🇮🇩" },
-      { name: "India",       flag: "🇮🇳" }, { name: "Philippines", flag: "🇵🇭" },
-      { name: "Vietnam",     flag: "🇻🇳" }, { name: "Hong Kong",   flag: "🇭🇰" },
+      { name: "Japan",       code: "JP" }, { name: "Singapore",   code: "SG" },
+      { name: "Thailand",    code: "TH" }, { name: "South Korea", code: "KR" },
+      { name: "Malaysia",    code: "MY" }, { name: "Indonesia",   code: "ID" },
+      { name: "India",       code: "IN" }, { name: "Philippines", code: "PH" },
+      { name: "Vietnam",     code: "VN" }, { name: "Hong Kong",   code: "HK" },
     ],
   },
   {
     id: "global",
     label: "Global",
     countries: [
-      { name: "190+ destinations covered worldwide with a single eSIM purchase", flag: "🌍" },
+      { name: "190+ destinations covered worldwide with a single eSIM purchase", code: "" },
     ],
   },
 ];
@@ -1871,7 +1891,13 @@ function CoverageSection() {
                       className="flex items-center gap-2.5 py-2.5 px-3 rounded-xl border bg-card"
                       data-testid={`coverage-country-${country.name.toLowerCase().replace(/\s/g, '-')}`}
                     >
-                      <span className="text-base leading-none flex-shrink-0">{country.flag}</span>
+                      {country.code ? (
+                        <div className="w-6 h-4 rounded-sm overflow-hidden flex-shrink-0 shadow-sm">
+                          <FlagImg code={country.code} name={country.name} className="w-full h-full" />
+                        </div>
+                      ) : (
+                        <Globe className="w-4 h-4 text-primary flex-shrink-0" />
+                      )}
                       <span className="text-sm leading-tight font-medium">{country.name}</span>
                     </div>
                   ))}

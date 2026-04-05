@@ -53,7 +53,13 @@ function CountryCard({ country }: { country: AvailableCountry }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
         <div className="absolute top-3 left-3">
-          <span className="text-2xl drop-shadow-lg leading-none">{country.flagEmoji}</span>
+          <div className="w-8 h-5 rounded-sm overflow-hidden shadow-md border border-white/25">
+            <img
+              src={flagSrc(country.countryCode)}
+              alt={country.name}
+              className="w-full h-full object-cover"
+            />
+          </div>
         </div>
 
         {country.planCount > 0 && (
