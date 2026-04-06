@@ -60,7 +60,7 @@ export const plans = pgTable("plans", {
 // status: pending | paid | failed | fulfilling | fulfilled | fulfillment_failed | partially_fulfilled | refunded
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  planId: varchar("plan_id").notNull().references(() => plans.id),
+  planId: varchar("plan_id").references(() => plans.id),
   userId: varchar("user_id").references(() => users.id),
   email: text("email").notNull(),
   status: text("status").notNull().default("pending"),

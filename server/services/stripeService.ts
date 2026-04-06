@@ -497,7 +497,7 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
   }
 
   const [order] = await db.insert(orders).values({
-    planId: metadata.planId,
+    planId: metadata.planId || null,
     email,
     userId: resolvedUserId || null,
     status: 'paid',

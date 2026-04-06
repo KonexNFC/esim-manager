@@ -13,7 +13,7 @@
 //     → getActiveProvider() (transparent failover adapter, unchanged)
 
 import { db } from '../storage';
-import { orders, esims, users, topups, plans, destinations, providerSyncLogs, providerAttempts } from '@shared/schema';
+import { orders, esims, users, topups, plans, destinations, normalizedPlans, providerSyncLogs, providerAttempts } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { getActiveProvider, getProviderAdapterByKey } from '../providers/adapters';
 import type { ProviderAdapter, ProviderPurchaseParams, CustomerContext, EsimProvisionResult } from '../providers/adapters';
@@ -157,24 +157,75 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
     ? (await db.select().from(users).where(eq(users.id, order.userId)))[0]
     : null;
 
-  const [planRow] = await db
-    .select({ plan: plans, dest: destinations })
-    .from(plans)
-    .leftJoin(destinations, eq(plans.destinationId, destinations.id))
-    .where(eq(plans.id, order.planId));
+  // ── Resolve plan data ──────────────────────────────────────────────────────
+  // Legacy orders reference the plans table via planId.
+  // Country-plan orders (routing engine) use normalizedPlanId with no legacy planId.
+  type PlanData = {
+    countryCode: string;
+    dataAmountGb: number;
+    validityDays: number;
+    providerRef?: string;
+    name: string;
+    destination: string;
+    region: string;
+    dataAmount: string;
+    validity: string;
+  };
+  let planData: PlanData | null = null;
 
-  if (!planRow) {
+  if (order.planId) {
+    const [planRow] = await db
+      .select({ plan: plans, dest: destinations })
+      .from(plans)
+      .leftJoin(destinations, eq(plans.destinationId, destinations.id))
+      .where(eq(plans.id, order.planId));
+    if (planRow) {
+      planData = {
+        countryCode: planRow.dest?.countryCode ?? 'US',
+        dataAmountGb: planRow.plan.dataAmountGb,
+        validityDays: planRow.plan.validityDays,
+        providerRef: planRow.plan.externalPlanCode ?? undefined,
+        name: planRow.plan.name,
+        destination: planRow.dest?.name ?? '',
+        region: planRow.dest?.region ?? '',
+        dataAmount: planRow.plan.dataAmount,
+        validity: planRow.plan.validity,
+      };
+    }
+  }
+
+  if (!planData && order.normalizedPlanId) {
+    const [np] = await db.select().from(normalizedPlans).where(eq(normalizedPlans.id, order.normalizedPlanId));
+    if (np) {
+      const dataAmountGb = np.dataMb / 1024;
+      const dataAmountLabel = np.isUnlimited ? 'Unlimited' : dataAmountGb >= 1 ? `${dataAmountGb} GB` : `${np.dataMb} MB`;
+      const validityLabel = `${np.validityDays} Day${np.validityDays !== 1 ? 's' : ''}`;
+      planData = {
+        countryCode: np.regionCode,
+        dataAmountGb,
+        validityDays: np.validityDays,
+        providerRef: undefined, // overridden per-entry in the fallback chain
+        name: np.name,
+        destination: np.regionCode,
+        region: '',
+        dataAmount: dataAmountLabel,
+        validity: validityLabel,
+      };
+    }
+  }
+
+  if (!planData) {
     await markFulfillmentFailed(orderId, 'Plan not found');
-    throw new Error(`Plan ${order.planId} not found`);
+    throw new Error(`No plan data found for order ${orderId} (planId=${order.planId}, normalizedPlanId=${order.normalizedPlanId})`);
   }
 
   // Base params shared across all provider attempts
   const baseParams: ProviderPurchaseParams = {
-    planId: order.planId,
-    countryCode: planRow.dest?.countryCode ?? 'US',
-    dataAmountGb: planRow.plan.dataAmountGb,
-    validityDays: planRow.plan.validityDays,
-    providerRef: planRow.plan.externalPlanCode ?? undefined,
+    planId: order.planId ?? undefined,
+    countryCode: planData.countryCode,
+    dataAmountGb: planData.dataAmountGb,
+    validityDays: planData.validityDays,
+    providerRef: planData.providerRef,
     customerEmail: order.email,
   };
 
@@ -196,7 +247,7 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
       Array.isArray(order.fallbackProvidersJson) &&
       (order.fallbackProvidersJson as any[]).length > 0;
 
-    const countryCode = planRow.dest?.countryCode ?? 'UNKNOWN';
+    const countryCode = planData.countryCode;
 
     if (hasFallbackChain) {
       const chain = order.fallbackProvidersJson as unknown as FallbackEntry[];
@@ -240,7 +291,7 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
     }
 
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + planRow.plan.validityDays);
+    expiresAt.setDate(expiresAt.getDate() + planData.validityDays);
 
     // ── Update order record ────────────────────────────────────────────────
     await db.update(orders).set({
@@ -254,7 +305,7 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
       dataTotalMb: result.dataTotalMb,
       dataUsedMb: result.dataUsedMb,
       dataRemainingMb: result.dataRemainingMb,
-      daysRemaining: planRow.plan.validityDays,
+      daysRemaining: planData.validityDays,
       expiresAt,
       lastSyncedAt: new Date(),
     }).where(eq(orders.id, orderId));
@@ -270,15 +321,15 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
       providerReference: result.activationUrl ?? undefined,
       qrCodeUrl: result.qrCodeUrl,
       manualCode: result.manualCode ?? undefined,
-      destination: planRow.dest?.name ?? '',
-      region: planRow.dest?.region ?? '',
-      planName: planRow.plan.name,
+      destination: planData.destination,
+      region: planData.region,
+      planName: planData.name,
       activationStatus: 'issued',
       dataTotalMb: result.dataTotalMb,
       dataUsedMb: result.dataUsedMb,
       dataRemainingMb: result.dataRemainingMb,
-      validityDays: planRow.plan.validityDays,
-      daysRemaining: planRow.plan.validityDays,
+      validityDays: planData.validityDays,
+      daysRemaining: planData.validityDays,
       expiresAt,
       lastSyncedAt: new Date(),
     }).returning();
@@ -291,10 +342,10 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
     // Fire-and-forget notifications
     sendPurchaseConfirmation({
       email: order.email, name: user?.name, orderId,
-      planName: planRow.plan.name,
-      destination: planRow.dest?.name ?? '',
-      dataAmount: planRow.plan.dataAmount,
-      validity: planRow.plan.validity,
+      planName: planData.name,
+      destination: planData.destination,
+      dataAmount: planData.dataAmount,
+      validity: planData.validity,
       totalPrice: order.totalPrice,
       currency: order.currency,
     }).catch(console.error);
@@ -303,7 +354,7 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
       email: order.email, name: user?.name, orderId,
       qrCodeUrl: result.qrCodeUrl,
       iccid: result.iccid,
-      destination: planRow.dest?.name ?? '',
+      destination: planData.destination,
       manualCode: result.manualCode,
     }).catch(console.error);
 
