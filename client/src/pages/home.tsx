@@ -2089,7 +2089,15 @@ function Footer() {
                   FAQ
                 </button>
               </li>
-              <li><span className="text-sm text-muted-foreground font-medium" data-testid="footer-link-contact">Contact</span></li>
+              <li>
+                <a
+                  href="mailto:support@konexesim.com"
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
+                  data-testid="footer-link-contact"
+                >
+                  support@konexesim.com
+                </a>
+              </li>
             </ul>
           </div>
 
