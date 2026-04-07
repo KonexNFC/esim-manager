@@ -1,0 +1,148 @@
+Build a backend catalogue normalisation and smart pricing engine for a travel eSIM platform.
+
+Project context:
+- Brand: Konex eSIM
+- Positioning: travel/tourist eSIM provider
+- Public storefront should prioritise clean travel durations: 1 Day, 3 Days, 5 Days, 7 Days
+- Within each duration, unlimited data should be prioritised as the recommended option where commercially viable
+- Fixed data plans should appear as cheaper/value alternatives
+- Hidden tabs/categories should exist for M2M and M2D bulk data products, but these must not appear in public travel catalogue responses
+
+Tech requirements:
+- Use TypeScript
+- Build modular server-side logic
+- Create clean service-layer architecture
+- Include mock seed data for 3 suppliers: breeze, esimgo, esimaccess
+- Expose API endpoints for public destination catalogue and internal catalogue inspection
+- Add unit-testable functions for plan normalisation, synthetic bundling, scoring, price ladder validation, and recommendation assignment
+
+Build the following modules:
+
+1. supplier-plan.types.ts
+- Define raw SupplierPlan type
+- Define enums for category, duration bucket, offer type, visibility, recommendation role
+
+2. normalizer.ts
+- Function normalizeValidityToBucket(validityDays)
+  rules:
+  1 => DAY_1
+  2-3 => DAY_3
+  4-5 => DAY_5
+  6-7 => DAY_7
+- Function mapOfferType(plan)
+  rules:
+  unlimited => UNLIMITED
+  low fixed data => ESSENTIAL
+  mid fixed data => PLUS
+  high fixed data => MAX
+- Function filterPublicEligiblePlans(plans)
+  exclude hidden, disabled, out_of_stock, unsupported, and categories M2M_BULK, M2D_BULK, ENTERPRISE_POOL, WHOLESALE, TESTING, LEGACY
+
+3. synthetic-bundler.ts
+- Build synthetic bundles when native plans do not exist for DAY_3, DAY_5, DAY_7
+- Allow bundling from DAY_1 plans of same supplier and same country
+- Preserve unlimited/fixed-data character
+- Return synthetic offer objects with isSynthetic=true
+- Keep supplierPlanIds source trace
+
+4. pricing-engine.ts
+- Convert internal cost into smart tourist-facing GBP sell prices
+- Use target price bands:
+  1 day unlimited £4.99-£5.99, fixed £2.99-£4.99
+  3 day unlimited £8.99-£11.99, fixed £5.99-£8.99
+  5 day unlimited £11.99-£15.99, fixed £8.99-£12.99
+  7 day unlimited £14.99-£19.99, fixed £10.99-£15.99
+- Enforce ladder integrity:
+  3-day >= 1-day
+  5-day >= 3-day
+  7-day >= 5-day
+- Enforce minimum margin floor:
+  absolute margin >= 1.50 GBP
+  percentage margin >= 25%
+- Round to .99
+- Unlimited should generally price 15%-45% above fixed-data equivalent
+- Add functions:
+  getTargetBand()
+  calculateSellPrice()
+  validatePriceLadder()
+  roundPsychological()
+
+5. scoring-engine.ts
+- Score offers using:
+  unlimited priority
+  price-band fit
+  margin health
+  tourist suitability
+  provider count
+  hotspot support
+  penalties for weak data and overpriced plans
+- Add helper thresholds:
+  min public usable data:
+  1 day = 1GB
+  3 day = 3GB
+  5 day = 5GB
+  7 day = 7GB
+
+6. recommendation-engine.ts
+- For each country and duration bucket:
+  pick recommended offer
+  pick cheaper offer
+  pick premium/more-data offer
+  collect browseAll list
+- Priority order:
+  unlimited in target band
+  unlimited slightly above target band
+  best fixed-data travel option
+  synthetic unlimited
+  synthetic fixed-data fallback
+- Ensure no duplicate cards across recommended/cheaper/premium when alternatives exist
+
+7. catalogue-service.ts
+- Main orchestration service:
+  input raw supplier plans
+  filter public-eligible plans
+  normalise
+  generate synthetic bundles if needed
+  price offers
+  score offers
+  assign recommendations
+  return destination catalogue response
+- Default duration should be DAY_3 when available, otherwise closest available duration
+- Always return availableDurations from the standard set [DAY_1, DAY_3, DAY_5, DAY_7] when offers exist
+
+8. internal segmentation
+- Public API must only include category TRAVEL and public visibility
+- Internal API can include M2M_BULK and M2D_BULK
+- Add separate service method for internal catalogue browsing
+
+9. mock data
+- Seed sample plans for US and UK with intentionally inconsistent supplier inputs:
+  examples:
+  - US only has 1-day unlimited and 1-day 1.5GB from one supplier, plus a 7-day 10GB from another
+  - UK has native 1,3,5,7 day unlimited plus fixed options
+  - Add hidden M2M and M2D plans for admin-only
+- The system must generate standardized public outputs automatically
+
+10. API routes
+- GET /api/plans/public/:countryCode
+  returns standardized travel destination catalogue
+- GET /api/plans/internal/:countryCode
+  returns full internal catalogue including hidden/bulk categories
+- GET /api/debug/ladder/:countryCode
+  returns price ladder analysis for QA
+
+11. output quality
+- Use clean TypeScript types everywhere
+- Add comments for each business rule
+- Structure code for easy adjustment of pricing bands later
+- Avoid frontend work for now unless needed to demonstrate response shapes
+- Include example JSON outputs for US and UK showing proper standardisation
+
+Critical business rules:
+- We are not simply reselling supplier plans directly
+- We are creating a normalized travel product layer on top of supplier supply
+- Public customers should always see a clean tourist-friendly duration structure
+- Unlimited should be preferred where commercially sensible
+- M2M and M2D products must remain hidden from public catalogue APIs
+- If a country lacks native 3/5/7 day plans, synthetic bundles should fill the gap automatically
+- The backend should solve the inconsistency problem, not the frontend

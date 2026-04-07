@@ -1849,5 +1849,63 @@ export async function registerRoutes(
     }
   });
 
+  // ── Catalogue API ──────────────────────────────────────────────────────────
+  // New modular catalogue layer: normalisation, synthetic bundling, smart
+  // pricing, scoring, and recommendation assignment.
+  // These routes use mock seed data; swap MOCK_SUPPLIER_PLANS for live DB data
+  // when the live provider sync is wired up.
+
+  {
+    const { buildPublicCatalogue, buildInternalCatalogue, buildLadderReport } =
+      await import("./catalogue/catalogue-service");
+    const { MOCK_SUPPLIER_PLANS } = await import("./catalogue/mock-data");
+
+    // GET /api/plans/public/:countryCode
+    // Public travel catalogue: only TRAVEL-category, active plans.
+    // M2M/M2D bulk products are excluded.
+    app.get("/api/plans/public/:countryCode", (req, res) => {
+      try {
+        const code = req.params.countryCode.toUpperCase();
+        const catalogue = buildPublicCatalogue(code, MOCK_SUPPLIER_PLANS);
+        if (catalogue.availableDurations.length === 0) {
+          return res.status(404).json({ message: `No public plans found for ${code}` });
+        }
+        return res.json(catalogue);
+      } catch (err: any) {
+        console.error("/api/plans/public error:", err.message);
+        return res.status(500).json({ message: "Failed to build catalogue" });
+      }
+    });
+
+    // GET /api/plans/internal/:countryCode
+    // Full internal catalogue including M2M / M2D bulk segments.
+    // Should be protected by admin auth in production.
+    app.get("/api/plans/internal/:countryCode", requireAdmin, (req, res) => {
+      try {
+        const code = req.params.countryCode.toUpperCase();
+        const result = buildInternalCatalogue(code, MOCK_SUPPLIER_PLANS);
+        return res.json(result);
+      } catch (err: any) {
+        console.error("/api/plans/internal error:", err.message);
+        return res.status(500).json({ message: "Failed to build internal catalogue" });
+      }
+    });
+
+    // GET /api/debug/ladder/:countryCode
+    // Price-ladder analysis for QA: shows sell prices per bucket, margin
+    // health, ladder violations, and which buckets are synthetic.
+    // No auth required — useful for automated QA pipelines.
+    app.get("/api/debug/ladder/:countryCode", (req, res) => {
+      try {
+        const code = req.params.countryCode.toUpperCase();
+        const report = buildLadderReport(code, MOCK_SUPPLIER_PLANS);
+        return res.json(report);
+      } catch (err: any) {
+        console.error("/api/debug/ladder error:", err.message);
+        return res.status(500).json({ message: "Failed to build ladder report" });
+      }
+    });
+  }
+
   return httpServer;
 }
