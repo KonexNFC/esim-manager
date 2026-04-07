@@ -12,7 +12,7 @@ Konex is built with a modern web stack. The **frontend** uses React with TypeScr
 **UI/UX Design:**
 -   Premium landing page with feature showcases.
 -   Context-aware navigation bar.
--   Destination detail pages with data usage estimators.
+-   Destination detail pages with automated plan recommendation engine: destination profile classification (business/holiday/default), trip buckets (Quick/Standard/Extended/Unlimited), one primary plan per bucket with alternatives hidden behind "Compare alternatives" toggle, data usage estimator, and full plan inventory behind "View all N plans" toggle.
 -   Checkout process includes trust badges and upsell steps.
 -   Checkout success and cancel pages.
 -   Dark/light theme toggle.

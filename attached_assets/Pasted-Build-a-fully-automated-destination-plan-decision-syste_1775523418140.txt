@@ -1,0 +1,430 @@
+Build a fully automated destination plan decision system for KONEX eSIM.
+
+IMPORTANT
+Do not rebuild the whole website.
+Do not break checkout, payments, routing, or the existing plan data model.
+This task is to automate how destination pages choose, group, and present plans so customers are guided to the best option instead of being overwhelmed by raw inventory.
+
+PRIMARY GOAL
+Turn destination plan pages from:
+- static plan catalogues
+into:
+- smart guided decision pages
+
+The system should automatically:
+1. classify the destination type
+2. group plans by trip type
+3. choose one primary recommended plan per group
+4. optionally show 1–2 alternatives behind a lower-emphasis interaction
+5. keep the full inventory available separately
+6. improve conversion by reducing choice overload
+
+==================================================
+1. CORE PRODUCT BEHAVIOUR
+==================================================
+
+For each destination page, build a recommendation engine that automatically generates:
+
+A. Destination summary
+B. Recommended plans grouped by trip type
+C. One primary recommended plan per group
+D. Optional alternative plans hidden behind “see more options”
+E. Full plan table or inventory lower on the page
+
+The page should feel like:
+“Here’s the right plan for your trip”
+not:
+“Here are 24 plans, good luck”
+
+==================================================
+2. DESTINATION PROFILE CLASSIFICATION
+==================================================
+
+Build a destination classification system.
+
+Each destination should be assigned one of these profile types:
+- business_travel
+- holiday_travel
+- default_travel
+
+Examples:
+
+business_travel:
+- United States
+- Nigeria
+- UAE
+- Dubai
+- Canada
+- Saudi Arabia
+- large city / work-heavy destinations
+
+holiday_travel:
+- France
+- Spain
+- Italy
+- Portugal
+- Greece
+- Turkey
+- Thailand
+- Indonesia / Bali
+- leisure / short-break destinations
+
+default_travel:
+- any uncategorised destination
+
+This profile should determine trip grouping logic and recommendation behaviour.
+
+Use a simple mapping config file or utility so this can be extended later.
+
+==================================================
+3. TRIP BUCKET RULES
+==================================================
+
+Use automated grouping rules by destination profile.
+
+A. business_travel destinations:
+- Quick trip: 1–7 days
+- Standard trip: 7–14 days
+- Extended stay: 14–30 days
+- Heavy use / Unlimited
+
+B. holiday_travel destinations:
+- Quick trip: 1–3 days
+- Standard trip: 5–14 days
+- Extended stay: 14–30 days
+- Heavy use / Unlimited
+
+C. default_travel:
+- Quick trip: 1–7 days
+- Standard trip: 7–14 days
+- Extended stay: 14–30 days
+- Heavy use / Unlimited
+
+Use these ranges to automatically assign plans into groups.
+
+==================================================
+4. AUTOMATED RECOMMENDATION ENGINE
+==================================================
+
+Build a recommendation engine that takes all available plans for a destination and chooses the best one per trip bucket.
+
+Core function:
+getRecommendedPlansForDestination(destinationCode)
+
+For each trip bucket, the engine must:
+1. filter eligible plans by duration and type
+2. score plans
+3. choose 1 primary plan
+4. optionally choose up to 2 alternatives
+
+The primary recommended plan should be the default visible option.
+
+Alternatives should be accessible via:
+- “Other options”
+- “See more”
+- “Compare alternatives”
+
+==================================================
+5. SCORING LOGIC
+==================================================
+
+Create a simple scoring system for plans.
+
+The recommendation score should consider:
+- value (cost per GB)
+- plan clarity / usefulness
+- commercially attractive pricing
+- duration fit for trip bucket
+- provider availability count
+- data amount suitability
+- avoid overpowered or underpowered plans
+
+Suggested scoring dimensions:
+- duration fit score
+- value score
+- usefulness score
+- provider confidence score
+- price attractiveness score
+
+Do not simply choose the cheapest plan.
+Do not simply choose the largest plan.
+Choose the best overall plan for a typical user in that bucket.
+
+==================================================
+6. RECOMMENDATION OUTPUT RULES
+==================================================
+
+For each trip bucket show:
+
+- bucket title
+- duration guidance
+- one primary recommended plan card
+- optional smaller link/button to show alternatives
+
+Examples:
+
+Quick trip
+1–7 days
+Recommended plan:
+2GB • 7 days • $3.49
+Perfect for maps, WhatsApp, Uber, and light browsing.
+
+Alternative plans hidden by default:
+- 1GB • 7 days
+- 3GB • 7 days
+
+Extended stay
+14–30 days
+Recommended plan:
+10GB • 30 days • $13.49
+Enough for everyday data use over a longer stay.
+
+==================================================
+7. TAGGING / LABEL SYSTEM
+==================================================
+
+Automatically apply clear labels to recommended plans.
+
+Possible labels:
+- Recommended
+- Most Popular
+- Best Value
+- Heavy Usage
+- Unlimited
+- Light Use
+- Best for 1–2 weeks
+
+Rules:
+- each bucket should have one clear main label
+- do not over-tag
+- keep visual hierarchy simple
+
+Recommended behaviour:
+- Quick trip → “Recommended” or “Most Popular”
+- Standard / Extended → “Best Value”
+- Unlimited → “Unlimited” or “Heavy Use”
+
+==================================================
+8. PLAN CARD COPY AUTOMATION
+==================================================
+
+Generate contextual helper text automatically based on plan size and duration.
+
+Examples:
+- Perfect for maps, WhatsApp, and light browsing
+- Good for a weekend trip
+- Ideal for regular daily use
+- Great for longer stays
+- Better for streaming, hotspotting, and heavier usage
+
+This text should be automatically generated based on:
+- data amount
+- plan type
+- trip bucket
+
+Make it feel helpful and human, not robotic.
+
+==================================================
+9. FULL INVENTORY HANDLING
+==================================================
+
+Do not remove the full inventory.
+
+But change its role:
+- lower priority
+- hidden by default
+- available only after the curated recommendation area
+
+Use text like:
+- View all 21 plans
+- Compare all options
+
+When expanded, show:
+- full list / table of plans
+- clean comparison layout
+- select CTA
+
+But keep the curated recommendation area as the main entry point.
+
+==================================================
+10. REDUCE LOW-VALUE NOISE
+==================================================
+
+Do not allow very low-value or edge-case plans to dominate the default recommendation area.
+
+Examples:
+- 100MB
+- 500MB
+- too many 1-day variants
+- very niche raw plans
+
+These can stay in the full inventory.
+But they should not be selected as the primary recommendation unless they genuinely make sense.
+
+==================================================
+11. DEFAULT PLAN SELECTION
+==================================================
+
+If the destination page supports preselection or direct checkout routing, automatically preselect the primary recommended plan for the first visible trip bucket.
+
+This should create a stronger “you should buy this” moment.
+
+Do not force purchase blindly, but make the best option obvious.
+
+==================================================
+12. PRIMARY PAGE STRUCTURE
+==================================================
+
+Restructure each destination page like this:
+
+1. Destination title
+2. Short helper intro
+3. Recommended plans grouped by trip type
+4. Optional alternatives within each group
+5. Device check reminder block
+6. Full plan comparison / full inventory
+7. Supporting trust or FAQ if present
+
+The curated recommendation area must come first.
+
+==================================================
+13. PAGE COPY
+==================================================
+
+Use conversion-focused structure.
+
+Examples:
+
+Heading:
+Recommended plans for United States
+
+Subheading:
+Pick the right plan based on how long you’re staying and how much data you need.
+
+Bucket examples:
+Quick trip
+1–7 days
+
+Standard trip
+7–14 days
+
+Extended stay
+14–30 days
+
+Heavy use / Unlimited
+
+Alternative trigger text:
+See other options
+Compare alternatives
+
+Full inventory trigger:
+View all 21 plans
+
+==================================================
+14. DESIGN / UX RULES
+==================================================
+
+Keep the current premium KONEX visual language.
+
+But make the recommendation system feel:
+- simpler
+- guided
+- lower friction
+- commercially intentional
+
+Rules:
+- one dominant card per bucket
+- alternatives lower emphasis
+- clear labels
+- generous spacing
+- avoid visual clutter
+- avoid giant walls of cards above the fold
+
+==================================================
+15. COST PER GB PRESENTATION
+==================================================
+
+Use cost-per-GB sparingly and strategically.
+
+Rules:
+- show it for fixed-data plans where useful
+- do not show it too aggressively on every card
+- de-emphasise it visually compared to total price
+- do not use it as the main hero value prop on the page
+
+For unlimited plans:
+- do not force cost-per-GB framing
+
+==================================================
+16. COMMERCIAL GUARDRAILS
+==================================================
+
+The engine should prefer plans that are:
+- easy to choose
+- not suspiciously cheap / weak
+- good margin
+- strong perceived value
+- aligned with common traveller behaviour
+
+If two plans are close:
+- prefer the clearer, stronger perceived-value plan
+- not necessarily the cheapest
+
+==================================================
+17. ALTERNATIVE PLAN LOGIC
+==================================================
+
+For each bucket, alternatives should be selected only if they add meaningful contrast.
+
+Examples:
+- smaller cheaper option
+- larger premium option
+
+Do not show 3 almost identical alternatives.
+Avoid duplicate-like options.
+
+==================================================
+18. MODULES / IMPLEMENTATION
+==================================================
+
+Keep this modular and easy to tune.
+
+Suggested files/modules:
+- destinationProfile.ts
+- tripBucketRules.ts
+- planRecommendationEngine.ts
+- planScoring.ts
+- planCopyGenerator.ts
+- destinationPlanPresenter.ts
+
+Use existing plan data source and current destination page route.
+
+==================================================
+19. DO NOT BREAK EXISTING FLOW
+==================================================
+
+Do not break:
+- full inventory access
+- selection buttons
+- checkout entry
+- pricing display
+- currency display
+- provider availability info
+
+This is an enhancement layer on top of the current destination page.
+
+==================================================
+20. DELIVERABLE
+==================================================
+
+Return a fully automated destination plan decision system for KONEX eSIM that:
+- classifies destinations
+- groups plans by trip type automatically
+- picks one primary plan per group
+- hides alternatives behind lower-emphasis interactions
+- keeps full inventory available
+- reduces overwhelm
+- increases clarity
+- improves conversion
+
+The result should make destination pages feel guided, premium, and easier to buy from.

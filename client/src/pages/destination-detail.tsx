@@ -497,11 +497,25 @@ function getUseCase(plan: CountryPlan, bucketId: string): string {
 }
 
 // Score a plan for curation: lower is better.
-// Balances cost-per-GB with provider breadth. Ignores plans with too little data for context.
+// Balances cost-per-GB, provider breadth, commercial attractiveness, and data suitability.
 function planScore(p: CountryPlan): number {
   if (p.dataAmountGb <= 0) return 9999;
+
+  // Primary signal: cost per GB (lower = more value)
   const ppgb = p.estimatedPriceUsd / p.dataAmountGb;
-  return ppgb / Math.max(1, p.providerCount);
+
+  // Provider confidence: more providers means broader availability and higher reliability
+  const providerBonus = 1 / Math.max(1, p.providerCount);
+
+  // Price attractiveness: plans under $2 are often 100MB micro plans; over $60 are niche
+  let pricePenalty = 0;
+  if (p.estimatedPriceUsd < 2)  pricePenalty = 3;
+  else if (p.estimatedPriceUsd > 60) pricePenalty = 1.5;
+
+  // Data floor: very small plans (< 0.5 GB) penalised even if cheap-per-GB
+  const dataPenalty = p.dataAmountGb < 0.5 ? 4 : p.dataAmountGb < 1 ? 1.5 : 0;
+
+  return ppgb * providerBonus + pricePenalty + dataPenalty;
 }
 
 // Checks whether two plans are different enough to justify showing both in a bucket.
@@ -726,6 +740,64 @@ function CuratedPlanCard({
   );
 }
 
+// ─── Compact alternative plan row ─────────────────────────────────────────────
+
+function AlternativePlanRow({
+  plan,
+  isHighlightedByCalc,
+  fmt,
+  isApprox,
+  onSelect,
+}: {
+  plan: CuratedPlan;
+  isHighlightedByCalc: boolean;
+  fmt: (v: number) => string;
+  isApprox: boolean;
+  onSelect: (p: CountryPlan) => void;
+}) {
+  const ppgb = !plan.isUnlimited && plan.dataAmountGb > 0
+    ? `${isApprox ? "≈ " : ""}${fmt(plan.estimatedPriceUsd / plan.dataAmountGb)}/GB`
+    : null;
+
+  return (
+    <div
+      className={`flex items-center justify-between px-4 py-3 rounded-lg border transition-colors ${
+        isHighlightedByCalc
+          ? "border-primary/50 bg-primary/5"
+          : "border-border bg-muted/20 hover:border-primary/30"
+      }`}
+      data-testid={`row-alternative-${plan.normalizedPlanId}`}
+    >
+      <div className="flex items-center gap-4 min-w-0 flex-1">
+        <div className="flex-shrink-0">
+          <p className="text-sm font-semibold">{plan.dataLabel}</p>
+          <p className="text-xs text-muted-foreground">{plan.validityLabel}</p>
+        </div>
+        {ppgb && (
+          <span className="text-xs text-muted-foreground hidden sm:inline flex-shrink-0">{ppgb}</span>
+        )}
+        <p className="text-xs text-muted-foreground truncate hidden md:block">{plan.useCase}</p>
+      </div>
+      <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+        <div className="text-right">
+          <p className="font-bold text-sm whitespace-nowrap">
+            {isApprox ? "≈ " : ""}{fmt(plan.estimatedPriceUsd)}
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs px-3 whitespace-nowrap"
+          onClick={() => onSelect(plan)}
+          data-testid={`button-select-alternative-${plan.normalizedPlanId}`}
+        >
+          Select
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ─── All plans comparison table ────────────────────────────────────────────────
 
 function AllPlansTable({
@@ -878,18 +950,27 @@ function CuratedPlansSection({
   onHighlight: (id: string | null) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
+  const [expandedBuckets, setExpandedBuckets] = useState<Set<string>>(new Set());
   const { fmt, isApprox } = useCurrency();
   const profile = getDestinationProfile(countryCode);
   const buckets = getTripBuckets(profile);
   const curated = useMemo(() => buildCuratedPlans(plans, profile), [plans, profile]);
 
   const totalPlans = plans.length;
-  const curatedCount = curated.length;
+
+  function toggleBucketAlternatives(bucketId: string) {
+    setExpandedBuckets(prev => {
+      const next = new Set(prev);
+      if (next.has(bucketId)) next.delete(bucketId);
+      else next.add(bucketId);
+      return next;
+    });
+  }
 
   return (
     <div>
       {/* Section header */}
-      <div className="mb-7">
+      <div className="mb-8">
         <h2 className="text-xl font-bold mb-1" data-testid="text-curated-title">
           Recommended plans for {countryName}
         </h2>
@@ -898,62 +979,97 @@ function CuratedPlansSection({
         </p>
       </div>
 
-      {/* Grouped buckets */}
-      <div className="space-y-7 mb-8">
+      {/* Grouped buckets — one primary card per bucket, alternatives behind toggle */}
+      <div className="space-y-8 mb-10">
         {buckets.map(bucket => {
           const bucketPlans = curated.filter(p => p.bucketId === bucket.id);
           if (bucketPlans.length === 0) return null;
-          const BucketIcon = bucket.icon;
+
+          const primaryPlan  = bucketPlans[0];
+          const alternatives = bucketPlans.slice(1);
+          const isExpanded   = expandedBuckets.has(bucket.id);
+          const BucketIcon   = bucket.icon;
+
           return (
             <div key={bucket.id} data-testid={`section-bucket-${bucket.id}`}>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <BucketIcon className="w-3.5 h-3.5 text-primary" />
+              {/* Bucket header */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <BucketIcon className="w-4 h-4 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold leading-tight">{bucket.label}</p>
+                  <p className="font-bold leading-tight">{bucket.label}</p>
                   <p className="text-xs text-muted-foreground">{bucket.description}</p>
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {bucketPlans.map(plan => (
-                  <CuratedPlanCard
-                    key={plan.normalizedPlanId}
-                    plan={plan}
-                    isHighlightedByCalc={highlightedPlanId === plan.normalizedPlanId}
-                    onSelect={onSelect}
-                  />
-                ))}
-              </div>
+
+              {/* Primary recommended plan — full card, dominant */}
+              <CuratedPlanCard
+                plan={primaryPlan}
+                isHighlightedByCalc={highlightedPlanId === primaryPlan.normalizedPlanId}
+                onSelect={onSelect}
+              />
+
+              {/* Alternatives — hidden by default, shown as compact rows */}
+              {alternatives.length > 0 && (
+                <div className="mt-3">
+                  <button
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => toggleBucketAlternatives(bucket.id)}
+                    data-testid={`button-alternatives-${bucket.id}`}
+                  >
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                    {isExpanded
+                      ? "Hide other options"
+                      : `Compare alternatives (${alternatives.length})`}
+                  </button>
+
+                  {isExpanded && (
+                    <div className="mt-3 space-y-2">
+                      {alternatives.map(plan => (
+                        <AlternativePlanRow
+                          key={plan.normalizedPlanId}
+                          plan={plan}
+                          isHighlightedByCalc={highlightedPlanId === plan.normalizedPlanId}
+                          fmt={fmt}
+                          isApprox={isApprox}
+                          onSelect={onSelect}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
       </div>
 
-      {/* View all plans toggle */}
-      {totalPlans > curatedCount && (
-        <div className="border-t pt-5">
-          <button
-            onClick={() => setShowAll(v => !v)}
-            className="flex items-center gap-2 text-sm font-medium text-primary hover:underline underline-offset-2 transition-colors"
-            data-testid="button-toggle-all-plans"
-          >
-            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showAll ? "rotate-180" : ""}`} />
-            {showAll ? "Hide full plan list" : `View all ${totalPlans} plans`}
-          </button>
+      {/* Data usage calculator — find the right plan by usage style + trip length */}
+      <DataCalculatorNew plans={plans} onHighlight={onHighlight} />
 
-          {showAll && (
-            <AllPlansTable
-              plans={plans}
-              curatedIds={new Set(curated.map(c => c.normalizedPlanId))}
-              highlightedPlanId={highlightedPlanId}
-              isApprox={isApprox}
-              fmt={fmt}
-              onSelect={onSelect}
-            />
-          )}
-        </div>
-      )}
+      {/* View all plans toggle */}
+      <div className="border-t pt-5">
+        <button
+          onClick={() => setShowAll(v => !v)}
+          className="flex items-center gap-2 text-sm font-medium text-primary hover:underline underline-offset-2 transition-colors"
+          data-testid="button-toggle-all-plans"
+        >
+          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showAll ? "rotate-180" : ""}`} />
+          {showAll ? "Hide full plan list" : `View all ${totalPlans} plans`}
+        </button>
+
+        {showAll && (
+          <AllPlansTable
+            plans={plans}
+            curatedIds={new Set(curated.map(c => c.normalizedPlanId))}
+            highlightedPlanId={highlightedPlanId}
+            isApprox={isApprox}
+            fmt={fmt}
+            onSelect={onSelect}
+          />
+        )}
+      </div>
     </div>
   );
 }
