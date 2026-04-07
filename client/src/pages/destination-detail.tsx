@@ -1310,10 +1310,250 @@ function LegacyDetail({ destId }: { destId: string }) {
   );
 }
 
+// ─── Short-Stay Flow ──────────────────────────────────────────────────────────
+
+const DURATION_OPTIONS = [
+  { days: 1, label: "1 Day" },
+  { days: 3, label: "3 Days" },
+  { days: 5, label: "5 Days" },
+  { days: 7, label: "7 Days" },
+] as const;
+
+function ShortStayFlow({
+  plans,
+  onSelect,
+}: {
+  plans: CountryPlan[];
+  onSelect: (p: CountryPlan) => void;
+}) {
+  const [selectedDays, setSelectedDays] = useState(3);
+  const [showAll, setShowAll] = useState(false);
+  const { fmt, isApprox } = useCurrency();
+
+  const unlimitedPlan = useMemo(() => {
+    return plans
+      .filter(p => p.isUnlimited && p.validityDays >= selectedDays)
+      .sort((a, b) => {
+        const aOver = a.validityDays - selectedDays;
+        const bOver = b.validityDays - selectedDays;
+        if (aOver !== bOver) return aOver - bOver;
+        return a.estimatedPriceUsd - b.estimatedPriceUsd;
+      })[0] ?? null;
+  }, [plans, selectedDays]);
+
+  const fixedAlternatives = useMemo(() => {
+    const eligible = plans.filter(
+      p => !p.isUnlimited && p.validityDays >= selectedDays && p.dataAmountGb >= 1
+    );
+    const byValuePerGb = (a: CountryPlan, b: CountryPlan) =>
+      a.estimatedPriceUsd / a.dataAmountGb - b.estimatedPriceUsd / b.dataAmountGb;
+
+    const light = [...eligible.filter(p => p.dataAmountGb <= 5)].sort(byValuePerGb)[0];
+    const heavier = [...eligible.filter(p => p.dataAmountGb > 5)].sort(byValuePerGb)[0];
+
+    const results: CountryPlan[] = [];
+    if (light) results.push(light);
+    if (heavier && heavier.normalizedPlanId !== light?.normalizedPlanId) results.push(heavier);
+
+    const added = new Set(results.map(r => r.normalizedPlanId));
+    for (const p of eligible) {
+      if (results.length >= 2) break;
+      if (!added.has(p.normalizedPlanId)) { results.push(p); added.add(p.normalizedPlanId); }
+    }
+    return results.slice(0, 2);
+  }, [plans, selectedDays]);
+
+  const primaryFixed = fixedAlternatives[0] ?? null;
+  const showUnlimited = !!unlimitedPlan;
+
+  return (
+    <div>
+      {/* Duration selector */}
+      <div className="mb-7">
+        <h2 className="text-lg font-bold mb-3" data-testid="text-duration-title">
+          How long is your trip?
+        </h2>
+        <div className="flex gap-2 flex-wrap">
+          {DURATION_OPTIONS.map(opt => (
+            <button
+              key={opt.days}
+              onClick={() => setSelectedDays(opt.days)}
+              className={`px-5 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-150 min-w-[80px] ${
+                selectedDays === opt.days
+                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                  : "border-border bg-background text-foreground hover:border-primary/40"
+              }`}
+              data-testid={`button-duration-${opt.days}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Primary: Unlimited plan */}
+      {showUnlimited && (
+        <div className="mb-5" data-testid="card-unlimited-primary">
+          <Card className="p-5 sm:p-6 ring-2 ring-primary bg-primary/[0.03] shadow-lg">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-primary text-primary-foreground">
+                <Zap className="w-3 h-3" /> Unlimited
+              </span>
+            </div>
+
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <div>
+                <p className="text-2xl font-bold tracking-tight">Unlimited Data</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {unlimitedPlan!.validityLabel} validity
+                  {unlimitedPlan!.providerCount > 1 && ` · ${unlimitedPlan!.providerCount} providers`}
+                </p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-3xl font-bold tracking-tight" data-testid="text-unlimited-price">
+                  {isApprox ? "≈ " : ""}{fmt(unlimitedPlan!.estimatedPriceUsd)}
+                </p>
+                {isApprox && (
+                  <p className="text-xs text-muted-foreground">${unlimitedPlan!.estimatedPriceUsd.toFixed(2)} USD</p>
+                )}
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-5 mt-3 leading-relaxed">
+              No limits. No stress. Perfect for travel, maps, streaming, and hotspot.
+            </p>
+
+            <Button
+              className="w-full h-11 text-sm font-semibold"
+              onClick={() => onSelect(unlimitedPlan!)}
+              data-testid="button-get-unlimited"
+            >
+              Get unlimited plan
+            </Button>
+
+            <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5 mt-4">
+              {["Instant QR delivery", "Works on arrival", "No roaming charges"].map(t => (
+                <span key={t} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Check className="w-3 h-3 text-primary flex-shrink-0" /> {t}
+                </span>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Primary fallback: best fixed-data when no unlimited exists */}
+      {!showUnlimited && primaryFixed && (
+        <div className="mb-5" data-testid="card-primary-fixed">
+          <Card className="p-5 sm:p-6 ring-2 ring-primary bg-primary/[0.03] shadow-lg">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-primary text-primary-foreground">
+                <Star className="w-3 h-3" /> Recommended
+              </span>
+            </div>
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <div>
+                <p className="text-2xl font-bold">{primaryFixed.dataLabel}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">{primaryFixed.validityLabel} validity</p>
+              </div>
+              <p className="text-3xl font-bold tracking-tight flex-shrink-0" data-testid="text-primary-fixed-price">
+                {isApprox ? "≈ " : ""}{fmt(primaryFixed.estimatedPriceUsd)}
+              </p>
+            </div>
+            <p className="text-sm text-muted-foreground mb-5 mt-3 leading-relaxed">
+              Maps, messaging, and browsing covered for your trip.
+            </p>
+            <Button
+              className="w-full h-11 text-sm font-semibold"
+              onClick={() => onSelect(primaryFixed)}
+              data-testid="button-select-primary-fixed"
+            >
+              Select plan
+            </Button>
+            <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5 mt-4">
+              {["Instant QR delivery", "Works on arrival", "No roaming charges"].map(t => (
+                <span key={t} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Check className="w-3 h-3 text-primary flex-shrink-0" /> {t}
+                </span>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Secondary: cheaper fixed-data alternatives (only shown when unlimited is primary) */}
+      {showUnlimited && fixedAlternatives.length > 0 && (
+        <div className="mb-8">
+          <p className="text-sm text-muted-foreground mb-3 font-medium">Prefer a cheaper option?</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {fixedAlternatives.map(plan => (
+              <Card
+                key={plan.normalizedPlanId}
+                className="p-4 hover:border-primary/30 transition-colors"
+                data-testid={`card-alternative-${plan.normalizedPlanId}`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="font-bold text-sm">{plan.dataLabel}</p>
+                    <p className="text-xs text-muted-foreground">{plan.validityLabel}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="font-bold text-base">{isApprox ? "≈ " : ""}{fmt(plan.estimatedPriceUsd)}</p>
+                    {plan.dataAmountGb > 0 && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {isApprox ? "≈ " : ""}{fmt(plan.estimatedPriceUsd / plan.dataAmountGb)}/GB
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-8 text-xs mt-2"
+                  onClick={() => onSelect(plan)}
+                  data-testid={`button-select-data-${plan.normalizedPlanId}`}
+                >
+                  Select
+                </Button>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Full inventory — low prominence */}
+      <div className="pt-5 border-t border-border/50">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">Not seeing the right fit?</p>
+          <button
+            onClick={() => setShowAll(v => !v)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            data-testid="button-toggle-all-plans"
+          >
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAll ? "rotate-180" : ""}`} />
+            {showAll ? "Hide" : `Browse all ${plans.length} plans`}
+          </button>
+        </div>
+        {showAll && (
+          <div className="mt-6">
+            <AllPlansTable
+              plans={plans}
+              curatedIds={new Set<string>()}
+              highlightedPlanId={null}
+              isApprox={isApprox}
+              fmt={fmt}
+              onSelect={onSelect}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── New mode (country-code-based destinations) ───────────────────────────────
 
 function CountryDetail({ countryCode }: { countryCode: string }) {
-  const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
   const [checkoutPlan, setCheckoutPlan] = useState<CountryPlan | null>(null);
   const code = countryCode.toUpperCase();
 
@@ -1398,13 +1638,9 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
       </div>
 
       {plans.length > 0 ? (
-        <CuratedPlansSection
+        <ShortStayFlow
           plans={plans}
-          countryCode={code}
-          countryName={meta.name}
-          highlightedPlanId={highlightedPlanId}
           onSelect={setCheckoutPlan}
-          onHighlight={setHighlightedPlanId}
         />
       ) : (
         <EmptyPlans />
