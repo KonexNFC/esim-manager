@@ -1347,23 +1347,31 @@ function roundToNineNine(gbp: number): number {
 
 /**
  * Compute the sell price in USD for display via fmt().
- * Formula: sell_gbp = max(wholesale_gbp * 2, floor_gbp), rounded to .49/.99
- * The USD equivalent is what fmt() expects.
+ * - Unlimited plans: sell_gbp = max(wholesale_gbp * 2, floor_gbp), rounded to .49/.99
+ * - Fixed-data plans: sell_gbp = max(wholesale_gbp * 2, £1.49) — no duration floor,
+ *   allowing fixed plans to genuinely undercut unlimited pricing.
  */
 function computeSellPriceUsd(plan: CountryPlan, bucketDays: number): number {
   const costUsd = plan.wholesaleCostUsd ?? plan.estimatedPriceUsd * 0.5;
   const costGbp = costUsd * GBP_RATE;
   const markedUpGbp = costGbp * 2.0;
-  const floorGbp = GBP_PRICE_FLOORS[bucketDays] ?? 0;
-  const rawGbp = Math.max(markedUpGbp, floorGbp);
-  const roundedGbp = roundToNineNine(rawGbp);
-  return roundedGbp / GBP_RATE;
+  if (plan.isUnlimited) {
+    const floorGbp = GBP_PRICE_FLOORS[bucketDays] ?? 0;
+    const rawGbp = Math.max(markedUpGbp, floorGbp);
+    const roundedGbp = roundToNineNine(rawGbp);
+    return roundedGbp / GBP_RATE;
+  } else {
+    // Fixed-data: 2× markup with a low absolute minimum (£1.49)
+    const rawGbp = Math.max(markedUpGbp, 1.49);
+    const roundedGbp = roundToNineNine(rawGbp);
+    return roundedGbp / GBP_RATE;
+  }
 }
 
-/** Filter out plans whose wholesale cost is below £1 — too low to show in main UI */
-function isLowValuePlan(plan: CountryPlan): boolean {
+/** Filter out unlimited plans with suspiciously low wholesale cost (< £0.20 = probable junk entry) */
+function isLowValueUnlimited(plan: CountryPlan): boolean {
   const costUsd = plan.wholesaleCostUsd ?? plan.estimatedPriceUsd * 0.5;
-  return costUsd * GBP_RATE < 1.0;
+  return costUsd * GBP_RATE < 0.20;
 }
 
 interface DurationGroup {
@@ -1377,30 +1385,40 @@ interface DurationGroup {
 
 function buildDurationGroups(plans: CountryPlan[]): DurationGroup[] {
   const groups: DurationGroup[] = DURATION_BUCKETS.map(bucket => {
-    const candidates = plans.filter(
-      p => p.validityDays >= bucket.minDays &&
-           p.validityDays <= bucket.maxDays &&
-           !isLowValuePlan(p)   // drop provider_cost < £1
+    // All plans in this validity window (no cost filter for availability check)
+    const allInBucket = plans.filter(
+      p => p.validityDays >= bucket.minDays && p.validityDays <= bucket.maxDays
     );
 
-    const unlimitedOpts = candidates
-      .filter(p => p.isUnlimited)
+    // Unlimited: only suppress genuinely garbage plans (wholesale < £1)
+    const unlimitedOpts = allInBucket
+      .filter(p => p.isUnlimited && !isLowValueUnlimited(p))
       .sort((a, b) => a.estimatedPriceUsd - b.estimatedPriceUsd);
 
-    // Fixed alternatives: pick cheapest from a light tier (≤5 GB) and a heavier tier (>5 GB)
-    const fixedCandidates = candidates
+    // Fixed alternatives: minimum 1 GB data, sorted by computed sell price (cheapest first)
+    // No wholesale-cost filter — the floor only applies to unlimited, so cheap fixed plans
+    // will genuinely undercut unlimited and make valid "cheaper option" alternatives.
+    const fixedCandidates = allInBucket
       .filter(p => !p.isUnlimited && p.dataAmountGb >= 1)
-      .sort((a, b) => a.estimatedPriceUsd - b.estimatedPriceUsd);
+      .sort((a, b) => computeSellPriceUsd(a, bucket.days) - computeSellPriceUsd(b, bucket.days));
 
-    const light = fixedCandidates.filter(p => p.dataAmountGb <= 5)[0];
-    const heavy = fixedCandidates.filter(p => p.dataAmountGb > 5)[0];
+    // Pre-filter: if unlimited exists, only keep fixed plans genuinely cheaper (≥£0.50 below).
+    // If no unlimited, show all fixed plans (they'll be alternatives to each other).
+    const unlimitedSellGbp = unlimitedOpts[0]
+      ? computeSellPriceUsd(unlimitedOpts[0], bucket.days) * GBP_RATE
+      : Infinity;
+    const cheaperFixed = unlimitedOpts[0]
+      ? fixedCandidates.filter(p => computeSellPriceUsd(p, bucket.days) * GBP_RATE < unlimitedSellGbp - 0.5)
+      : fixedCandidates;
+
+    // Pick: (1) cheapest plan, (2) plan with most data among the cheaper options
+    // This shows the "how cheap can I go?" and "how much data for less?" spectrum.
     const alts: CountryPlan[] = [];
-    if (light) alts.push(light);
-    if (heavy && heavy.normalizedPlanId !== light?.normalizedPlanId) alts.push(heavy);
-    if (alts.length < 2) {
-      for (const p of fixedCandidates) {
-        if (alts.length >= 2) break;
-        if (!alts.find(a => a.normalizedPlanId === p.normalizedPlanId)) alts.push(p);
+    if (cheaperFixed.length > 0) {
+      alts.push(cheaperFixed[0]); // cheapest (sorted by sell price)
+      const mostData = [...cheaperFixed].sort((a, b) => b.dataAmountGb - a.dataAmountGb)[0];
+      if (mostData.normalizedPlanId !== cheaperFixed[0].normalizedPlanId) {
+        alts.push(mostData);
       }
     }
 
@@ -1408,8 +1426,8 @@ function buildDurationGroups(plans: CountryPlan[]): DurationGroup[] {
       days: bucket.days,
       label: bucket.label,
       primaryUnlimited: unlimitedOpts[0] ?? null,
-      fixedAlternatives: alts.slice(0, 2),
-      available: candidates.length > 0,
+      fixedAlternatives: alts,
+      available: allInBucket.length > 0,
       pricingAnomaly: false,
     };
   });
@@ -1452,14 +1470,22 @@ function ShortStayFlow({
   const primaryUnlimited = currentGroup?.primaryUnlimited ?? null;
   const fixedAlternatives = currentGroup?.fixedAlternatives ?? [];
 
-  // If unlimited is suppressed (pricing anomaly) or absent, promote best fixed as primary
-  const primaryFixed = !primaryUnlimited ? (fixedAlternatives[0] ?? null) : null;
-  // Shown alternatives: if unlimited is primary, show fixed ones; if fixed is primary, skip it
-  const shownAlternatives = primaryUnlimited ? fixedAlternatives : fixedAlternatives.slice(1);
-
-  const showUnlimited = !!primaryUnlimited;
   // Use the selected bucket's days for price-floor / margin calculations
   const groupDays = currentGroup?.days ?? selectedDays;
+
+  // If unlimited is suppressed (pricing anomaly) or absent, promote best fixed as primary
+  const primaryFixed = !primaryUnlimited ? (fixedAlternatives[0] ?? null) : null;
+
+  // fixedAlternatives from buildDurationGroups are already pre-filtered:
+  // - when unlimited exists: only plans cheaper than unlimited (≥£0.50 below)
+  // - when no unlimited: all ≥1GB fixed plans sorted cheapest first
+  // When fixed is primary, skip [0] (already shown as primary), show the rest.
+  const shownAlternatives = primaryUnlimited ? fixedAlternatives : fixedAlternatives.slice(1);
+
+  // Section heading changes based on context
+  const alternativesSectionLabel = primaryUnlimited ? "Prefer a cheaper option?" : "Need more data?";
+
+  const showUnlimited = !!primaryUnlimited;
 
   return (
     <div>
@@ -1573,10 +1599,10 @@ function ShortStayFlow({
         </div>
       )}
 
-      {/* Secondary: cheaper fixed-data alternatives */}
+      {/* Secondary: cheaper fixed-data alternatives (or more-data options when no unlimited) */}
       {shownAlternatives.length > 0 && (
         <div className="mb-8">
-          <p className="text-sm text-muted-foreground mb-3 font-medium">Prefer a cheaper option?</p>
+          <p className="text-sm text-muted-foreground mb-3 font-medium">{alternativesSectionLabel}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {shownAlternatives.map(plan => (
               <Card
