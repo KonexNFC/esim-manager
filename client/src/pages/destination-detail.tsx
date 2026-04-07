@@ -1320,6 +1320,52 @@ const DURATION_BUCKETS = [
   { days: 7, label: "7 Days", minDays: 7, maxDays: 9  },
 ] as const;
 
+// ─── Pricing engine ───────────────────────────────────────────────────────────
+
+// GBP rate used for floor / margin calculations (display only; Stripe charges USD)
+const GBP_RATE = 0.79; // 1 USD = £0.79
+
+// Minimum sell prices per duration bucket (in GBP)
+const GBP_PRICE_FLOORS: Partial<Record<number, number>> = {
+  1: 4.99,
+  3: 9.99,
+  5: 14.99,
+  7: 18.99,
+};
+
+/** Round a GBP amount to the nearest £X.49 or £X.99.
+ *  Works in integer pence to avoid IEEE-754 edge cases (e.g. 4.99 - 4 > 0.99). */
+function roundToNineNine(gbp: number): number {
+  // Work in integer pence to avoid IEEE-754 issues (e.g. 4.99 * 100 = 499.000...01776)
+  const pence = Math.round(gbp * 100);
+  const base = Math.floor(pence / 100);
+  const rem = pence % 100;
+  if (rem <= 49) return base + 0.49;
+  if (rem <= 99) return base + 0.99;
+  return base + 1 + 0.49;
+}
+
+/**
+ * Compute the sell price in USD for display via fmt().
+ * Formula: sell_gbp = max(wholesale_gbp * 2, floor_gbp), rounded to .49/.99
+ * The USD equivalent is what fmt() expects.
+ */
+function computeSellPriceUsd(plan: CountryPlan, bucketDays: number): number {
+  const costUsd = plan.wholesaleCostUsd ?? plan.estimatedPriceUsd * 0.5;
+  const costGbp = costUsd * GBP_RATE;
+  const markedUpGbp = costGbp * 2.0;
+  const floorGbp = GBP_PRICE_FLOORS[bucketDays] ?? 0;
+  const rawGbp = Math.max(markedUpGbp, floorGbp);
+  const roundedGbp = roundToNineNine(rawGbp);
+  return roundedGbp / GBP_RATE;
+}
+
+/** Filter out plans whose wholesale cost is below £1 — too low to show in main UI */
+function isLowValuePlan(plan: CountryPlan): boolean {
+  const costUsd = plan.wholesaleCostUsd ?? plan.estimatedPriceUsd * 0.5;
+  return costUsd * GBP_RATE < 1.0;
+}
+
 interface DurationGroup {
   days: number;
   label: string;
@@ -1332,7 +1378,9 @@ interface DurationGroup {
 function buildDurationGroups(plans: CountryPlan[]): DurationGroup[] {
   const groups: DurationGroup[] = DURATION_BUCKETS.map(bucket => {
     const candidates = plans.filter(
-      p => p.validityDays >= bucket.minDays && p.validityDays <= bucket.maxDays
+      p => p.validityDays >= bucket.minDays &&
+           p.validityDays <= bucket.maxDays &&
+           !isLowValuePlan(p)   // drop provider_cost < £1
     );
 
     const unlimitedOpts = candidates
@@ -1410,6 +1458,8 @@ function ShortStayFlow({
   const shownAlternatives = primaryUnlimited ? fixedAlternatives : fixedAlternatives.slice(1);
 
   const showUnlimited = !!primaryUnlimited;
+  // Use the selected bucket's days for price-floor / margin calculations
+  const groupDays = currentGroup?.days ?? selectedDays;
 
   return (
     <div>
@@ -1442,7 +1492,7 @@ function ShortStayFlow({
           <Card className="p-5 sm:p-6 ring-2 ring-primary bg-primary/[0.03] shadow-lg">
             <div className="flex items-center gap-2 mb-4">
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-primary text-primary-foreground">
-                <Zap className="w-3 h-3" /> Unlimited
+                <Zap className="w-3 h-3" /> Recommended
               </span>
             </div>
 
@@ -1456,11 +1506,8 @@ function ShortStayFlow({
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="text-3xl font-bold tracking-tight" data-testid="text-unlimited-price">
-                  {isApprox ? "≈ " : ""}{fmt(primaryUnlimited!.estimatedPriceUsd)}
+                  {fmt(computeSellPriceUsd(primaryUnlimited!, groupDays))}
                 </p>
-                {isApprox && (
-                  <p className="text-xs text-muted-foreground">${primaryUnlimited!.estimatedPriceUsd.toFixed(2)} USD</p>
-                )}
               </div>
             </div>
 
@@ -1502,7 +1549,7 @@ function ShortStayFlow({
                 <p className="text-sm text-muted-foreground mt-0.5">{primaryFixed.validityLabel} validity</p>
               </div>
               <p className="text-3xl font-bold tracking-tight flex-shrink-0" data-testid="text-primary-fixed-price">
-                {isApprox ? "≈ " : ""}{fmt(primaryFixed.estimatedPriceUsd)}
+                {fmt(computeSellPriceUsd(primaryFixed, groupDays))}
               </p>
             </div>
             <p className="text-sm text-muted-foreground mb-5 mt-3 leading-relaxed">
@@ -1542,7 +1589,7 @@ function ShortStayFlow({
                     <p className="font-bold text-sm">{plan.dataLabel}</p>
                     <p className="text-xs text-muted-foreground">{plan.validityLabel} validity</p>
                   </div>
-                  <p className="font-bold text-base flex-shrink-0">{isApprox ? "≈ " : ""}{fmt(plan.estimatedPriceUsd)}</p>
+                  <p className="font-bold text-base flex-shrink-0">{fmt(computeSellPriceUsd(plan, groupDays))}</p>
                 </div>
                 <Button
                   variant="outline"
