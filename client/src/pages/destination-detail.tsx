@@ -411,9 +411,31 @@ const BUSINESS_CODES = new Set([
 
 // Leisure / city-break / beach destinations — shorter stays, leisure data use
 const HOLIDAY_CODES = new Set([
-  "ES","IT","PT","GR","TR","TH","ID","MX","MA","EG","HR","CY","MT",
-  "PH","VN","KH","LK","MV","MU","GE","AL","ME","RS","SI","SK",
-  "IS","IE","LT","LV","EE","BG","MK","BA","XK","RE","NC","FJ",
+  // Western Europe leisure
+  "FR","ES","IT","PT","GR","HR","CY","MT","IS","MC","SM","AD",
+  // Eastern / Central Europe city-break
+  "AL","ME","RS","SI","SK","BG","MK","BA","XK","LT","LV","EE","UA",
+  // Turkey + North Africa
+  "TR","MA","TN","EG",
+  // Middle East leisure (JO in business codes; these are additional leisure markets)
+  "KZ",
+  // South / Southeast Asia beach & tourism
+  "TH","ID","PH","VN","KH","LK","MV","MM","LA","BT",
+  // East Asia leisure
+  "TW",
+  // Indian Ocean / islands
+  "MU","RE","SC","YT",
+  // Pacific
+  "FJ","NC","PF","WS","TO",
+  // Latin America leisure
+  "MX","CU","DO","PR","JM","BB","LC","VC","GD","TT","AW","CW","BQ",
+  "PA","CR","GT","HN","NI","BZ","SV",
+  // Africa leisure
+  "ZW","BW","LS","SZ","TZ","RW","UG","ZM",
+  // Caucasus / Central Asia tourism
+  "GE","AM","AZ",
+  // Ireland (listed separately from GB which is business)
+  "IE",
 ]);
 
 function getDestinationProfile(code: string): DestinationProfile {
@@ -438,95 +460,141 @@ interface TripBucket {
 function getTripBuckets(profile: DestinationProfile): TripBucket[] {
   const unlimitedBucket: TripBucket = {
     id: "unlimited", label: "Heavy usage", icon: Flame,
-    description: "Streaming, hotspot, or remote work",
+    description: "Unlimited data — stream, hotspot, remote work",
     daysMin: 1, daysMax: 999, isUnlimited: true,
   };
   if (profile === "holiday_travel") {
-    // Holiday: city-breaks → week stays → longer holidays
+    // Holiday: city-breaks (1–4d) → week/fortnight (5–14d) → long holiday (15–30d)
     return [
-      { id: "short",    label: "City break",    icon: Timer,      description: "1–4 days",       daysMin: 1,  daysMax: 4  },
-      { id: "standard", label: "Week away",      icon: Gauge,      description: "5–14 days",      daysMin: 5,  daysMax: 14 },
-      { id: "extended", label: "Long holiday",   icon: TrendingUp, description: "15–35 days",     daysMin: 15, daysMax: 35 },
+      { id: "short",    label: "City break",    icon: Timer,      description: "1–4 days",    daysMin: 1,  daysMax: 4  },
+      { id: "standard", label: "Week away",      icon: Gauge,      description: "5–14 days",   daysMin: 5,  daysMax: 14 },
+      { id: "extended", label: "Long holiday",   icon: TrendingUp, description: "15–30 days",  daysMin: 15, daysMax: 30 },
       unlimitedBucket,
     ];
   }
-  // Business/diaspora/default: quick trips → standard work trips → long stays
+  // Business/diaspora/default:
+  // short=1–6d (so 7-day plans fall into the "Standard trip" bracket — more accurate)
   return [
-    { id: "short",    label: "Quick trip",    icon: Timer,      description: "1–7 days",       daysMin: 1,  daysMax: 7  },
-    { id: "standard", label: "Standard trip", icon: Gauge,      description: "8–14 days",      daysMin: 8,  daysMax: 14 },
-    { id: "extended", label: "Extended stay", icon: TrendingUp, description: "15–35 days",     daysMin: 15, daysMax: 35 },
+    { id: "short",    label: "Quick trip",    icon: Timer,      description: "1–6 days",    daysMin: 1,  daysMax: 6  },
+    { id: "standard", label: "Standard trip", icon: Gauge,      description: "7–14 days",   daysMin: 7,  daysMax: 14 },
+    { id: "extended", label: "Extended stay", icon: TrendingUp, description: "15–30 days",  daysMin: 15, daysMax: 30 },
     unlimitedBucket,
   ];
 }
 
 // ─── Plan curation logic ───────────────────────────────────────────────────────
 
-type PlanBadge = "Most Popular" | "Best Value" | "Unlimited";
+type PlanBadge = "Recommended" | "Most Popular" | "Best Value" | "Unlimited";
 
 interface CuratedPlan extends CountryPlan {
   badge?: PlanBadge;
   useCase: string;
   bucketId: string;
   isHighlighted: boolean;
+  isPrimary: boolean;
 }
 
-function getUseCase(plan: CountryPlan, bucketId: string): string {
+function getUseCase(plan: CountryPlan, bucketId: string, profile: DestinationProfile): string {
   if (plan.isUnlimited) {
-    if (plan.validityDays <= 3)  return "Unlimited data for a short burst — ideal for streaming and hotspot";
-    if (plan.validityDays <= 7)  return "Full-speed data all week — stream, video call, and share a hotspot";
-    if (plan.validityDays <= 14) return "Two weeks of unlimited data — remote work or extended travel";
-    return "Long-stay unlimited plan — no data anxiety for the whole trip";
+    if (plan.validityDays <= 3)  return "No data limits — stream, hotspot, and stay connected without counting GBs";
+    if (plan.validityDays <= 7)  return "Full-speed data all week — video calls, streaming, and hotspot whenever you need it";
+    if (plan.validityDays <= 14) return "Two weeks of unlimited data — ideal for remote work, streaming, and heavy use";
+    return "Month-long unlimited data — use as much as you need, no restrictions";
   }
   const gb = plan.dataAmountGb;
   const days = plan.validityDays;
+  const isHoliday = profile === "holiday_travel";
+  const isBusiness = profile === "business_travel";
+
   if (bucketId === "short") {
-    if (gb <= 1)  return "Light use — WhatsApp, maps, and ride-hailing";
-    if (gb <= 3)  return "Plenty for a quick trip — social media and navigation";
-    return `${gb} GB for ${days} days — browse, stream clips, and stay connected`;
+    if (gb <= 1)  return "Maps, WhatsApp, and ride apps — everything you need for a short visit";
+    if (gb <= 2)  return isHoliday
+      ? "Enough for maps, Instagram stories, and staying in touch while you explore"
+      : "Maps, email, messaging, and Uber — perfect for a quick business trip";
+    if (gb <= 4)  return isHoliday
+      ? "Browse, share photos, and use Google Maps without watching your usage"
+      : "Stay connected, check emails, and join video calls for a few days";
+    return `${gb} GB for ${days} days — plenty to browse, share photos, and stream clips`;
   }
+
+  if (bucketId === "standard") {
+    if (gb <= 3)  return "Messaging, maps, and light browsing for the week — great if you're mostly on Wi-Fi";
+    if (gb <= 6)  return isHoliday
+      ? "Maps, social media, and video calls — all you need for a relaxed week away"
+      : "Email, video calls, maps, and messaging throughout the working week";
+    if (gb <= 10) return isHoliday
+      ? "Browse freely, share photos, and video call home without running out of data"
+      : "A full week of meetings, maps, emails, and browsing without rationing";
+    if (gb <= 20) return "Generous data for the week — stream, video call, and share without thinking about it";
+    return `${gb} GB over ${days} days — for heavy users who don't want to think about data`;
+  }
+
   if (bucketId === "extended") {
-    if (gb <= 10) return "Enough for regular daily use across a longer stay";
-    if (gb <= 20) return "Solid data for extended travel — browsing, video calls, and social";
-    return "Heavy data for a long trip — stream, work, and share without worry";
+    if (gb <= 8)  return "Light daily use — maps, messaging, and occasional browsing for a longer stay";
+    if (gb <= 15) return isBusiness
+      ? "Daily connectivity for a longer assignment — email, calls, and browsing covered"
+      : "Enough for regular daily use across a longer stay without running short";
+    if (gb <= 25) return "Solid data for an extended trip — browse, stream, and video call every day";
+    return `${gb} GB for the longer haul — stream, work remotely, and share without worry`;
   }
-  // standard
-  if (gb <= 3)  return "Good for navigation, messaging, and light browsing";
-  if (gb <= 8)  return "Great balance — social media, video calls, and everyday browsing";
-  if (gb <= 15) return "Generous data — stream, work remotely, and stay connected all week";
-  return `${gb} GB for ${days} days — ideal if you use data heavily while abroad`;
+
+  // fallback
+  return `${gb} GB · ${days} days — one-time payment, instant activation`;
 }
 
-// Score a plan for curation: lower is better.
-// Balances cost-per-GB, provider breadth, commercial attractiveness, and data suitability.
-function planScore(p: CountryPlan): number {
+// Score a plan within a specific bucket: lower is better.
+// Considers value-per-GB, provider confidence, commercial attractiveness,
+// duration fit, and data appropriateness for the bucket.
+function planScoreForBucket(p: CountryPlan, bucket: TripBucket): number {
   if (p.dataAmountGb <= 0) return 9999;
 
-  // Primary signal: cost per GB (lower = more value)
+  // Value: cost per GB — primary efficiency signal
   const ppgb = p.estimatedPriceUsd / p.dataAmountGb;
 
-  // Provider confidence: more providers means broader availability and higher reliability
+  // Provider confidence: more providers = more reliable (reduces score)
   const providerBonus = 1 / Math.max(1, p.providerCount);
 
-  // Price attractiveness: plans under $2 are often 100MB micro plans; over $60 are niche
+  // Commercial price window: $3–$35 is the sweet spot; extremes are penalised
   let pricePenalty = 0;
-  if (p.estimatedPriceUsd < 2)  pricePenalty = 3;
-  else if (p.estimatedPriceUsd > 60) pricePenalty = 1.5;
+  if      (p.estimatedPriceUsd < 2)  pricePenalty = 5;
+  else if (p.estimatedPriceUsd < 3)  pricePenalty = 1.5;
+  else if (p.estimatedPriceUsd > 50) pricePenalty = 2;
+  else if (p.estimatedPriceUsd > 35) pricePenalty = 0.5;
 
-  // Data floor: very small plans (< 0.5 GB) penalised even if cheap-per-GB
-  const dataPenalty = p.dataAmountGb < 0.5 ? 4 : p.dataAmountGb < 1 ? 1.5 : 0;
+  // Data floor: micro plans are deprioritised even if cheap per GB
+  const dataPenalty = p.dataAmountGb < 0.5 ? 5 : p.dataAmountGb < 1 ? 2 : 0;
 
-  return ppgb * providerBonus + pricePenalty + dataPenalty;
+  // Duration fit: plans whose validity is near the bucket midpoint are preferred.
+  // A 7-day plan is a great fit for a "7–14 day" standard bucket midpoint of 10.5 days.
+  const bucketMid = (bucket.daysMin + Math.min(bucket.daysMax, 21)) / 2;
+  const daysFit   = Math.abs(p.validityDays - bucketMid) * 0.04;
+
+  // Data overkill guard: a 50 GB plan for a 1-day trip is a bad recommendation
+  let dataOverkill = 0;
+  if (!bucket.isUnlimited) {
+    // Typical max sensible data: ~1.5 GB/day for the bucket midpoint
+    const sensibleMax = Math.max(3, bucketMid * 1.5);
+    if (p.dataAmountGb > sensibleMax * 2) {
+      dataOverkill = (p.dataAmountGb - sensibleMax * 2) * 0.08;
+    }
+  }
+
+  return ppgb * providerBonus + pricePenalty + dataPenalty + daysFit + dataOverkill;
 }
 
-// Checks whether two plans are different enough to justify showing both in a bucket.
+// Two plans are meaningfully different only when they offer a clearly distinct option:
+// noticeably different data tier (≥50% difference) OR validity tier (≥4 days apart),
+// AND a clear price step (≥25%). This prevents near-duplicates appearing as "alternatives".
 function meaningfullyDifferent(primary: CountryPlan, candidate: CountryPlan): boolean {
-  const dataDiff   = Math.abs(candidate.dataAmountGb - primary.dataAmountGb);
+  const dataRatio  = primary.dataAmountGb > 0
+    ? Math.abs(candidate.dataAmountGb - primary.dataAmountGb) / primary.dataAmountGb
+    : 0;
   const validDiff  = Math.abs(candidate.validityDays - primary.validityDays);
   const priceDiff  = primary.estimatedPriceUsd > 0
     ? Math.abs(candidate.estimatedPriceUsd - primary.estimatedPriceUsd) / primary.estimatedPriceUsd
     : 0;
-  // Require: meaningfully different data amount OR different validity tier AND a noticeable price step
-  return (dataDiff >= 2 || validDiff >= 3) && priceDiff >= 0.15;
+  // Need a real data-tier jump OR a different validity window — AND a visible price step
+  return (dataRatio >= 0.5 || validDiff >= 4) && priceDiff >= 0.25;
 }
 
 function buildCuratedPlans(allPlans: CountryPlan[], profile: DestinationProfile): CuratedPlan[] {
@@ -534,14 +602,15 @@ function buildCuratedPlans(allPlans: CountryPlan[], profile: DestinationProfile)
   const used = new Set<string>();
   const result: CuratedPlan[] = [];
 
-  // Minimum noise floor: skip plans under 1 GB fixed data (genuinely useless for most travellers)
-  // If the destination has very few plans, fall back to 0.5 GB floor.
-  const pool1gb   = allPlans.filter(p => p.isUnlimited || p.dataAmountGb >= 1.0);
-  const pool      = pool1gb.length >= 4 ? pool1gb : allPlans.filter(p => p.isUnlimited || p.dataAmountGb >= 0.5);
+  // Noise floor: skip fixed plans under 1 GB (useless for most travellers).
+  // Fall back to 0.5 GB floor if the destination has very few plans.
+  const pool1gb = allPlans.filter(p => p.isUnlimited || p.dataAmountGb >= 1.0);
+  const pool    = pool1gb.length >= 4 ? pool1gb : allPlans.filter(p => p.isUnlimited || p.dataAmountGb >= 0.5);
 
   for (const bucket of buckets) {
     if (bucket.isUnlimited) {
-      // Prefer commercially useful validity durations: 7d > 5d > 10d > 14d > 3d > 30d > others
+      // Unlimited bucket: prefer 7-day plans (most commercially useful), then sort by price.
+      // 7d > 5d > 10d > 14d > 3d > 30d > anything else, tiebreak on provider count then price.
       const PREFERRED_DAYS = [7, 5, 10, 14, 3, 30, 1, 2];
       const unlimiteds = pool
         .filter(p => p.isUnlimited && !used.has(p.normalizedPlanId))
@@ -558,83 +627,114 @@ function buildCuratedPlans(allPlans: CountryPlan[], profile: DestinationProfile)
       const primary = unlimiteds[0];
       if (!primary) continue;
       used.add(primary.normalizedPlanId);
-      result.push({ ...primary, bucketId: bucket.id, badge: undefined, useCase: getUseCase(primary, bucket.id), isHighlighted: false });
+      result.push({
+        ...primary, bucketId: bucket.id, badge: undefined,
+        useCase: getUseCase(primary, bucket.id, profile),
+        isHighlighted: false, isPrimary: true,
+      });
 
-      // Second unlimited only if a clearly different validity tier (≥3 days apart)
-      const secondary = unlimiteds.slice(1).find(p => Math.abs(p.validityDays - primary.validityDays) >= 3);
+      // One alternative only — must be clearly different validity (≥5 days apart)
+      const secondary = unlimiteds.slice(1).find(p => Math.abs(p.validityDays - primary.validityDays) >= 5);
       if (secondary) {
         used.add(secondary.normalizedPlanId);
-        result.push({ ...secondary, bucketId: bucket.id, badge: undefined, useCase: getUseCase(secondary, bucket.id), isHighlighted: false });
+        result.push({
+          ...secondary, bucketId: bucket.id, badge: undefined,
+          useCase: getUseCase(secondary, bucket.id, profile),
+          isHighlighted: false, isPrimary: false,
+        });
       }
     } else {
-      // Fixed-data bucket: exact non-overlapping day ranges (set in getTripBuckets)
+      // Fixed-data bucket: score plans using bucket-aware scoring so duration fit
+      // and data-overkill penalties apply, not just raw cost-per-GB.
       const matching = pool
-        .filter(p => !p.isUnlimited && p.validityDays >= bucket.daysMin && p.validityDays <= bucket.daysMax && !used.has(p.normalizedPlanId))
-        .sort((a, b) => planScore(a) - planScore(b));
+        .filter(p =>
+          !p.isUnlimited &&
+          p.validityDays >= bucket.daysMin &&
+          p.validityDays <= bucket.daysMax &&
+          !used.has(p.normalizedPlanId)
+        )
+        .sort((a, b) => planScoreForBucket(a, bucket) - planScoreForBucket(b, bucket));
 
       if (matching.length === 0) continue;
 
       const primary = matching[0];
       used.add(primary.normalizedPlanId);
-      result.push({ ...primary, bucketId: bucket.id, badge: undefined, useCase: getUseCase(primary, bucket.id), isHighlighted: false });
+      result.push({
+        ...primary, bucketId: bucket.id, badge: undefined,
+        useCase: getUseCase(primary, bucket.id, profile),
+        isHighlighted: false, isPrimary: true,
+      });
 
-      // Second card only when it's meaningfully different from the primary
+      // One alternative only — must be meaningfully different (stricter thresholds)
       const secondary = matching.slice(1).find(p => meaningfullyDifferent(primary, p));
       if (secondary) {
         used.add(secondary.normalizedPlanId);
-        result.push({ ...secondary, bucketId: bucket.id, badge: undefined, useCase: getUseCase(secondary, bucket.id), isHighlighted: false });
+        result.push({
+          ...secondary, bucketId: bucket.id, badge: undefined,
+          useCase: getUseCase(secondary, bucket.id, profile),
+          isHighlighted: false, isPrimary: false,
+        });
       }
     }
   }
 
-  // Assign badges with smarter logic
-  assignCuratedBadges(result);
+  // Assign per-bucket badges to all primary plans
+  assignCuratedBadges(result, buckets);
   return result;
 }
 
-function assignCuratedBadges(plans: CuratedPlan[]): void {
-  const nonUnlimited = plans.filter(p => !p.isUnlimited);
-  const unlimitedPlans = plans.filter(p => p.isUnlimited);
+function assignCuratedBadges(plans: CuratedPlan[], buckets: TripBucket[]): void {
+  // Strategy: every PRIMARY plan gets a badge. Alternative plans get none.
+  // Badge per bucket:
+  //   short    → "Recommended"   (the obvious first choice)
+  //   standard → "Most Popular"  (highest-traffic bucket)
+  //   extended → "Best Value"    (longer stay = better per-day economics)
+  //   unlimited → "Unlimited"    (self-explanatory)
+  //
+  // If a destination only has one bucket visible, that primary gets "Recommended".
 
-  // Most Popular: target the standard bucket — that's where most travellers land.
-  // Within standard, prefer highest provider count (broadest availability = proven popularity).
-  const standardPlans = nonUnlimited.filter(p => p.bucketId === "standard");
-  const popularPool   = standardPlans.length > 0 ? standardPlans : nonUnlimited;
-  const mostPopular   = popularPool.length > 0
-    ? [...popularPool].sort((a, b) => b.providerCount - a.providerCount)[0]
-    : null;
+  const primaryPlans = plans.filter(p => p.isPrimary);
 
-  if (mostPopular) {
-    mostPopular.badge = "Most Popular";
-    mostPopular.isHighlighted = true;
+  // Build default badge per bucket id
+  const DEFAULT_BADGE: Record<string, PlanBadge> = {
+    short:    "Recommended",
+    standard: "Most Popular",
+    extended: "Best Value",
+    unlimited: "Unlimited",
+  };
+
+  // If there's only one primary, always use "Recommended"
+  if (primaryPlans.length === 1) {
+    primaryPlans[0].badge = "Recommended";
+    primaryPlans[0].isHighlighted = true;
+    return;
   }
 
-  // Best Value: best $/GB in a DIFFERENT bucket from Most Popular.
-  // Only award if it's genuinely ≥10% cheaper per GB than the Most Popular plan.
-  const forValue = nonUnlimited.filter(p => !p.isHighlighted);
-  if (forValue.length > 0) {
-    const diffBucket = forValue.filter(p => p.bucketId !== mostPopular?.bucketId);
-    const candidates = diffBucket.length > 0 ? diffBucket : forValue;
-    const bestValue  = [...candidates].sort((a, b) => {
-      const ppA = a.dataAmountGb > 0 ? a.estimatedPriceUsd / a.dataAmountGb : 9999;
-      const ppB = b.dataAmountGb > 0 ? b.estimatedPriceUsd / b.dataAmountGb : 9999;
-      return ppA - ppB;
-    })[0];
+  // Assign per-bucket defaults to all primaries
+  for (const plan of primaryPlans) {
+    plan.badge = DEFAULT_BADGE[plan.bucketId] ?? "Recommended";
+  }
 
-    const bvPpgb = bestValue.dataAmountGb > 0 ? bestValue.estimatedPriceUsd / bestValue.dataAmountGb : 9999;
-    const mpPpgb = mostPopular && mostPopular.dataAmountGb > 0
-      ? mostPopular.estimatedPriceUsd / mostPopular.dataAmountGb
-      : 9999;
+  // isHighlighted drives the filled button on the card.
+  // Award it to the standard-bucket primary (most commercially important),
+  // or the first primary if there's no standard bucket.
+  const standardPrimary = primaryPlans.find(p => p.bucketId === "standard");
+  const highlightTarget = standardPrimary ?? primaryPlans[0];
+  if (highlightTarget) {
+    highlightTarget.isHighlighted = true;
+  }
 
-    // Award if the candidate is at least 10% cheaper per GB — otherwise it's not "best value"
-    if (bvPpgb < mpPpgb * 0.90 || !mostPopular) {
-      bestValue.badge = "Best Value";
+  // Prevent "Best Value" from being awarded if the extended plan is NOT meaningfully
+  // cheaper per GB than the standard plan — replace with "Recommended" instead.
+  const extPrimary = primaryPlans.find(p => p.bucketId === "extended");
+  const stdPrimary = primaryPlans.find(p => p.bucketId === "standard");
+  if (extPrimary && stdPrimary && extPrimary.dataAmountGb > 0 && stdPrimary.dataAmountGb > 0) {
+    const extPpgb = extPrimary.estimatedPriceUsd / extPrimary.dataAmountGb;
+    const stdPpgb = stdPrimary.estimatedPriceUsd / stdPrimary.dataAmountGb;
+    if (extPpgb >= stdPpgb * 0.90) {
+      // Extended plan isn't genuinely better value — call it "Recommended" for the bucket
+      extPrimary.badge = "Recommended";
     }
-  }
-
-  // Unlimited badge: first (primary) unlimited pick only
-  if (unlimitedPlans.length > 0) {
-    unlimitedPlans[0].badge = "Unlimited";
   }
 }
 
@@ -649,75 +749,90 @@ function CuratedPlanCard({
   isHighlightedByCalc: boolean;
   onSelect: (p: CountryPlan) => void;
 }) {
-  const highlighted = plan.isHighlighted || isHighlightedByCalc;
   const { fmt, isApprox } = useCurrency();
+
+  // Price per GB shown lightly for fixed plans (not the hero value prop)
   const ppgb = !plan.isUnlimited && plan.dataAmountGb > 0
     ? `${isApprox ? "≈ " : ""}${fmt(plan.estimatedPriceUsd / plan.dataAmountGb)}/GB`
     : null;
 
-  const isMostPopular = plan.badge === "Most Popular" || isHighlightedByCalc;
-  const isBestValue   = plan.badge === "Best Value";
-  const isUnlimitedBadge = plan.badge === "Unlimited";
+  const badge = isHighlightedByCalc && !plan.badge ? "Recommended" : plan.badge;
 
-  const badgeColor =
-    isMostPopular      ? "bg-primary text-primary-foreground"
-    : isBestValue      ? "bg-emerald-500 text-white"
+  const isRecommended   = badge === "Recommended";
+  const isMostPopular   = badge === "Most Popular";
+  const isBestValue     = badge === "Best Value";
+  const isUnlimitedBadge = badge === "Unlimited";
+  const hasBadge        = !!badge;
+
+  // Card ring treatment: Most Popular and calc-highlighted get the strongest treatment
+  const cardRing =
+    isMostPopular || isHighlightedByCalc
+      ? "ring-2 ring-primary shadow-lg bg-primary/[0.03]"
+      : isRecommended
+      ? "ring-1 ring-primary/50 shadow-sm"
+      : isBestValue
+      ? "ring-1 ring-emerald-500/50 hover:ring-emerald-500/70"
+      : isUnlimitedBadge
+      ? "ring-1 ring-violet-500/40 hover:ring-violet-500/60"
+      : "hover:border-primary/40";
+
+  const badgeBg =
+    isMostPopular || isHighlightedByCalc ? "bg-primary text-primary-foreground"
+    : isRecommended  ? "bg-primary/90 text-primary-foreground"
+    : isBestValue    ? "bg-emerald-500 text-white"
     : isUnlimitedBadge ? "bg-violet-600 text-white"
     : "bg-muted text-foreground";
 
+  // All primary plans get a filled button; alternatives stay outline
+  const buttonVariant: "default" | "outline" = plan.isPrimary || isHighlightedByCalc ? "default" : "outline";
+
   return (
     <Card
-      className={`relative flex flex-col p-5 transition-all duration-200 ${
-        isMostPopular
-          ? "ring-2 ring-primary shadow-lg bg-primary/[0.03]"
-          : isBestValue
-          ? "ring-1 ring-emerald-500/40 hover:ring-emerald-500/60"
-          : isUnlimitedBadge
-          ? "ring-1 ring-violet-500/30 hover:ring-violet-500/50"
-          : "hover:border-primary/40"
-      }`}
+      className={`relative flex flex-col p-5 transition-all duration-200 ${cardRing}`}
       data-testid={`card-plan-${plan.normalizedPlanId}`}
     >
-      {/* Badge */}
-      {(plan.badge || isHighlightedByCalc) && (
+      {/* Badge pill — floated above the card top edge */}
+      {hasBadge && (
         <div className="absolute -top-3 left-4">
-          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${badgeColor}`}>
-            {isMostPopular && <><Star className="w-3 h-3" /> Most Popular</>}
-            {isBestValue   && <><Check className="w-3 h-3" /> Best Value</>}
-            {isUnlimitedBadge && <><Zap className="w-3 h-3" /> Unlimited</>}
-            {isHighlightedByCalc && !plan.badge && <><Star className="w-3 h-3" /> Recommended</>}
+          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide ${badgeBg}`}>
+            {(isRecommended || isMostPopular || isHighlightedByCalc) && <Star className="w-3 h-3" />}
+            {isBestValue      && <Check className="w-3 h-3" />}
+            {isUnlimitedBadge && <Zap className="w-3 h-3" />}
+            {badge}
           </span>
         </div>
       )}
 
-      {/* Price */}
+      {/* Price — hero element */}
       <div className="mt-2 mb-3">
         <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="text-3xl font-bold" data-testid={`text-plan-price-${plan.normalizedPlanId}`}>
+          <span className="text-3xl font-bold tracking-tight" data-testid={`text-plan-price-${plan.normalizedPlanId}`}>
             {isApprox ? "≈ " : ""}{fmt(plan.estimatedPriceUsd)}
           </span>
-          {ppgb && <span className="text-xs text-muted-foreground">{ppgb}</span>}
+          {ppgb && (
+            <span className="text-xs text-muted-foreground">{ppgb}</span>
+          )}
         </div>
         <p className="text-[11px] text-muted-foreground">
-          {isApprox ? `$${plan.estimatedPriceUsd.toFixed(2)} USD · ` : ""}one-time payment
+          {isApprox ? `$${plan.estimatedPriceUsd.toFixed(2)} USD · ` : ""}one-time · instant activation
         </p>
       </div>
 
-      {/* Data + validity */}
+      {/* Data / validity / providers row */}
       <div className="flex items-center gap-3 mb-3">
-        <div className="flex-1">
-          <p className="font-bold text-sm leading-tight">{plan.dataLabel}</p>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm leading-tight truncate">{plan.dataLabel}</p>
           <p className="text-[11px] text-muted-foreground">data</p>
         </div>
         <div className="w-px h-8 bg-border flex-shrink-0" />
-        <div className="flex-1">
-          <p className="font-bold text-sm leading-tight">{plan.validityLabel}</p>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm leading-tight truncate">{plan.validityLabel}</p>
           <p className="text-[11px] text-muted-foreground">validity</p>
         </div>
         {plan.providerCount > 1 && (
           <>
             <div className="w-px h-8 bg-border flex-shrink-0" />
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <p className="font-bold text-sm leading-tight">{plan.providerCount}</p>
               <p className="text-[11px] text-muted-foreground">providers</p>
             </div>
@@ -725,12 +840,12 @@ function CuratedPlanCard({
         )}
       </div>
 
-      {/* Use case */}
+      {/* Use case helper text */}
       <p className="text-xs text-muted-foreground flex-1 mb-4 leading-relaxed">{plan.useCase}</p>
 
       <Button
         className="w-full"
-        variant={highlighted ? "default" : "outline"}
+        variant={buttonVariant}
         onClick={() => onSelect(plan)}
         data-testid={`button-select-plan-${plan.normalizedPlanId}`}
       >
@@ -1048,16 +1163,21 @@ function CuratedPlansSection({
       {/* Data usage calculator — find the right plan by usage style + trip length */}
       <DataCalculatorNew plans={plans} onHighlight={onHighlight} />
 
-      {/* View all plans toggle */}
-      <div className="border-t pt-5">
-        <button
-          onClick={() => setShowAll(v => !v)}
-          className="flex items-center gap-2 text-sm font-medium text-primary hover:underline underline-offset-2 transition-colors"
-          data-testid="button-toggle-all-plans"
-        >
-          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showAll ? "rotate-180" : ""}`} />
-          {showAll ? "Hide full plan list" : `View all ${totalPlans} plans`}
-        </button>
+      {/* Full inventory — low prominence, available for those who want to compare everything */}
+      <div className="mt-8 pt-6 border-t border-border/50">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-xs text-muted-foreground">
+            {showAll ? "Full plan list" : `Not seeing the right fit?`}
+          </p>
+          <button
+            onClick={() => setShowAll(v => !v)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            data-testid="button-toggle-all-plans"
+          >
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAll ? "rotate-180" : ""}`} />
+            {showAll ? "Hide" : `Browse all ${totalPlans} plans`}
+          </button>
+        </div>
 
         {showAll && (
           <AllPlansTable
