@@ -1,0 +1,114 @@
+Implement a high-conversion short-stay eSIM UI flow.
+
+GOAL:
+Replace traditional plan grids with a guided decision experience focused on short stays and unlimited data.
+
+DO NOT break backend or checkout.
+
+----------------------------------------
+1. ADD TRIP LENGTH SELECTOR
+----------------------------------------
+
+At top of destination page, add:
+
+Title:
+How long is your trip?
+
+Options (buttons):
+- 1 Day
+- 3 Days
+- 5 Days
+- 7 Days
+
+Default selection: 3 Days
+
+----------------------------------------
+2. DYNAMIC PLAN DISPLAY
+----------------------------------------
+
+When user selects a duration:
+
+Use the recommendation engine to:
+
+- fetch recommended unlimited plan for that duration
+- fetch 2 lower-data alternatives
+
+----------------------------------------
+3. PRIMARY PLAN (UNLIMITED)
+----------------------------------------
+
+Display prominently:
+
+- Unlimited Data
+- Selected duration
+- Price
+- Provider count
+
+Copy:
+No limits. No stress. Perfect for travel, maps, streaming, and hotspot.
+
+CTA:
+Get unlimited plan
+
+Style:
+- large card
+- highlighted border
+- strong CTA
+
+----------------------------------------
+4. SECONDARY OPTIONS (COLLAPSED)
+----------------------------------------
+
+Below primary plan:
+
+Text:
+Prefer a cheaper option?
+
+Show:
+- 2GB plan
+- 5GB plan
+
+Style:
+- smaller cards
+- muted CTA
+- less emphasis
+
+----------------------------------------
+5. AUTO UPDATE
+----------------------------------------
+
+When user changes duration:
+- update plans instantly
+- do not reload page
+- smooth transition
+
+----------------------------------------
+6. REMOVE CLUTTER
+----------------------------------------
+
+- Hide full plan grid initially
+- Keep “View all plans” as secondary link
+- Do not show more than 3 options by default
+
+----------------------------------------
+7. MICRO TRUST
+----------------------------------------
+
+Under CTA:
+
+- Instant QR delivery
+- Works on arrival
+- No roaming charges
+
+----------------------------------------
+8. MOBILE FIRST
+----------------------------------------
+
+Ensure:
+- buttons are thumb-friendly
+- cards stack vertically
+- CTA always visible
+
+----------------------------------------
+RESULT:
+A fast, guided, conversion-first plan selection flow focused on short stays and unlimited data.
