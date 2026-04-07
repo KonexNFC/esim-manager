@@ -1312,12 +1312,77 @@ function LegacyDetail({ destId }: { destId: string }) {
 
 // ─── Short-Stay Flow ──────────────────────────────────────────────────────────
 
-const DURATION_OPTIONS = [
-  { days: 1, label: "1 Day" },
-  { days: 3, label: "3 Days" },
-  { days: 5, label: "5 Days" },
-  { days: 7, label: "7 Days" },
+// Duration buckets: validity window [minDays, maxDays] for each button
+const DURATION_BUCKETS = [
+  { days: 1, label: "1 Day",  minDays: 1, maxDays: 2  },
+  { days: 3, label: "3 Days", minDays: 3, maxDays: 4  },
+  { days: 5, label: "5 Days", minDays: 5, maxDays: 6  },
+  { days: 7, label: "7 Days", minDays: 7, maxDays: 9  },
 ] as const;
+
+interface DurationGroup {
+  days: number;
+  label: string;
+  primaryUnlimited: CountryPlan | null;
+  fixedAlternatives: CountryPlan[];
+  available: boolean;
+  pricingAnomaly: boolean;
+}
+
+function buildDurationGroups(plans: CountryPlan[]): DurationGroup[] {
+  const groups: DurationGroup[] = DURATION_BUCKETS.map(bucket => {
+    const candidates = plans.filter(
+      p => p.validityDays >= bucket.minDays && p.validityDays <= bucket.maxDays
+    );
+
+    const unlimitedOpts = candidates
+      .filter(p => p.isUnlimited)
+      .sort((a, b) => a.estimatedPriceUsd - b.estimatedPriceUsd);
+
+    // Fixed alternatives: pick cheapest from a light tier (≤5 GB) and a heavier tier (>5 GB)
+    const fixedCandidates = candidates
+      .filter(p => !p.isUnlimited && p.dataAmountGb >= 1)
+      .sort((a, b) => a.estimatedPriceUsd - b.estimatedPriceUsd);
+
+    const light = fixedCandidates.filter(p => p.dataAmountGb <= 5)[0];
+    const heavy = fixedCandidates.filter(p => p.dataAmountGb > 5)[0];
+    const alts: CountryPlan[] = [];
+    if (light) alts.push(light);
+    if (heavy && heavy.normalizedPlanId !== light?.normalizedPlanId) alts.push(heavy);
+    if (alts.length < 2) {
+      for (const p of fixedCandidates) {
+        if (alts.length >= 2) break;
+        if (!alts.find(a => a.normalizedPlanId === p.normalizedPlanId)) alts.push(p);
+      }
+    }
+
+    return {
+      days: bucket.days,
+      label: bucket.label,
+      primaryUnlimited: unlimitedOpts[0] ?? null,
+      fixedAlternatives: alts.slice(0, 2),
+      available: candidates.length > 0,
+      pricingAnomaly: false,
+    };
+  });
+
+  // Pricing ladder: unlimited price must strictly increase with duration.
+  // If a longer-duration bucket is cheaper than a previous bucket, suppress its
+  // unlimited plan from primary view (it still appears in Browse all).
+  let prevUnlimitedPrice = -Infinity;
+  for (const g of groups) {
+    if (g.primaryUnlimited) {
+      if (g.primaryUnlimited.estimatedPriceUsd <= prevUnlimitedPrice) {
+        g.primaryUnlimited = null;
+        g.pricingAnomaly = true;
+      } else {
+        prevUnlimitedPrice = g.primaryUnlimited.estimatedPriceUsd;
+      }
+    }
+  }
+
+  return groups;
+}
 
 function ShortStayFlow({
   plans,
@@ -1326,45 +1391,25 @@ function ShortStayFlow({
   plans: CountryPlan[];
   onSelect: (p: CountryPlan) => void;
 }) {
-  const [selectedDays, setSelectedDays] = useState(3);
+  const groups = useMemo(() => buildDurationGroups(plans), [plans]);
+  const availableGroups = groups.filter(g => g.available);
+
+  const [selectedDays, setSelectedDays] = useState<number>(() =>
+    availableGroups.find(g => g.days === 3)?.days ?? availableGroups[0]?.days ?? 3
+  );
   const [showAll, setShowAll] = useState(false);
   const { fmt, isApprox } = useCurrency();
 
-  const unlimitedPlan = useMemo(() => {
-    return plans
-      .filter(p => p.isUnlimited && p.validityDays >= selectedDays)
-      .sort((a, b) => {
-        const aOver = a.validityDays - selectedDays;
-        const bOver = b.validityDays - selectedDays;
-        if (aOver !== bOver) return aOver - bOver;
-        return a.estimatedPriceUsd - b.estimatedPriceUsd;
-      })[0] ?? null;
-  }, [plans, selectedDays]);
+  const currentGroup = groups.find(g => g.days === selectedDays) ?? null;
+  const primaryUnlimited = currentGroup?.primaryUnlimited ?? null;
+  const fixedAlternatives = currentGroup?.fixedAlternatives ?? [];
 
-  const fixedAlternatives = useMemo(() => {
-    const eligible = plans.filter(
-      p => !p.isUnlimited && p.validityDays >= selectedDays && p.dataAmountGb >= 1
-    );
-    const byValuePerGb = (a: CountryPlan, b: CountryPlan) =>
-      a.estimatedPriceUsd / a.dataAmountGb - b.estimatedPriceUsd / b.dataAmountGb;
+  // If unlimited is suppressed (pricing anomaly) or absent, promote best fixed as primary
+  const primaryFixed = !primaryUnlimited ? (fixedAlternatives[0] ?? null) : null;
+  // Shown alternatives: if unlimited is primary, show fixed ones; if fixed is primary, skip it
+  const shownAlternatives = primaryUnlimited ? fixedAlternatives : fixedAlternatives.slice(1);
 
-    const light = [...eligible.filter(p => p.dataAmountGb <= 5)].sort(byValuePerGb)[0];
-    const heavier = [...eligible.filter(p => p.dataAmountGb > 5)].sort(byValuePerGb)[0];
-
-    const results: CountryPlan[] = [];
-    if (light) results.push(light);
-    if (heavier && heavier.normalizedPlanId !== light?.normalizedPlanId) results.push(heavier);
-
-    const added = new Set(results.map(r => r.normalizedPlanId));
-    for (const p of eligible) {
-      if (results.length >= 2) break;
-      if (!added.has(p.normalizedPlanId)) { results.push(p); added.add(p.normalizedPlanId); }
-    }
-    return results.slice(0, 2);
-  }, [plans, selectedDays]);
-
-  const primaryFixed = fixedAlternatives[0] ?? null;
-  const showUnlimited = !!unlimitedPlan;
+  const showUnlimited = !!primaryUnlimited;
 
   return (
     <div>
@@ -1374,18 +1419,18 @@ function ShortStayFlow({
           How long is your trip?
         </h2>
         <div className="flex gap-2 flex-wrap">
-          {DURATION_OPTIONS.map(opt => (
+          {availableGroups.map(g => (
             <button
-              key={opt.days}
-              onClick={() => setSelectedDays(opt.days)}
+              key={g.days}
+              onClick={() => setSelectedDays(g.days)}
               className={`px-5 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-150 min-w-[80px] ${
-                selectedDays === opt.days
+                selectedDays === g.days
                   ? "border-primary bg-primary text-primary-foreground shadow-sm"
                   : "border-border bg-background text-foreground hover:border-primary/40"
               }`}
-              data-testid={`button-duration-${opt.days}`}
+              data-testid={`button-duration-${g.days}`}
             >
-              {opt.label}
+              {g.label}
             </button>
           ))}
         </div>
@@ -1405,16 +1450,16 @@ function ShortStayFlow({
               <div>
                 <p className="text-2xl font-bold tracking-tight">Unlimited Data</p>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  {unlimitedPlan!.validityLabel} validity
-                  {unlimitedPlan!.providerCount > 1 && ` · ${unlimitedPlan!.providerCount} providers`}
+                  {primaryUnlimited!.validityLabel} validity
+                  {primaryUnlimited!.providerCount > 1 && ` · ${primaryUnlimited!.providerCount} providers`}
                 </p>
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="text-3xl font-bold tracking-tight" data-testid="text-unlimited-price">
-                  {isApprox ? "≈ " : ""}{fmt(unlimitedPlan!.estimatedPriceUsd)}
+                  {isApprox ? "≈ " : ""}{fmt(primaryUnlimited!.estimatedPriceUsd)}
                 </p>
                 {isApprox && (
-                  <p className="text-xs text-muted-foreground">${unlimitedPlan!.estimatedPriceUsd.toFixed(2)} USD</p>
+                  <p className="text-xs text-muted-foreground">${primaryUnlimited!.estimatedPriceUsd.toFixed(2)} USD</p>
                 )}
               </div>
             </div>
@@ -1425,7 +1470,7 @@ function ShortStayFlow({
 
             <Button
               className="w-full h-11 text-sm font-semibold"
-              onClick={() => onSelect(unlimitedPlan!)}
+              onClick={() => onSelect(primaryUnlimited!)}
               data-testid="button-get-unlimited"
             >
               Get unlimited plan
@@ -1481,12 +1526,12 @@ function ShortStayFlow({
         </div>
       )}
 
-      {/* Secondary: cheaper fixed-data alternatives (only shown when unlimited is primary) */}
-      {showUnlimited && fixedAlternatives.length > 0 && (
+      {/* Secondary: cheaper fixed-data alternatives */}
+      {shownAlternatives.length > 0 && (
         <div className="mb-8">
           <p className="text-sm text-muted-foreground mb-3 font-medium">Prefer a cheaper option?</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {fixedAlternatives.map(plan => (
+            {shownAlternatives.map(plan => (
               <Card
                 key={plan.normalizedPlanId}
                 className="p-4 hover:border-primary/30 transition-colors"
@@ -1495,16 +1540,9 @@ function ShortStayFlow({
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <p className="font-bold text-sm">{plan.dataLabel}</p>
-                    <p className="text-xs text-muted-foreground">{plan.validityLabel}</p>
+                    <p className="text-xs text-muted-foreground">{plan.validityLabel} validity</p>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="font-bold text-base">{isApprox ? "≈ " : ""}{fmt(plan.estimatedPriceUsd)}</p>
-                    {plan.dataAmountGb > 0 && (
-                      <p className="text-[10px] text-muted-foreground">
-                        {isApprox ? "≈ " : ""}{fmt(plan.estimatedPriceUsd / plan.dataAmountGb)}/GB
-                      </p>
-                    )}
-                  </div>
+                  <p className="font-bold text-base flex-shrink-0">{isApprox ? "≈ " : ""}{fmt(plan.estimatedPriceUsd)}</p>
                 </div>
                 <Button
                   variant="outline"
