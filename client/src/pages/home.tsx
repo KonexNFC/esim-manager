@@ -278,7 +278,7 @@ function EventsCarousel() {
           <img
             src={event.photo}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-20"
+            className="absolute inset-0 w-full h-full object-cover opacity-35"
             loading="lazy"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent" />
@@ -344,18 +344,18 @@ function EventsCarousel() {
             </div>
           </div>
 
-          {/* Right: circular photo */}
+          {/* Right: full image */}
           <div className="hidden lg:flex justify-center items-center">
-            <div className="relative">
-              {/* Outer glow ring */}
+            <div className="relative w-full max-w-lg">
+              {/* Subtle glow behind image */}
               <div
-                className="absolute inset-0 rounded-full blur-2xl opacity-40 scale-110"
+                className="absolute -inset-4 rounded-2xl blur-3xl opacity-30"
                 style={{ backgroundColor: ev.accent }}
               />
-              {/* Circle frame */}
+              {/* Full rectangular image */}
               <div
-                className="relative w-64 h-64 xl:w-80 xl:h-80 rounded-full overflow-hidden border-4"
-                style={{ borderColor: ev.accent + "80" }}
+                className="relative w-full rounded-2xl overflow-hidden border-2 shadow-2xl"
+                style={{ borderColor: ev.accent + "60", aspectRatio: "16/9" }}
               >
                 <img
                   src={ev.photo}
@@ -363,11 +363,11 @@ function EventsCarousel() {
                   className="w-full h-full object-cover"
                   loading="lazy"
                 />
-              </div>
-              {/* Floating date badge */}
-              <div className="absolute -bottom-3 -right-3 px-3 py-2 rounded-xl bg-black/80 backdrop-blur border border-white/15 shadow-xl">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 leading-none mb-0.5">When</p>
-                <p className="text-xs font-bold text-white">{ev.dates}</p>
+                {/* Floating date badge */}
+                <div className="absolute bottom-3 right-3 px-3 py-2 rounded-xl bg-black/80 backdrop-blur border border-white/15 shadow-xl">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 leading-none mb-0.5">When</p>
+                  <p className="text-xs font-bold text-white">{ev.dates}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -2174,8 +2174,8 @@ export default function Home() {
   return (
     <div className="min-h-screen pb-20 sm:pb-0">
       {/* Primary conversion funnel */}
-      <HeroSection />
       <EventsCarousel />
+      <HeroSection />
       <PlanFinder />
       <QuickCountriesGrid />
       <PopularDestinations />
