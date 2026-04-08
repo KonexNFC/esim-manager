@@ -2114,6 +2114,11 @@ function Footer() {
                   <span className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium cursor-pointer" data-testid="text-footer-terms">Terms of Service</span>
                 </Link>
               </li>
+              <li>
+                <Link href="/refund-policy">
+                  <span className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium cursor-pointer" data-testid="text-footer-refund">Refund Policy</span>
+                </Link>
+              </li>
             </ul>
           </div>
         </div>

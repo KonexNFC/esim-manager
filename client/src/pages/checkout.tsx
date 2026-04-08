@@ -358,6 +358,13 @@ export default function Checkout() {
                   <SiStripe className="h-3 w-auto" />
                   You'll be redirected to Stripe's secure payment page
                 </p>
+                <p className="text-xs text-center text-muted-foreground" data-testid="text-refund-policy-notice">
+                  By completing your purchase, you agree to our{" "}
+                  <Link href="/refund-policy" className="underline underline-offset-2 hover:text-foreground transition-colors">
+                    Refund & Return Policy
+                  </Link>
+                  .
+                </p>
               </div>
             </Card>
           )}
