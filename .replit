@@ -45,3 +45,4 @@ integrations = ["stripe:1.0.0"]
 
 [userenv.shared]
 ZENDIT_ENV = "production"
+STRIPE_PUBLISHABLE_KEY = "pk_live_51TJlGG6fAIQZ7PPyXy5rVY4TEuWtSaqjjNoP6M6OPsEN3qrugqlN9qsQAqFcd0cCvXsF1EdcIIPpSWCa0drBYPSH00Yy0kX6tt"

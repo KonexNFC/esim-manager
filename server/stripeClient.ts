@@ -18,6 +18,15 @@ async function fetchStripeConnection(hostname: string, xReplitToken: string, env
 }
 
 async function getCredentials() {
+  // Prefer explicit environment variable keys (live/production keys)
+  if (process.env.STRIPE_SECRET_KEY) {
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY || '';
+    const isLive = secretKey.startsWith('sk_live_');
+    console.log(`[Stripe] Using env var keys (${isLive ? 'live' : 'test'} mode)`);
+    return { publishableKey, secretKey };
+  }
+
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY
     ? 'repl ' + process.env.REPL_IDENTITY
