@@ -1322,24 +1322,21 @@ const DURATION_BUCKETS = [
 
 // ─── Pricing engine ───────────────────────────────────────────────────────────
 
-// GBP rate used for floor / margin calculations (display only; Stripe charges USD)
-const GBP_RATE = 0.79; // 1 USD = £0.79
-
-// Minimum sell prices per duration bucket (in GBP)
-const GBP_PRICE_FLOORS: Partial<Record<number, number>> = {
-  1: 4.99,
-  3: 9.99,
-  5: 14.99,
-  7: 18.99,
+// Fixed USD tier prices for unlimited plans, one per duration bucket.
+// All countries pay the same structured price — predictable, trustworthy, conversion-optimised.
+const USD_UNLIMITED_TIERS: Record<number, number> = {
+  1: 5.99,
+  3: 11.99,
+  5: 16.99,
+  7: 21.99,
 };
 
-/** Round a GBP amount to the nearest £X.49 or £X.99.
- *  Works in integer pence to avoid IEEE-754 edge cases (e.g. 4.99 - 4 > 0.99). */
-function roundToNineNine(gbp: number): number {
-  // Work in integer pence to avoid IEEE-754 issues (e.g. 4.99 * 100 = 499.000...01776)
-  const pence = Math.round(gbp * 100);
-  const base = Math.floor(pence / 100);
-  const rem = pence % 100;
+/** Round a USD amount to the nearest $X.49 or $X.99.
+ *  Works in integer cents to avoid IEEE-754 edge cases. */
+function roundToNineNine(usd: number): number {
+  const cents = Math.round(usd * 100);
+  const base = Math.floor(cents / 100);
+  const rem = cents % 100;
   if (rem <= 49) return base + 0.49;
   if (rem <= 99) return base + 0.99;
   return base + 1 + 0.49;
@@ -1347,31 +1344,26 @@ function roundToNineNine(gbp: number): number {
 
 /**
  * Compute the sell price in USD for display via fmt().
- * - Unlimited plans: sell_gbp = max(wholesale_gbp * 2, floor_gbp), rounded to .49/.99
- * - Fixed-data plans: sell_gbp = max(wholesale_gbp * 2, £1.49) — no duration floor,
- *   allowing fixed plans to genuinely undercut unlimited pricing.
+ * - Unlimited plans: fixed structured tier price by duration ($5.99/$11.99/$16.99/$21.99).
+ *   Same price globally — no floating, no per-country drift.
+ * - Fixed-data plans: 2× wholesale markup rounded to .49/.99, minimum $1.99.
+ *   Allows fixed plans to genuinely undercut unlimited pricing.
  */
 function computeSellPriceUsd(plan: CountryPlan, bucketDays: number): number {
-  const costUsd = plan.wholesaleCostUsd ?? plan.estimatedPriceUsd * 0.5;
-  const costGbp = costUsd * GBP_RATE;
-  const markedUpGbp = costGbp * 2.0;
   if (plan.isUnlimited) {
-    const floorGbp = GBP_PRICE_FLOORS[bucketDays] ?? 0;
-    const rawGbp = Math.max(markedUpGbp, floorGbp);
-    const roundedGbp = roundToNineNine(rawGbp);
-    return roundedGbp / GBP_RATE;
+    return USD_UNLIMITED_TIERS[bucketDays] ?? USD_UNLIMITED_TIERS[3];
   } else {
-    // Fixed-data: 2× markup with a low absolute minimum (£1.49)
-    const rawGbp = Math.max(markedUpGbp, 1.49);
-    const roundedGbp = roundToNineNine(rawGbp);
-    return roundedGbp / GBP_RATE;
+    const costUsd = plan.wholesaleCostUsd ?? plan.estimatedPriceUsd * 0.5;
+    const markedUpUsd = costUsd * 2.0;
+    const rawUsd = Math.max(markedUpUsd, 1.99);
+    return roundToNineNine(rawUsd);
   }
 }
 
-/** Filter out unlimited plans with suspiciously low wholesale cost (< £0.20 = probable junk entry) */
+/** Filter out unlimited plans with suspiciously low wholesale cost (< $0.25 = probable junk entry) */
 function isLowValueUnlimited(plan: CountryPlan): boolean {
   const costUsd = plan.wholesaleCostUsd ?? plan.estimatedPriceUsd * 0.5;
-  return costUsd * GBP_RATE < 0.20;
+  return costUsd < 0.25;
 }
 
 interface DurationGroup {
@@ -1402,13 +1394,13 @@ function buildDurationGroups(plans: CountryPlan[]): DurationGroup[] {
       .filter(p => !p.isUnlimited && p.dataAmountGb >= 1)
       .sort((a, b) => computeSellPriceUsd(a, bucket.days) - computeSellPriceUsd(b, bucket.days));
 
-    // Pre-filter: if unlimited exists, only keep fixed plans genuinely cheaper (≥£0.50 below).
+    // Pre-filter: if unlimited exists, only keep fixed plans genuinely cheaper (≥$0.50 below).
     // If no unlimited, show all fixed plans (they'll be alternatives to each other).
-    const unlimitedSellGbp = unlimitedOpts[0]
-      ? computeSellPriceUsd(unlimitedOpts[0], bucket.days) * GBP_RATE
+    const unlimitedSellUsd = unlimitedOpts[0]
+      ? computeSellPriceUsd(unlimitedOpts[0], bucket.days)
       : Infinity;
     const cheaperFixed = unlimitedOpts[0]
-      ? fixedCandidates.filter(p => computeSellPriceUsd(p, bucket.days) * GBP_RATE < unlimitedSellGbp - 0.5)
+      ? fixedCandidates.filter(p => computeSellPriceUsd(p, bucket.days) < unlimitedSellUsd - 0.50)
       : fixedCandidates;
 
     // Pick: (1) cheapest plan, (2) plan with most data among the cheaper options
@@ -1432,17 +1424,18 @@ function buildDurationGroups(plans: CountryPlan[]): DurationGroup[] {
     };
   });
 
-  // Pricing ladder: unlimited price must strictly increase with duration.
-  // If a longer-duration bucket is cheaper than a previous bucket, suppress its
-  // unlimited plan from primary view (it still appears in Browse all).
+  // Pricing ladder: unlimited tier prices always strictly increase with duration
+  // ($5.99 → $11.99 → $16.99 → $21.99) so no anomaly suppression needed.
+  // This loop is kept for safety in case custom buckets are added later.
   let prevUnlimitedPrice = -Infinity;
   for (const g of groups) {
     if (g.primaryUnlimited) {
-      if (g.primaryUnlimited.estimatedPriceUsd <= prevUnlimitedPrice) {
+      const tierPrice = computeSellPriceUsd(g.primaryUnlimited, g.days);
+      if (tierPrice <= prevUnlimitedPrice) {
         g.primaryUnlimited = null;
         g.pricingAnomaly = true;
       } else {
-        prevUnlimitedPrice = g.primaryUnlimited.estimatedPriceUsd;
+        prevUnlimitedPrice = tierPrice;
       }
     }
   }
