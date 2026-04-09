@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
-import { Search, Smartphone, ArrowRight, LayoutDashboard, LogIn, ChevronDown } from "lucide-react";
+import { Search, Smartphone, LayoutDashboard, LogIn, ChevronDown } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { KonexLogo } from "./konex-logo";
 import { useCurrency, CURRENCIES } from "@/lib/currency";
@@ -55,7 +55,7 @@ export function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-background/70 backdrop-blur-xl">
+    <header className={isHome ? "relative border-b border-white/[0.06] bg-background" : "sticky top-0 z-50 border-b border-white/[0.06] bg-background/70 backdrop-blur-xl"}>
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 px-4 py-3">
 
         {/* Logo */}
@@ -100,16 +100,6 @@ export function Navbar() {
               )
             )}
 
-            <Link href="/destinations">
-              <Button
-                size="sm"
-                className="ml-1 bg-primary hover:bg-primary/90 text-white font-semibold shadow-lg shadow-primary/25"
-                data-testid="nav-get-esim"
-              >
-                Get eSIM<span className="hidden min-[380px]:inline"> Now</span>
-                <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
-              </Button>
-            </Link>
             <CurrencySelector />
             <ThemeToggle />
           </nav>
