@@ -35,10 +35,10 @@ const BADGE_CONFIG: Record<
   { bg: string; text: string; icon: React.ReactNode; bar: string }
 > = {
   recommended: {
-    bg: "bg-violet-600 dark:bg-violet-500",
+    bg: "bg-blue-600 dark:bg-blue-500",
     text: "text-white",
     icon: <Star className="w-3 h-3 fill-white/90" />,
-    bar: "from-violet-500 to-fuchsia-500",
+    bar: "from-blue-500 to-cyan-400",
   },
   popular: {
     bg: "bg-sky-500 dark:bg-sky-400",
@@ -117,13 +117,13 @@ export function PlanCard({
         // Recommended: elevated, glowing accent border
         isRecommended
           ? [
-              "ring-2 ring-violet-500 dark:ring-violet-400",
-              "shadow-[0_8px_32px_-4px_rgba(124,58,237,0.22),0_4px_12px_-4px_rgba(124,58,237,0.14)]",
-              "dark:shadow-[0_8px_32px_-4px_rgba(139,92,246,0.30),0_4px_12px_-4px_rgba(139,92,246,0.18)]",
+              "ring-2 ring-blue-500 dark:ring-blue-400",
+              "shadow-[0_8px_32px_-4px_rgba(37,99,235,0.22),0_4px_12px_-4px_rgba(37,99,235,0.14)]",
+              "dark:shadow-[0_8px_32px_-4px_rgba(96,165,250,0.30),0_4px_12px_-4px_rgba(96,165,250,0.18)]",
               "scale-[1.02]",
               "hover:scale-[1.035]",
-              "hover:shadow-[0_16px_48px_-8px_rgba(124,58,237,0.28),0_8px_20px_-6px_rgba(124,58,237,0.18)]",
-              "dark:hover:shadow-[0_16px_48px_-8px_rgba(139,92,246,0.38),0_8px_20px_-6px_rgba(139,92,246,0.22)]",
+              "hover:shadow-[0_16px_48px_-8px_rgba(37,99,235,0.28),0_8px_20px_-6px_rgba(37,99,235,0.18)]",
+              "dark:hover:shadow-[0_16px_48px_-8px_rgba(96,165,250,0.38),0_8px_20px_-6px_rgba(96,165,250,0.22)]",
             ]
           : [
               "shadow-[var(--shadow-sm)]",
@@ -175,7 +175,7 @@ export function PlanCard({
               className={cn(
                 "text-4xl font-bold tracking-tight",
                 isRecommended
-                  ? "text-violet-600 dark:text-violet-400"
+                  ? "text-blue-600 dark:text-blue-400"
                   : "text-foreground",
               )}
             >
@@ -240,7 +240,7 @@ export function PlanCard({
           className={cn(
             "w-full font-semibold mt-auto",
             isRecommended
-              ? "bg-violet-600 hover:bg-violet-700 text-white shadow-md shadow-violet-500/20"
+              ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/25"
               : "bg-background border border-border text-foreground hover:bg-accent hover:text-accent-foreground",
           )}
           variant={isRecommended ? "default" : "outline"}

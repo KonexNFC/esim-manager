@@ -250,7 +250,7 @@ const QUICK_COUNTRIES = [
 // STATS STRIP
 // ─────────────────────────────────────────────
 const STATS = [
-  { value: "190+",   label: "Countries covered",   accent: "text-violet-500 dark:text-violet-400" },
+  { value: "190+",   label: "Countries covered",   accent: "text-blue-500 dark:text-blue-400" },
   { value: "5,000+", label: "Happy travellers",     accent: "text-emerald-500 dark:text-emerald-400" },
   { value: "4.9/5",  label: "Customer rating",      accent: "text-amber-500 dark:text-amber-400" },
   { value: "<60s",   label: "Average setup time",   accent: "text-sky-500 dark:text-sky-400" },
@@ -464,10 +464,10 @@ function HeroSection() {
           className="w-full h-full object-cover"
           style={{ filter: "brightness(0.35) saturate(1.2)", transform: "scale(1.04)" }}
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0A0A0A]/95 via-black/75 to-violet-950/80" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0A0A0A]/95 via-black/75 to-blue-950/80" />
         {/* Glow blobs */}
         <div className="absolute top-0 right-0 w-[700px] h-[700px] rounded-full opacity-15 pointer-events-none"
-          style={{ background: "radial-gradient(circle, #7c3aed 0%, transparent 65%)" }} />
+          style={{ background: "radial-gradient(circle, #2563eb 0%, transparent 65%)" }} />
         <div className="absolute bottom-0 left-0 w-[500px] h-[400px] rounded-full opacity-10 pointer-events-none"
           style={{ background: "radial-gradient(circle, #4f46e5 0%, transparent 70%)" }} />
       </div>
@@ -503,7 +503,7 @@ function HeroSection() {
                 "One flat price — no daily fees, no bill shock",
               ].map((b) => (
                 <div key={b} className="flex items-center gap-2.5 text-white/55 text-sm">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
                   {b}
                 </div>
               ))}
@@ -589,14 +589,14 @@ function HeroSection() {
           <div className="hidden lg:block" data-testid="card-hero-preview">
             <div className="relative">
               <div className="absolute inset-0 rounded-3xl opacity-25 pointer-events-none"
-                style={{ background: "radial-gradient(ellipse, #7c3aed 0%, transparent 70%)", filter: "blur(48px)" }} />
+                style={{ background: "radial-gradient(ellipse, #2563eb 0%, transparent 70%)", filter: "blur(48px)" }} />
               <div className="relative rounded-3xl border border-white/10 bg-black/55 backdrop-blur-2xl overflow-hidden shadow-2xl">
                 <div className="px-6 pt-6 pb-4 border-b border-white/[0.07] flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-white/35 mb-0.5">Popular Plans</p>
                     <p className="text-sm text-white/50">Starting from <strong className="text-white/90">$9</strong></p>
                   </div>
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500/20 border border-violet-500/30 text-violet-300 text-xs font-semibold">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-semibold">
                     <Zap className="w-3 h-3" />
                     Instant QR
                   </div>
@@ -698,7 +698,7 @@ function HowItWorks() {
       phone: (
         <div className="flex flex-col items-center gap-3 w-full px-3">
           {/* eSIM chip card */}
-          <div className="w-full rounded-xl bg-gradient-to-br from-primary/30 to-violet-600/20 border border-primary/25 p-2.5 flex items-center gap-2">
+          <div className="w-full rounded-xl bg-gradient-to-br from-primary/30 to-blue-600/20 border border-primary/25 p-2.5 flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0">
               <Smartphone className="w-4 h-4 text-primary" />
             </div>
@@ -963,8 +963,8 @@ function WhyKonex() {
     },
     {
       icon: Globe,
-      accent: "text-violet-400",
-      bg: "bg-violet-400/10",
+      accent: "text-blue-400",
+      bg: "bg-blue-400/10",
       title: "Regional & global plans",
       description: "One eSIM, multiple countries. Cover all of Europe, the Middle East, or Southeast Asia with a single purchase.",
     },
@@ -1156,18 +1156,29 @@ function CompatibilitySection() {
             </Link>
           </div>
 
-          <div className="rounded-2xl bg-gradient-to-br from-primary via-violet-600 to-blue-600 p-8 text-white flex flex-col shadow-2xl shadow-primary/30">
-            <Smartphone className="w-12 h-12 mb-6 opacity-80" />
-            <h3 className="font-display text-2xl font-bold mb-3">Not sure if your phone is compatible?</h3>
-            <p className="text-white/70 leading-relaxed mb-8 flex-1">
-              Our device checker covers 60+ models across Apple, Samsung, Google, and more. Takes under 30 seconds to confirm eSIM support.
-            </p>
-            <Link href="/compatibility">
-              <Button variant="outline" size="lg" className="bg-white/10 border-white/20 text-white hover:bg-white/20 w-full sm:w-auto font-bold" data-testid="button-device-checker-cta">
-                Open Device Checker
-                <ArrowRight className="ml-2 w-4 h-4" />
-              </Button>
-            </Link>
+          {/* Travel photo card */}
+          <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-black/30 aspect-[4/3] lg:aspect-auto lg:min-h-[360px]">
+            <img
+              src="https://images.unsplash.com/photo-1512428813834-c702c7702b78?w=900&q=80"
+              alt="Traveller using phone at airport"
+              loading="lazy"
+              className="absolute inset-0 w-full h-full object-cover img-travel-hover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-950/40 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 p-7 text-white">
+              <Smartphone className="w-9 h-9 mb-4 opacity-80" />
+              <h3 className="font-display text-xl font-bold mb-2 leading-snug">Not sure if your phone is compatible?</h3>
+              <p className="text-white/65 text-sm leading-relaxed mb-5">
+                Our device checker covers 60+ models. Takes under 30 seconds.
+              </p>
+              <Link href="/compatibility">
+                <Button variant="outline" size="sm" className="bg-white/10 border-white/25 text-white hover:bg-white/20 font-bold" data-testid="button-device-checker-cta">
+                  Open Device Checker
+                  <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -1237,7 +1248,7 @@ function TestimonialsSection() {
                   {t.full}
                 </p>
                 <div className="flex items-center gap-3 pt-4 border-t">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-primary to-violet-700 text-primary-foreground font-bold text-sm flex-shrink-0 shadow-md shadow-primary/20">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-primary to-blue-700 text-primary-foreground font-bold text-sm flex-shrink-0 shadow-md shadow-primary/20">
                     {t.initials}
                   </div>
                   <div>
@@ -1354,36 +1365,54 @@ function FAQSection() {
 // 13. FINAL CTA
 // ─────────────────────────────────────────────
 function FinalCTA() {
+  const { ref, inView } = useInView(0.15);
   return (
-    <section className="py-12 sm:py-20 lg:py-28 border-t relative overflow-hidden bg-card">
-      {/* Background accent */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-blue-500/5 pointer-events-none" />
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] opacity-10 pointer-events-none"
-        style={{ background: "radial-gradient(ellipse, #7c3aed 0%, transparent 70%)" }} />
+    <section className="relative overflow-hidden border-t" ref={ref}>
+      {/* Travel background image */}
+      <img
+        src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=1600&q=80"
+        alt=""
+        loading="lazy"
+        className={`absolute inset-0 w-full h-full object-cover reveal-img ${inView ? "in-view" : ""}`}
+        style={{ filter: "brightness(0.28) saturate(1.3)" }}
+        aria-hidden
+      />
+      {/* Gradient overlays */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/60 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-r from-blue-950/50 via-transparent to-transparent pointer-events-none" />
+      {/* Blue glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] opacity-15 pointer-events-none blob-drift"
+        style={{ background: "radial-gradient(ellipse, #2563eb 0%, transparent 70%)" }} />
 
-      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 text-center">
-        <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-[1.0]" data-testid="text-final-cta-title">
-          Get travel data<br />before you land.
-        </h2>
-        <p className="text-muted-foreground text-sm sm:text-lg max-w-xl mx-auto mb-8 sm:mb-10 leading-relaxed" data-testid="text-final-cta-subtitle">
-          Choose your destination, activate in minutes, and stay connected in 190+ countries with KONEX eSIM.
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
-          <Link href="/destinations">
-            <Button size="lg" className="h-13 px-8 text-base font-bold shadow-xl shadow-primary/30" data-testid="button-final-get-started">
-              Get eSIM Now
-              <ArrowRight className="ml-2 w-4 h-4" />
-            </Button>
-          </Link>
-          <Link href="/destinations">
-            <Button size="lg" variant="outline" className="h-13 px-8 text-base font-bold" data-testid="button-final-browse-plans">
-              View Plans
-            </Button>
-          </Link>
+      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-20 sm:py-28 lg:py-36 text-center">
+        <div className={`reveal ${inView ? "in-view" : ""}`}>
+          <div className="inline-flex items-center gap-2 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-bold px-4 py-1.5 mb-6 uppercase tracking-widest">
+            <Zap className="w-3 h-3" />
+            Instant Activation
+          </div>
+          <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-[1.0] text-white" data-testid="text-final-cta-title">
+            Get travel data<br />before you land.
+          </h2>
+          <p className="text-white/60 text-sm sm:text-lg max-w-xl mx-auto mb-8 sm:mb-10 leading-relaxed" data-testid="text-final-cta-subtitle">
+            Choose your destination, activate in minutes, and stay connected in 190+ countries with KONEX eSIM.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
+            <Link href="/destinations">
+              <Button size="lg" className="h-13 px-8 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xl shadow-blue-500/30" data-testid="button-final-get-started">
+                Get eSIM Now
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+            </Link>
+            <Link href="/destinations">
+              <Button size="lg" variant="outline" className="h-13 px-8 text-base font-bold border-white/25 text-white bg-white/10 hover:bg-white/20" data-testid="button-final-browse-plans">
+                View Plans
+              </Button>
+            </Link>
+          </div>
+          <p className="text-sm text-white/35" data-testid="text-final-microcopy">
+            Instant delivery &nbsp;·&nbsp; No roaming fees &nbsp;·&nbsp; No contracts
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground" data-testid="text-final-microcopy">
-          Instant delivery &nbsp;·&nbsp; No roaming fees &nbsp;·&nbsp; No contracts
-        </p>
       </div>
     </section>
   );

@@ -196,20 +196,20 @@ export default function FindPlan() {
   return (
     <main className="min-h-screen bg-background">
       {/* ── Hero / input section ─────────────────────────────────────────── */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-violet-950/20 via-background to-background pt-10 pb-12 sm:pt-16 sm:pb-16">
+      <section className="relative overflow-hidden bg-gradient-to-b from-blue-950/20 via-background to-background pt-10 pb-12 sm:pt-16 sm:pb-16">
         <div className="absolute inset-0 pointer-events-none" aria-hidden>
-          <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full bg-violet-600/10 blur-[120px]" />
+          <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full bg-blue-600/10 blur-[120px]" />
         </div>
 
         <div className="relative max-w-3xl mx-auto px-4 sm:px-6 text-center">
-          <div className="inline-flex items-center gap-2 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-xs font-semibold px-4 py-1.5 mb-5">
+          <div className="inline-flex items-center gap-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-semibold px-4 py-1.5 mb-5">
             <Sparkles className="w-3.5 h-3.5" />
             Smart Plan Recommender
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-bold tracking-tight mb-3">
             Find Your{" "}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-500 to-fuchsia-500">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-cyan-400">
               Perfect eSIM
             </span>
           </h1>
@@ -253,8 +253,8 @@ export default function FindPlan() {
                     className={cn(
                       "min-w-[44px] h-10 rounded-xl text-sm font-semibold border transition-all duration-150",
                       tripDays === d
-                        ? "bg-violet-600 border-violet-600 text-white shadow-md scale-[1.05]"
-                        : "bg-background border-border text-muted-foreground hover:border-violet-400 hover:text-violet-600 dark:hover:text-violet-400",
+                        ? "bg-primary border-primary text-white shadow-md scale-[1.05]"
+                        : "bg-background border-border text-muted-foreground hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400",
                     )}
                   >
                     {d}d
@@ -271,7 +271,7 @@ export default function FindPlan() {
 
             <Button
               data-testid="button-find-plan"
-              className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold h-11 text-base shadow-md shadow-violet-500/20 transition-all"
+              className="w-full bg-primary hover:bg-primary/90 text-white font-semibold h-11 text-base shadow-md shadow-primary/25 transition-all"
               onClick={handleSearch}
               disabled={!countryCode}
             >
@@ -290,7 +290,7 @@ export default function FindPlan() {
             <div className="text-center mb-10">
               <h2 className="text-xl sm:text-2xl font-bold mb-1">
                 Plans for{" "}
-                <span className="text-violet-600 dark:text-violet-400">
+                <span className="text-blue-600 dark:text-blue-400">
                   {data.country}
                 </span>
                 {" "}· {data.tripDays}-day trip
@@ -335,7 +335,7 @@ export default function FindPlan() {
               className="mt-10 bg-muted/40 border border-border rounded-2xl p-6 max-w-2xl mx-auto"
             >
               <h3 className="text-sm font-semibold mb-5 flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
-                <TrendingDown className="w-4 h-4 text-violet-500" />
+                <TrendingDown className="w-4 h-4 text-blue-500" />
                 Price Comparison
               </h3>
               <div className="grid grid-cols-3 gap-4 text-center">
@@ -352,8 +352,8 @@ export default function FindPlan() {
                       label: "Best Value",
                       price: breakdown.recommended_price_usd,
                       ppd: breakdown.recommended_per_day_usd,
-                      color: "text-violet-600 dark:text-violet-400",
-                      ring: "ring-2 ring-violet-300 dark:ring-violet-700",
+                      color: "text-blue-600 dark:text-blue-400",
+                      ring: "ring-2 ring-blue-300 dark:ring-blue-700",
                     },
                     {
                       label: "Premium",
@@ -398,7 +398,7 @@ export default function FindPlan() {
               <Button
                 data-testid="button-view-all-plans"
                 variant="outline"
-                className="border-violet-300 dark:border-violet-700 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 font-semibold"
+                className="border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 font-semibold"
                 onClick={() => navigate(`/destinations/${countryCode.toLowerCase()}`)}
               >
                 View All Plans
