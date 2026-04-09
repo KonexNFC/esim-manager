@@ -443,47 +443,6 @@ function EventsCarousel() {
 
 // ─────────────────────────────────────────────
 // QUICK COUNTRIES GRID
-// ─────────────────────────────────────────────
-function QuickCountriesGrid() {
-  const [, navigate] = useLocation();
-  return (
-    <section className="py-12 sm:py-16 border-t bg-muted/20" data-testid="section-quick-countries">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Browse by destination</p>
-            <h3 className="font-display text-2xl sm:text-3xl font-bold">Popular countries</h3>
-          </div>
-          <Link href="/destinations">
-            <Button variant="ghost" size="sm" className="text-primary font-semibold gap-1" data-testid="button-quick-countries-all">
-              View all <ChevronRight className="w-4 h-4" />
-            </Button>
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
-          {QUICK_COUNTRIES.map(c => (
-            <button
-              key={c.code}
-              onClick={() => navigate(`/destinations/${c.code}`)}
-              className="group flex items-center gap-3 px-3 py-3 rounded-xl border bg-background hover:border-primary/40 hover:bg-primary/5 transition-all duration-150 text-left"
-              data-testid={`card-quick-country-${c.code}`}
-            >
-              {/* Circular flag */}
-              <div className="w-9 h-9 rounded-full flex-shrink-0 overflow-hidden border bg-muted/20">
-                <FlagImg code={c.code} name={c.name} className="w-full h-full" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-sm leading-tight truncate">{c.name}</p>
-                <p className="text-muted-foreground text-[11px] mt-0.5">from {c.from}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 // ─────────────────────────────────────────────
 // 1. HERO
@@ -1653,132 +1612,6 @@ function TestimonialsSection() {
   );
 }
 
-// ─────────────────────────────────────────────
-// 11. COVERAGE
-// ─────────────────────────────────────────────
-const coverageRegions = [
-  {
-    id: "europe",
-    label: "Europe",
-    countries: [
-      { name: "United Kingdom", code: "GB" }, { name: "France",      code: "FR" },
-      { name: "Germany",        code: "DE" }, { name: "Spain",       code: "ES" },
-      { name: "Italy",          code: "IT" }, { name: "Portugal",    code: "PT" },
-      { name: "Netherlands",    code: "NL" }, { name: "Greece",      code: "GR" },
-      { name: "Poland",         code: "PL" }, { name: "Sweden",      code: "SE" },
-      { name: "Switzerland",    code: "CH" }, { name: "Austria",     code: "AT" },
-    ],
-  },
-  {
-    id: "north-america",
-    label: "North America",
-    countries: [
-      { name: "United States", code: "US" }, { name: "Canada", code: "CA" }, { name: "Mexico", code: "MX" },
-    ],
-  },
-  {
-    id: "africa",
-    label: "Africa",
-    countries: [
-      { name: "Nigeria",      code: "NG" }, { name: "South Africa", code: "ZA" },
-      { name: "Kenya",        code: "KE" }, { name: "Ghana",        code: "GH" },
-      { name: "Egypt",        code: "EG" }, { name: "Ethiopia",     code: "ET" },
-      { name: "Tanzania",     code: "TZ" }, { name: "Uganda",       code: "UG" },
-    ],
-  },
-  {
-    id: "middle-east",
-    label: "Middle East",
-    countries: [
-      { name: "UAE",          code: "AE" }, { name: "Saudi Arabia", code: "SA" },
-      { name: "Qatar",        code: "QA" }, { name: "Kuwait",       code: "KW" },
-      { name: "Bahrain",      code: "BH" }, { name: "Oman",         code: "OM" },
-      { name: "Jordan",       code: "JO" }, { name: "Lebanon",      code: "LB" },
-    ],
-  },
-  {
-    id: "asia",
-    label: "Asia",
-    countries: [
-      { name: "Japan",       code: "JP" }, { name: "Singapore",   code: "SG" },
-      { name: "Thailand",    code: "TH" }, { name: "South Korea", code: "KR" },
-      { name: "Malaysia",    code: "MY" }, { name: "Indonesia",   code: "ID" },
-      { name: "India",       code: "IN" }, { name: "Philippines", code: "PH" },
-      { name: "Vietnam",     code: "VN" }, { name: "Hong Kong",   code: "HK" },
-    ],
-  },
-  {
-    id: "global",
-    label: "Global",
-    countries: [
-      { name: "190+ destinations covered worldwide with a single eSIM purchase", code: "" },
-    ],
-  },
-];
-
-function CoverageSection() {
-  return (
-    <section id="coverage" className="py-24 sm:py-32 border-t bg-card">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="mb-14 max-w-xl">
-          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Coverage</p>
-          <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-coverage-title">
-            190+ countries covered.
-          </h2>
-          <p className="mt-4 text-muted-foreground max-w-sm leading-relaxed">
-            From a weekend break in Europe to a month across Southeast Asia — Konex works the moment you land, everywhere on the list.
-          </p>
-        </div>
-
-        <Tabs defaultValue="europe">
-          <TabsList className="flex flex-wrap h-auto gap-1.5 mb-8 justify-start bg-transparent p-0">
-            {coverageRegions.map((r) => (
-              <TabsTrigger
-                key={r.id}
-                value={r.id}
-                className="rounded-full border px-4 py-1.5 text-sm font-bold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:border-primary"
-                data-testid={`tab-region-${r.id}`}
-              >
-                {r.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          {coverageRegions.map((r) => (
-            <TabsContent key={r.id} value={r.id}>
-              <div className="rounded-2xl border bg-background p-6">
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 mb-7">
-                  {r.countries.map((country) => (
-                    <div
-                      key={country.name}
-                      className="flex items-center gap-2.5 py-2.5 px-3 rounded-xl border bg-card"
-                      data-testid={`coverage-country-${country.name.toLowerCase().replace(/\s/g, '-')}`}
-                    >
-                      {country.code ? (
-                        <div className="w-6 h-4 rounded-sm overflow-hidden flex-shrink-0 shadow-sm">
-                          <FlagImg code={country.code} name={country.name} className="w-full h-full" />
-                        </div>
-                      ) : (
-                        <Globe className="w-4 h-4 text-primary flex-shrink-0" />
-                      )}
-                      <span className="text-sm leading-tight font-medium">{country.name}</span>
-                    </div>
-                  ))}
-                </div>
-                <Link href="/destinations">
-                  <Button variant="outline" className="font-bold" data-testid={`button-region-plans-${r.id}`}>
-                    Browse {r.label} Plans
-                    <ArrowRight className="ml-2 w-4 h-4" />
-                  </Button>
-                </Link>
-              </div>
-            </TabsContent>
-          ))}
-        </Tabs>
-      </div>
-    </section>
-  );
-}
 
 // ─────────────────────────────────────────────
 // 12. FAQ
@@ -2040,9 +1873,7 @@ export default function Home() {
       <EventsCarousel />
       <StatsStrip />
       <HeroSection />
-      <Reveal><QuickCountriesGrid /></Reveal>
       <Reveal><PopularDestinations /></Reveal>
-      <Reveal><CoverageSection /></Reveal>
       <Reveal><TestimonialsSection /></Reveal>
       <Reveal><WhyKonex /></Reveal>
       <Reveal><BuiltForTravellers /></Reveal>

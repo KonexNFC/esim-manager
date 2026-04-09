@@ -68,7 +68,6 @@ export function Navbar() {
           <nav className="flex items-center gap-0.5">
             {[
               { label: "Plans",        id: "plans"        },
-              { label: "Coverage",     id: "coverage"     },
               { label: "How It Works", id: "how-it-works" },
               { label: "FAQ",          id: "faq"          },
             ].map(item => (
