@@ -632,56 +632,6 @@ function HeroSection() {
           </div>
         </div>
 
-        {/* Flag strip */}
-        <div className="border-t border-white/8 py-5">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-            <span className="text-white/25 text-[10px] uppercase tracking-widest font-bold flex-shrink-0 hidden sm:block">Popular</span>
-            {flagStrip.map((item) => (
-              <Link key={item.code} href={`/destinations/${item.code}`} data-testid={`flag-strip-${item.code.toLowerCase()}`}>
-                <div className="flex items-center gap-1.5 hover:opacity-75 transition-opacity cursor-pointer">
-                  <div className="w-5 h-3.5 rounded-[2px] overflow-hidden flex-shrink-0 shadow-sm">
-                    <FlagImg code={item.code} name={item.label} className="w-full h-full" />
-                  </div>
-                  <span className="text-white/40 text-xs font-medium">{item.label}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom bar */}
-      <div className="relative border-t border-white/6 bg-black/35 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5">
-          <div className="flex flex-col sm:flex-row items-center gap-4 justify-between">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-              <div className="flex items-center gap-1.5 text-white/45" data-testid="trust-bar-rating">
-                <Star className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">4.9/5 · 5,000+ travellers</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-white/45" data-testid="trust-bar-delivery">
-                <Zap className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">Instant QR delivery</span>
-              </div>
-              <div className="flex items-center gap-2.5" data-testid="trust-bar-networks">
-                <SiVodafone className="h-3.5 w-auto" style={{ color: "#E60000" }} title="Vodafone" />
-                <SiTmobile  className="h-3.5 w-auto" style={{ color: "#E20074" }} title="T-Mobile" />
-                <SiOrange   className="h-3.5 w-auto" style={{ color: "#FF7900" }} title="Orange" />
-              </div>
-              <div className="flex items-center gap-1.5 text-white/45" data-testid="trust-bar-support">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">24/7 support</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 flex-shrink-0" data-testid="payment-icons">
-              <SiVisa       className="h-4 w-auto" style={{ color: "#1A73E8" }} data-testid="payment-icon-visa" />
-              <SiMastercard className="h-4 w-auto" style={{ color: "#EB001B" }} data-testid="payment-icon-mc" />
-              <SiApplepay   className="h-5 w-auto" style={{ color: "#FFFFFF" }} data-testid="payment-icon-apple-pay" />
-              <SiGooglepay  className="h-5 w-auto" style={{ color: "#4285F4" }} data-testid="payment-icon-google-pay" />
-              <SiStripe     className="h-4 w-auto" style={{ color: "#635BFF" }} data-testid="payment-icon-stripe" />
-            </div>
-          </div>
-        </div>
       </div>
     </section>
   );
@@ -1745,7 +1695,6 @@ function Footer() {
             <ul className="space-y-3">
               {[
                 { label: "Plans",        action: () => scrollTo("plans"),        testid: "footer-link-plans" },
-                { label: "Coverage",     action: () => scrollTo("coverage"),     testid: "footer-link-coverage" },
                 { label: "How It Works", action: () => scrollTo("how-it-works"), testid: "footer-link-how" },
               ].map((item) => (
                 <li key={item.label}>
@@ -1810,6 +1759,55 @@ function Footer() {
                 </Link>
               </li>
             </ul>
+          </div>
+        </div>
+
+        {/* Flag strip */}
+        <div className="border-t pt-8 pb-6">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+            <span className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground flex-shrink-0 hidden sm:block">Popular</span>
+            {flagStrip.map((item) => (
+              <Link key={item.code} href={`/destinations/${item.code}`} data-testid={`flag-strip-${item.code.toLowerCase()}`}>
+                <div className="flex items-center gap-1.5 hover:opacity-75 transition-opacity cursor-pointer">
+                  <div className="w-5 h-3.5 rounded-[2px] overflow-hidden flex-shrink-0 shadow-sm">
+                    <FlagImg code={item.code} name={item.label} className="w-full h-full" />
+                  </div>
+                  <span className="text-xs font-medium text-muted-foreground">{item.label}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* Trust & payment bar */}
+        <div className="border-t pt-6 pb-6">
+          <div className="flex flex-col sm:flex-row items-center gap-4 justify-between">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <div className="flex items-center gap-1.5 text-muted-foreground" data-testid="trust-bar-rating">
+                <Star className="w-3.5 h-3.5" />
+                <span className="text-xs font-medium">4.9/5 · 5,000+ travellers</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground" data-testid="trust-bar-delivery">
+                <Zap className="w-3.5 h-3.5" />
+                <span className="text-xs font-medium">Instant QR delivery</span>
+              </div>
+              <div className="flex items-center gap-2.5" data-testid="trust-bar-networks">
+                <SiVodafone className="h-3.5 w-auto" style={{ color: "#E60000" }} title="Vodafone" />
+                <SiTmobile  className="h-3.5 w-auto" style={{ color: "#E20074" }} title="T-Mobile" />
+                <SiOrange   className="h-3.5 w-auto" style={{ color: "#FF7900" }} title="Orange" />
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground" data-testid="trust-bar-support">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span className="text-xs font-medium">24/7 support</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0" data-testid="payment-icons">
+              <SiVisa       className="h-4 w-auto text-muted-foreground" data-testid="payment-icon-visa" />
+              <SiMastercard className="h-4 w-auto" style={{ color: "#EB001B" }} data-testid="payment-icon-mc" />
+              <SiApplepay   className="h-5 w-auto text-foreground" data-testid="payment-icon-apple-pay" />
+              <SiGooglepay  className="h-5 w-auto" style={{ color: "#4285F4" }} data-testid="payment-icon-google-pay" />
+              <SiStripe     className="h-4 w-auto" style={{ color: "#635BFF" }} data-testid="payment-icon-stripe" />
+            </div>
           </div>
         </div>
 
