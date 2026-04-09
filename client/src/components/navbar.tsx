@@ -99,6 +99,17 @@ export function Navbar() {
               )
             )}
 
+            <Link href="/destinations">
+              <Button size="sm" className="ml-1 font-semibold hidden sm:inline-flex" data-testid="nav-get-started">
+                Get Started
+              </Button>
+            </Link>
+            <Link href="/orders">
+              <Button size="sm" variant="outline" className="font-semibold hidden sm:inline-flex" data-testid="nav-my-esims">
+                My eSIMs
+              </Button>
+            </Link>
+
             <CurrencySelector />
             <ThemeToggle />
           </nav>
@@ -152,6 +163,16 @@ export function Navbar() {
                 </Link>
               )
             )}
+            <Link href="/destinations">
+              <Button size="sm" className="font-semibold hidden sm:inline-flex" data-testid="nav-get-started-other">
+                Get Started
+              </Button>
+            </Link>
+            <Link href="/orders">
+              <Button size="sm" variant="outline" className="font-semibold hidden sm:inline-flex" data-testid="nav-my-esims-other">
+                My eSIMs
+              </Button>
+            </Link>
             <CurrencySelector />
             <ThemeToggle />
           </nav>

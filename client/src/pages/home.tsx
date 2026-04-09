@@ -1811,18 +1811,10 @@ function Footer() {
           </div>
         </div>
 
-        <div className="border-t pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-muted-foreground" data-testid="text-footer-copyright">
+        <div className="border-t pt-8">
+          <p className="text-xs text-muted-foreground text-center sm:text-left" data-testid="text-footer-copyright">
             &copy; 2026 Konex. All rights reserved.
           </p>
-          <div className="flex items-center gap-2">
-            <Link href="/destinations">
-              <Button size="sm" className="font-bold" data-testid="button-footer-get-started">Get Started</Button>
-            </Link>
-            <Link href="/orders">
-              <Button size="sm" variant="outline" className="font-bold" data-testid="button-footer-my-esims">My eSIMs</Button>
-            </Link>
-          </div>
         </div>
       </div>
     </footer>
