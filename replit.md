@@ -10,7 +10,13 @@ I prefer detailed explanations. I want iterative development where I am asked be
 Konex is built with a modern web stack. The **frontend** uses React with TypeScript, Vite, Tailwind CSS, and shadcn/ui. The **backend** is an Express.js application in TypeScript. **PostgreSQL** with Drizzle ORM manages data persistence.
 
 **UI/UX Design:**
--   Premium landing page with feature showcases.
+-   Premium landing page with animated scroll-reveal sections (custom `Reveal` wrapper + `use-in-view.tsx` hook).
+-   `StatsStrip` component (190+ countries, 5000+ travellers, 4.9/5 rating, <60s delivery) displayed prominently above the hero.
+-   Events carousel appears first after the navbar with full 16:9 rectangular frames and colored glow borders.
+-   `HowItWorks` redesigned with individual step cards, gradient connector line, and filled number badges.
+-   Testimonial cards upgraded with per-card star ratings, gradient avatars, and card-gradient-hover effects.
+-   Trust badge cards and WhyKonex benefit cards all use `card-gradient-hover` for a polished interactive feel.
+-   `CountryGrid` deduplicates entries by `type+countryCode` to prevent React key collisions from duplicate API entries (CW, CY, ES).
 -   Context-aware navigation bar.
 -   Destination detail pages with automated plan recommendation engine: destination profile classification (business/holiday/default), trip buckets (Quick/Standard/Extended/Unlimited), one primary plan per bucket with alternatives hidden behind "Compare alternatives" toggle, data usage estimator, and full plan inventory behind "View all N plans" toggle.
 -   Checkout process includes trust badges and upsell steps.

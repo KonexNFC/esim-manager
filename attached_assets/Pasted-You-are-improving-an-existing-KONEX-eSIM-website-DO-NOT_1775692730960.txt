@@ -1,0 +1,215 @@
+You are improving an existing KONEX eSIM website. DO NOT remove, break, or replace any existing features, components, or logic.
+
+CRITICAL RULES (NON-NEGOTIABLE)
+- Preserve ALL existing features and functionality
+- Preserve ALL existing routes, backend connections, and logic
+- Preserve existing components such as:
+  - upcoming events
+  - dashboards
+  - profile systems
+  - checkout flows
+  - any current working UI modules
+- DO NOT delete or overwrite working code
+- Only enhance, redesign, and layer improvements on top
+- If something already exists, improve its UI/UX instead of replacing it
+
+GOAL
+Upgrade the UI and UX of the KONEX eSIM platform to match and exceed the clarity and usability of Airalo, while introducing a more premium, modern, and conversion-focused experience.
+
+This is a UI/UX enhancement and system upgrade — NOT a rebuild.
+
+---
+
+DESIGN STRATEGY
+
+We are combining:
+- Airalo’s simplicity and clarity
+- Premium modern UI (dark/light hybrid with vibrant accents)
+- Travel + lifestyle visual direction
+- Smart conversion-focused UX
+
+The result should feel:
+- clean
+- colourful but controlled
+- modern
+- mobile-first
+- premium
+- fast and intuitive
+
+---
+
+STEP 1: AUDIT EXISTING UI
+
+Before making changes:
+- Identify all current sections and components
+- Keep their structure and logic intact
+- Only improve:
+  - layout
+  - spacing
+  - styling
+  - hierarchy
+  - interaction
+
+---
+
+STEP 2: HOMEPAGE UI UPGRADE (NON-DESTRUCTIVE)
+
+Enhance the homepage while preserving all current sections.
+
+If existing sections include:
+- upcoming events → keep it and restyle it
+- featured content → keep it and upgrade visuals
+- any custom modules → improve, do not remove
+
+Add or enhance the following sections WITHOUT breaking existing ones:
+
+1. HERO SECTION (ENHANCE OR INSERT IF MISSING)
+- Add strong headline about travel connectivity
+- Add destination search bar
+- Add subtle animation (gradient, motion, etc.)
+- Improve visual hierarchy
+
+2. DESTINATION SEARCH EXPERIENCE
+- If search already exists → redesign it (do not replace logic)
+- Add:
+  - better input UI
+  - quick destination chips
+  - improved responsiveness
+
+3. SMART PLAN RECOMMENDER (NEW LAYER)
+- Add a UI component that suggests plans based on:
+  - destination
+  - trip duration
+  - usage
+- This can be frontend-only for now (mock logic if needed)
+- DO NOT interfere with existing pricing logic
+
+4. PLAN CARD SYSTEM (UPGRADE EXISTING)
+- If plan cards already exist:
+  - restyle them into premium cards
+  - improve hierarchy (flag, data, duration, price)
+  - add badges (Most Popular, Best Value)
+  - add hover/interaction states
+
+5. EXISTING FEATURES (IMPORTANT)
+For ALL existing sections such as:
+- upcoming events
+- dashboards
+- custom features
+
+DO:
+- improve layout spacing
+- upgrade card design
+- improve typography
+- add subtle animations
+
+DO NOT:
+- remove them
+- rename them
+- change their functionality
+
+6. WHY KONEX / BENEFITS (ADD IF MISSING)
+- clean icon-based section
+- short, benefit-driven copy
+
+7. HOW IT WORKS (ADD OR ENHANCE)
+- 3–4 step visual process
+- keep simple and intuitive
+
+8. TRUST SECTION (ADD OR ENHANCE)
+- reviews
+- stats
+- credibility indicators
+
+9. DESTINATIONS GRID (ADD IF MISSING)
+- visually appealing country cards
+- encourage browsing
+
+10. FINAL CTA (ENHANCE)
+- strong conversion message
+- repeat search functionality
+
+---
+
+STEP 3: DESIGN SYSTEM UPGRADE
+
+Apply globally without breaking structure:
+
+- modern typography scale
+- consistent spacing system
+- rounded cards and buttons
+- premium shadows
+- gradient accents
+- improved contrast and readability
+
+---
+
+STEP 4: ANIMATION LAYER
+
+Add subtle, performant animations:
+
+- section fade-ins on scroll
+- hover effects on cards
+- button transitions
+- soft motion in hero
+
+DO NOT:
+- add heavy animations that slow performance
+- break existing interactions
+
+---
+
+STEP 5: MOBILE OPTIMIZATION
+
+- ensure all upgraded components are fully responsive
+- improve tap targets
+- ensure search and plan selection are easy on mobile
+
+---
+
+STEP 6: CODE APPROACH
+
+- use existing component structure
+- refactor only where necessary
+- create reusable UI wrappers if needed
+- do NOT rewrite backend or routing
+- do NOT introduce breaking changes
+
+---
+
+CONTENT STYLE
+
+- concise
+- benefit-driven
+- modern tone
+- travel-focused
+- no telecom jargon
+
+---
+
+EXPERIENCE TARGET
+
+The final result should feel like:
+Airalo’s clarity + KONEX premium identity + smarter UX + preserved product ecosystem
+
+---
+
+FINAL CHECK BEFORE COMPLETION
+
+- all existing features still work
+- upcoming events section still present and improved
+- no broken routes
+- no removed components
+- UI feels upgraded, not rebuilt
+- performance remains smooth
+
+---
+
+DELIVERABLE
+
+Return an enhanced, production-ready UI with:
+- upgraded homepage
+- preserved existing features
+- improved visual system
+- stronger conversion UX
+- scalable component structure

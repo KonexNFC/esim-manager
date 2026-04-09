@@ -34,6 +34,20 @@ import { useState, useEffect, useRef } from "react";
 import { SiVisa, SiMastercard, SiApplepay, SiStripe, SiGooglepay, SiVodafone, SiTmobile, SiOrange } from "react-icons/si";
 import type { Destination, Plan } from "@shared/schema";
 import { CountryCombobox } from "@/components/country-combobox";
+import { useInView } from "@/hooks/use-in-view";
+
+// ─── Reveal wrapper ──────────────────────────────────────────────────────────
+function Reveal({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+  const { ref, inView } = useInView(0.1);
+  return (
+    <div
+      ref={ref}
+      className={`reveal ${inView ? "in-view" : ""} ${delay ? `reveal-delay-${delay}` : ""} ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
 
 async function goToCheckout(
   navigate: (path: string) => void,
@@ -240,6 +254,39 @@ const QUICK_COUNTRIES = [
   { code: "KE", flag: "🇰🇪", name: "Kenya",           from: "$10" },
   { code: "GR", flag: "🇬🇷", name: "Greece",          from: "$9"  },
 ];
+
+// ─────────────────────────────────────────────
+// STATS STRIP
+// ─────────────────────────────────────────────
+const STATS = [
+  { value: "190+",   label: "Countries covered",   accent: "text-violet-500 dark:text-violet-400" },
+  { value: "5,000+", label: "Happy travellers",     accent: "text-emerald-500 dark:text-emerald-400" },
+  { value: "4.9/5",  label: "Customer rating",      accent: "text-amber-500 dark:text-amber-400" },
+  { value: "<60s",   label: "Average setup time",   accent: "text-sky-500 dark:text-sky-400" },
+];
+
+function StatsStrip() {
+  const { ref, inView } = useInView(0.2);
+  return (
+    <div className="border-b bg-muted/25 dark:bg-white/[0.02]" data-testid="section-stats-strip">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5" ref={ref}>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-4 divide-x-0 sm:divide-x divide-border/50">
+          {STATS.map((s, i) => (
+            <div
+              key={s.label}
+              className={`text-center sm:text-left sm:pl-6 first:pl-0 reveal ${inView ? "in-view" : ""} reveal-delay-${i + 1}`}
+            >
+              <div className={`font-display text-3xl sm:text-4xl font-bold tracking-tight leading-none mb-1 ${s.accent}`}>
+                {s.value}
+              </div>
+              <div className="text-xs text-muted-foreground font-medium">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────
 // FESTIVAL EVENTS CAROUSEL
@@ -807,7 +854,7 @@ function HowItWorks() {
   return (
     <section id="how-it-works" className="py-16 sm:py-24 border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="mb-14 max-w-xl">
+        <Reveal className="mb-14 max-w-xl">
           <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">How it works</p>
           <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.0]" data-testid="text-how-it-works-title">
             Online in<br /><span className="text-gradient">60 seconds.</span>
@@ -815,41 +862,46 @@ function HowItWorks() {
           <p className="mt-4 text-muted-foreground text-sm max-w-sm leading-relaxed">
             Four simple steps from purchase to full-speed data — no store visit, no SIM card, no waiting.
           </p>
-        </div>
+        </Reveal>
 
-        {/* Connector line on desktop */}
-        <div className="hidden sm:block absolute left-0 right-0 h-px bg-border" style={{ top: "40%" }} />
+        {/* Steps grid with connecting line */}
+        <div className="relative">
+          {/* Desktop connector line */}
+          <div className="hidden lg:block absolute top-[6.5rem] left-[12.5%] right-[12.5%] h-px bg-gradient-to-r from-transparent via-border to-transparent z-0" />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px bg-border rounded-2xl overflow-hidden border">
-          {steps.map((step, idx) => (
-            <div
-              key={idx}
-              className="bg-card p-6 sm:p-8 flex flex-col gap-5"
-              data-testid={`card-step-${idx + 1}`}
-            >
-              {/* Phone mockup illustration */}
-              <div className="flex justify-center">
-                <PhoneMockup accent={idx === 0 ? "default" : "primary"}>
-                  {step.phone}
-                </PhoneMockup>
-              </div>
-
-              {/* Step number + icon */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <step.icon className="w-3.5 h-3.5 text-primary" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {steps.map((step, idx) => (
+              <Reveal key={idx} delay={(idx + 1) as 1 | 2 | 3 | 4}>
+                <div
+                  className="bg-card border rounded-2xl p-6 sm:p-7 flex flex-col gap-5 card-gradient-hover relative z-10 h-full"
+                  data-testid={`card-step-${idx + 1}`}
+                >
+                  {/* Phone mockup illustration */}
+                  <div className="flex justify-center">
+                    <PhoneMockup accent={idx === 0 ? "default" : "primary"}>
+                      {step.phone}
+                    </PhoneMockup>
                   </div>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Step {step.num}</span>
-                </div>
-              </div>
 
-              <div>
-                <h3 className="font-display font-bold text-lg mb-1.5" data-testid={`text-step-title-${idx + 1}`}>{step.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{step.description}</p>
-              </div>
-            </div>
-          ))}
+                  {/* Step number badge */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-xs font-bold flex-shrink-0 shadow-md shadow-primary/25">
+                      {step.num}
+                    </div>
+                    <div className="w-px h-4 bg-border" />
+                    <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <step.icon className="w-3.5 h-3.5 text-primary" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-display font-bold text-lg mb-1.5" data-testid={`text-step-title-${idx + 1}`}>{step.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{step.description}</p>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -1091,7 +1143,7 @@ function PopularDestinations() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
           {popular.map((dest) => (
             <Link key={dest.id} href={`/destinations/${dest.id}`} data-testid={`card-popular-dest-${dest.id}`}>
-              <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[3/4] bg-muted shadow-lg">
+              <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[3/4] bg-muted shadow-lg shadow-black/10 hover:shadow-xl hover:shadow-black/20 transition-shadow duration-300">
                 <img
                   src={dest.imageUrl}
                   alt={dest.name}
@@ -1183,17 +1235,18 @@ function WhyKonex() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {benefits.map((b, i) => (
-            <div
-              key={b.title}
-              className="p-7 rounded-2xl border bg-background hover:border-primary/30 transition-colors"
-              data-testid={`card-benefit-${i}`}
-            >
-              <div className={`inline-flex items-center justify-center w-11 h-11 rounded-xl ${b.bg} mb-5`}>
-                <b.icon className={`w-5 h-5 ${b.accent}`} />
+            <Reveal key={b.title} delay={((i % 3) + 1) as 1 | 2 | 3 | 4}>
+              <div
+                className="p-7 rounded-2xl border bg-background card-gradient-hover h-full"
+                data-testid={`card-benefit-${i}`}
+              >
+                <div className={`inline-flex items-center justify-center w-11 h-11 rounded-xl ${b.bg} mb-5`}>
+                  <b.icon className={`w-5 h-5 ${b.accent}`} />
+                </div>
+                <h3 className="font-bold text-base mb-2 leading-snug">{b.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{b.description}</p>
               </div>
-              <h3 className="font-bold text-base mb-2 leading-snug">{b.title}</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">{b.description}</p>
-            </div>
+            </Reveal>
           ))}
         </div>
       </div>
@@ -1742,24 +1795,31 @@ function TestimonialsSection() {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-14">
           {testimonials.map((t, idx) => (
-            <div key={idx} className="flex flex-col p-7 rounded-2xl border bg-card" data-testid={`card-testimonial-${idx}`}>
-              <Quote className="w-7 h-7 text-primary/30 mb-5 flex-shrink-0" />
-              <p className="font-display font-bold text-lg leading-snug mb-3" data-testid={`text-testimonial-headline-${idx}`}>
-                "{t.quote}"
-              </p>
-              <p className="text-sm text-muted-foreground leading-relaxed flex-1 mb-6">
-                {t.full}
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary text-primary-foreground font-bold text-sm flex-shrink-0">
-                  {t.initials}
+            <Reveal key={idx} delay={(idx + 1) as 1 | 2 | 3}>
+              <div className="flex flex-col p-7 rounded-2xl border bg-card card-gradient-hover h-full" data-testid={`card-testimonial-${idx}`}>
+                <div className="flex items-center gap-0.5 mb-4">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star key={i} className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+                  ))}
                 </div>
-                <div>
-                  <p className="text-sm font-bold leading-tight" data-testid={`text-testimonial-name-${idx}`}>{t.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5" data-testid={`text-testimonial-context-${idx}`}>{t.context}</p>
+                <Quote className="w-6 h-6 text-primary/25 mb-4 flex-shrink-0" />
+                <p className="font-display font-bold text-lg leading-snug mb-3" data-testid={`text-testimonial-headline-${idx}`}>
+                  "{t.quote}"
+                </p>
+                <p className="text-sm text-muted-foreground leading-relaxed flex-1 mb-6">
+                  {t.full}
+                </p>
+                <div className="flex items-center gap-3 pt-4 border-t">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-primary to-violet-700 text-primary-foreground font-bold text-sm flex-shrink-0 shadow-md shadow-primary/20">
+                    {t.initials}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold leading-tight" data-testid={`text-testimonial-name-${idx}`}>{t.name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5" data-testid={`text-testimonial-context-${idx}`}>{t.context}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            </Reveal>
           ))}
         </div>
 
@@ -1772,7 +1832,7 @@ function TestimonialsSection() {
           ].map(({ icon: Icon, label, sub }) => (
             <div
               key={label}
-              className="flex flex-col items-center text-center p-5 rounded-2xl border bg-card gap-3"
+              className="flex flex-col items-center text-center p-5 rounded-2xl border bg-card gap-3 card-gradient-hover"
               data-testid={`trust-badge-${label.toLowerCase().replace(/\s/g, '-')}`}
             >
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -2175,23 +2235,24 @@ export default function Home() {
     <div className="min-h-screen pb-20 sm:pb-0">
       {/* Primary conversion funnel */}
       <EventsCarousel />
+      <StatsStrip />
       <HeroSection />
-      <PlanFinder />
-      <QuickCountriesGrid />
-      <PopularDestinations />
-      <CoverageSection />
-      <TestimonialsSection />
-      <WhyKonex />
-      <BuiltForTravellers />
-      <BundlesSection />
-      <CompatibilitySection />
-      <FinalCTA />
+      <Reveal><PlanFinder /></Reveal>
+      <Reveal><QuickCountriesGrid /></Reveal>
+      <Reveal><PopularDestinations /></Reveal>
+      <Reveal><CoverageSection /></Reveal>
+      <Reveal><TestimonialsSection /></Reveal>
+      <Reveal><WhyKonex /></Reveal>
+      <Reveal><BuiltForTravellers /></Reveal>
+      <Reveal><BundlesSection /></Reveal>
+      <Reveal><CompatibilitySection /></Reveal>
+      <Reveal><FinalCTA /></Reveal>
       {/* Secondary / future features */}
-      <DataRolloverSection />
-      <GiftEsimSection />
-      <VoiceCallingSection />
-      <HowItWorks />
-      <FAQSection />
+      <Reveal><DataRolloverSection /></Reveal>
+      <Reveal><GiftEsimSection /></Reveal>
+      <Reveal><VoiceCallingSection /></Reveal>
+      <Reveal><HowItWorks /></Reveal>
+      <Reveal><FAQSection /></Reveal>
       <Footer />
       <MobileStickyCTA />
     </div>

@@ -165,12 +165,22 @@ function RegionCard({ entry }: { entry: AvailableCountry }) {
 }
 
 function CountryGrid({ countries }: { countries: AvailableCountry[] }) {
+  const deduped = useMemo(() => {
+    const seen = new Set<string>();
+    return countries.filter(c => {
+      const key = `${c.type}-${c.countryCode}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [countries]);
+
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-      {countries.map(c => (
+      {deduped.map(c => (
         c.type === "region" || c.type === "global"
-          ? <RegionCard key={c.countryCode} entry={c} />
-          : <CountryCard key={c.countryCode} country={c} />
+          ? <RegionCard key={`${c.type}-${c.countryCode}`} entry={c} />
+          : <CountryCard key={`country-${c.countryCode}`} country={c} />
       ))}
     </div>
   );
