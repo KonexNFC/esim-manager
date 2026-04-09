@@ -643,20 +643,40 @@ function HeroSection() {
 
 function PhoneMockup({ children, accent = "primary" }: { children: React.ReactNode; accent?: string }) {
   return (
-    <div className="relative w-28 h-52 mx-auto flex-shrink-0">
-      {/* Phone outer shell */}
-      <div className={`absolute inset-0 rounded-[22px] border-2 shadow-xl ${accent === "primary" ? "border-primary/40 shadow-primary/10" : "border-border"} bg-card`} />
-      {/* Side button */}
-      <div className="absolute right-0 top-14 w-0.5 h-7 rounded-l-full bg-border translate-x-px" />
-      <div className="absolute left-0 top-10 w-0.5 h-5 rounded-r-full bg-border -translate-x-px" />
-      <div className="absolute left-0 top-18 w-0.5 h-5 rounded-r-full bg-border -translate-x-px" />
-      {/* Notch */}
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 w-9 h-1.5 rounded-full bg-border/50" />
+    <div className="relative w-32 h-60 mx-auto flex-shrink-0">
+      {/* Outer glow */}
+      {accent === "primary" && (
+        <div className="absolute inset-0 rounded-[28px] bg-primary/5 blur-xl scale-105 -z-10" />
+      )}
+      {/* Phone shell */}
+      <div className={`absolute inset-0 rounded-[28px] border-2 shadow-2xl ${accent === "primary" ? "border-primary/35 shadow-primary/15" : "border-white/10"} bg-[#0d0d12]`} />
+      {/* Side buttons */}
+      <div className="absolute right-[-1px] top-16 w-[3px] h-8 rounded-l-full bg-white/10" />
+      <div className="absolute left-[-1px] top-11 w-[3px] h-5 rounded-r-full bg-white/10" />
+      <div className="absolute left-[-1px] top-20 w-[3px] h-5 rounded-r-full bg-white/10" />
+      {/* Dynamic island */}
+      <div className="absolute top-[10px] left-1/2 -translate-x-1/2 w-11 h-[7px] rounded-full bg-black" />
       {/* Home indicator */}
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-border/40" />
+      <div className="absolute bottom-[7px] left-1/2 -translate-x-1/2 w-10 h-[3px] rounded-full bg-white/15" />
       {/* Screen */}
-      <div className="absolute inset-x-[6px] top-7 bottom-5 rounded-[16px] overflow-hidden bg-muted/40 flex items-center justify-center">
-        {children}
+      <div className="absolute inset-x-[4px] top-[5px] bottom-[4px] rounded-[24px] overflow-hidden bg-[#080810] flex flex-col">
+        {/* Status bar */}
+        <div className="flex items-center justify-between px-3 pt-3 pb-1 flex-shrink-0">
+          <span className="text-[6px] font-semibold text-white/50 tracking-wide">9:41</span>
+          <div className="flex items-center gap-1">
+            <div className="flex gap-[2px] items-end">
+              {[3,4,5,6].map((h,i) => (
+                <div key={i} className="w-[2px] rounded-sm bg-white/50" style={{ height: `${h}px` }} />
+              ))}
+            </div>
+            <div className="w-3 h-1.5 rounded-[2px] border border-white/40 ml-0.5 flex items-center px-[1px]">
+              <div className="h-[4px] w-2/3 bg-white/50 rounded-[1px]" />
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center pb-1">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -670,19 +690,34 @@ function HowItWorks() {
       title: "Check compatibility",
       description: "Make sure your device supports eSIM and is carrier-unlocked. Most modern phones do.",
       phone: (
-        <div className="flex flex-col items-center justify-center gap-2 p-2 w-full h-full">
-          <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
-            <Smartphone className="w-5 h-5 text-primary" />
+        <div className="flex flex-col items-center gap-3 w-full px-3">
+          {/* eSIM chip card */}
+          <div className="w-full rounded-xl bg-gradient-to-br from-primary/30 to-violet-600/20 border border-primary/25 p-2.5 flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0">
+              <Smartphone className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-[8px] font-bold text-white leading-tight">eSIM Profile</p>
+              <p className="text-[7px] text-white/50 mt-0.5">Carrier unlocked</p>
+            </div>
+            <div className="ml-auto w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
+              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+            </div>
           </div>
+          {/* Status text */}
           <div className="text-center">
-            <p className="text-[10px] font-bold text-foreground leading-tight">eSIM</p>
-            <p className="text-[8px] text-muted-foreground mt-0.5">Ready</p>
+            <p className="text-[9px] font-bold text-white">eSIM Ready</p>
+            <p className="text-[7px] text-white/40 mt-0.5">Compatible device detected</p>
           </div>
-          <div className="flex gap-1 mt-1">
-            <div className="w-1 h-2 rounded-sm bg-emerald-400" />
-            <div className="w-1 h-3 rounded-sm bg-emerald-400" />
-            <div className="w-1 h-4 rounded-sm bg-emerald-400" />
-            <div className="w-1 h-3 rounded-sm bg-muted" />
+          {/* Animated signal bars */}
+          <div className="flex gap-[3px] items-end">
+            {[5, 7, 9, 11, 13].map((h, i) => (
+              <div
+                key={i}
+                className="w-[5px] rounded-t-[2px] bg-emerald-400"
+                style={{ height: `${h}px`, opacity: i < 4 ? 1 : 0.3, animation: `pulse 2s ease-in-out ${i * 0.15}s infinite` }}
+              />
+            ))}
           </div>
         </div>
       ),
@@ -693,20 +728,29 @@ function HowItWorks() {
       title: "Choose your plan",
       description: "Pick your destination and data size. Available for 190+ countries with instant pricing.",
       phone: (
-        <div className="flex flex-col gap-1 p-2 w-full h-full pt-1">
-          <div className="flex flex-wrap gap-0.5 justify-center mb-1">
+        <div className="flex flex-col gap-2 w-full px-2.5">
+          {/* Flag row */}
+          <div className="flex flex-wrap gap-[3px] justify-center">
             {["🇬🇧","🇺🇸","🇦🇪","🇳🇬","🇫🇷","🇩🇪","🇯🇵","🇪🇸"].map(f => (
-              <span key={f} className="text-[10px]">{f}</span>
+              <span key={f} className="text-[11px]">{f}</span>
             ))}
           </div>
-          <p className="text-[7px] text-center text-muted-foreground font-bold uppercase tracking-wider">190+ countries</p>
+          <p className="text-[7px] text-center text-white/30 font-bold uppercase tracking-widest">190+ Countries</p>
+          {/* Plan cards */}
           {[
             { label: "5 GB · 7 days", price: "$9.99", highlight: true },
-            { label: "10 GB · 30 days", price: "$16.99" },
+            { label: "10 GB · 30 days", price: "$16.99", highlight: false },
           ].map(p => (
-            <div key={p.label} className={`flex items-center justify-between px-1.5 py-1 rounded-md text-[7px] ${p.highlight ? "bg-primary text-primary-foreground" : "bg-muted/50"}`}>
-              <span className="font-medium">{p.label}</span>
-              <span className="font-bold">{p.price}</span>
+            <div
+              key={p.label}
+              className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-[7px] transition-all ${
+                p.highlight
+                  ? "bg-primary text-white shadow-lg shadow-primary/30"
+                  : "bg-white/5 border border-white/10 text-white/60"
+              }`}
+            >
+              <span className="font-semibold">{p.label}</span>
+              <span className={`font-bold ${p.highlight ? "text-white" : "text-white/50"}`}>{p.price}</span>
             </div>
           ))}
         </div>
@@ -718,14 +762,16 @@ function HowItWorks() {
       title: "Get your QR instantly",
       description: "Your QR code lands in your inbox seconds after payment. No waiting, no shipping.",
       phone: (
-        <div className="flex flex-col items-center justify-center gap-2 p-2 w-full h-full">
-          <p className="text-[7px] font-bold text-primary uppercase tracking-wider">Your eSIM</p>
-          <div className="w-14 h-14 rounded-lg bg-white flex items-center justify-center">
-            <QrCode className="w-10 h-10 text-black" />
+        <div className="flex flex-col items-center gap-2.5 w-full px-3">
+          <p className="text-[7px] font-bold text-primary uppercase tracking-widest">Your eSIM</p>
+          {/* QR code */}
+          <div className="w-16 h-16 rounded-xl bg-white p-1.5 shadow-lg shadow-primary/20 flex items-center justify-center">
+            <QrCode className="w-12 h-12 text-black" />
           </div>
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30">
-            <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[7px] font-bold text-emerald-500">Delivered</span>
+          {/* Delivered pill */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/25">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[7px] font-bold text-emerald-400">Delivered to inbox</span>
           </div>
         </div>
       ),
@@ -736,17 +782,23 @@ function HowItWorks() {
       title: "Scan and connect",
       description: "Open Settings → Cellular → Add eSIM, scan the code, and you're online instantly on landing.",
       phone: (
-        <div className="flex flex-col items-center justify-center gap-2 p-2 w-full h-full">
-          <div className="w-10 h-10 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
-            <Wifi className="w-5 h-5 text-emerald-500" />
+        <div className="flex flex-col items-center gap-2.5 w-full px-3">
+          {/* Pulsing wifi icon */}
+          <div className="relative flex items-center justify-center">
+            <div className="absolute w-12 h-12 rounded-full bg-emerald-500/10 animate-ping" style={{ animationDuration: "2s" }} />
+            <div className="absolute w-9 h-9 rounded-full bg-emerald-500/15" />
+            <div className="relative w-7 h-7 rounded-full bg-emerald-500/25 border border-emerald-500/40 flex items-center justify-center">
+              <Wifi className="w-4 h-4 text-emerald-400" />
+            </div>
           </div>
           <div className="text-center">
-            <p className="text-[8px] font-bold text-foreground">Connected</p>
-            <p className="text-[7px] text-muted-foreground mt-0.5">Full speed</p>
+            <p className="text-[9px] font-bold text-white">Connected</p>
+            <p className="text-[7px] text-white/40 mt-0.5">Full speed · 5G</p>
           </div>
-          <div className="flex gap-0.5 items-end">
-            {[3, 5, 7, 9, 11].map((h, i) => (
-              <div key={i} className="w-1.5 rounded-t-sm bg-emerald-500" style={{ height: `${h}px` }} />
+          {/* Full signal bars */}
+          <div className="flex gap-[3px] items-end">
+            {[5, 7, 9, 11, 13].map((h, i) => (
+              <div key={i} className="w-[5px] rounded-t-[2px] bg-emerald-400" style={{ height: `${h}px` }} />
             ))}
           </div>
         </div>
