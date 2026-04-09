@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
-import { Search, Smartphone, LayoutDashboard, LogIn, ChevronDown } from "lucide-react";
+import { Search, Smartphone, LayoutDashboard, LogIn, ChevronDown, Rocket } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { KonexLogo } from "./konex-logo";
 import { useCurrency, CURRENCIES } from "@/lib/currency";
@@ -81,6 +81,16 @@ export function Navbar() {
               </button>
             ))}
 
+            <Link href="/roadmap">
+              <button
+                className="hidden lg:flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground rounded-lg hover:bg-white/5 hover:text-foreground transition-colors gap-1.5"
+                data-testid="nav-roadmap"
+              >
+                <Rocket className="w-3.5 h-3.5" />
+                Roadmap
+              </button>
+            </Link>
+
             {!isLoading && (
               user ? (
                 <Link href="/dashboard">
@@ -135,6 +145,17 @@ export function Navbar() {
               >
                 <Smartphone className="w-4 h-4 mr-1.5" />
                 Check Device
+              </Button>
+            </Link>
+            <Link href="/roadmap">
+              <Button
+                variant={location.startsWith("/roadmap") ? "secondary" : "ghost"}
+                size="sm"
+                data-testid="link-roadmap"
+                className="hidden sm:flex"
+              >
+                <Rocket className="w-4 h-4 mr-1.5" />
+                Roadmap
               </Button>
             </Link>
 
