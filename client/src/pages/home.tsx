@@ -11,13 +11,6 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Tabs,
   TabsContent,
   TabsList,
@@ -109,8 +102,6 @@ const mockPlans = [
   { dest: "Nigeria",        flag: "🇳🇬", data: "5 GB",  days: 30, price: "$16" },
 ];
 
-const planSizes     = ["1 GB", "3 GB", "5 GB", "10 GB", "Unlimited"];
-const planDurations = ["1 Day", "3 Days", "5 Days", "7 Days", "15 Days", "30 Days"];
 
 // ─── Festival events data ──────────────────────────────────────────────────────
 interface FestivalEvent {
@@ -450,38 +441,46 @@ function EventsCarousel() {
 function HeroSection() {
   useEffect(() => { document.title = "Konex eSIM – Instant Data Plans for 190+ Countries"; }, []);
   const [, navigate] = useLocation();
-  const [heroCode, setHeroCode]         = useState<string>("");
-  const [heroSize, setHeroSize]         = useState<string>("");
-  const [heroDuration, setHeroDuration] = useState<string>("");
+  const [heroCode, setHeroCode] = useState<string>("");
+  const [heroDays, setHeroDays] = useState<number | null>(null);
+
+  const DURATION_OPTIONS = [1, 3, 5, 7];
 
   const handleHeroFind = () => {
-    if (!heroCode || heroCode === "any") navigate("/destinations");
-    else navigate(`/destinations/${heroCode}`);
+    const params = new URLSearchParams();
+    if (heroDays) params.set("days", String(heroDays));
+    if (heroCode && heroCode !== "any") {
+      navigate(`/destinations/${heroCode}?${params.toString()}`);
+    } else {
+      navigate(params.toString() ? `/destinations?${params.toString()}` : "/destinations");
+    }
   };
 
   return (
-    <section className="relative overflow-hidden min-h-[92vh] flex flex-col">
+    <section className="relative overflow-hidden min-h-[92vh] flex flex-col" data-testid="hero-section">
       {/* Background */}
       <div className="absolute inset-0">
         <img
           src="/images/hero-bg.png"
           alt=""
           className="w-full h-full object-cover"
-          style={{ filter: "brightness(0.4) saturate(1.2)", transform: "scale(1.04)" }}
+          style={{ filter: "brightness(0.35) saturate(1.2)", transform: "scale(1.04)" }}
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-black/90 via-black/70 to-violet-950/80" />
-        {/* Subtle purple glow in upper-right */}
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full opacity-20"
-          style={{ background: "radial-gradient(circle, #7c3aed 0%, transparent 70%)" }} />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0A0A0A]/95 via-black/75 to-violet-950/80" />
+        {/* Glow blobs */}
+        <div className="absolute top-0 right-0 w-[700px] h-[700px] rounded-full opacity-15 pointer-events-none"
+          style={{ background: "radial-gradient(circle, #7c3aed 0%, transparent 65%)" }} />
+        <div className="absolute bottom-0 left-0 w-[500px] h-[400px] rounded-full opacity-10 pointer-events-none"
+          style={{ background: "radial-gradient(circle, #4f46e5 0%, transparent 70%)" }} />
       </div>
 
-      <div className="relative flex-1 max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-0 sm:pt-28 lg:pt-36 w-full">
+      <div className="relative flex-1 max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-0 sm:pt-28 lg:pt-32 w-full">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center pb-16 sm:pb-20">
 
-          {/* Left: Copy */}
+          {/* ── Left: Copy + Search form ─────────────────── */}
           <div>
             <h1
-              className="font-display text-3xl sm:text-4xl lg:text-[2.75rem] xl:text-[3.25rem] font-bold text-white leading-[1.1] tracking-tight mb-6"
+              className="font-display text-3xl sm:text-4xl lg:text-[2.75rem] xl:text-[3.25rem] font-bold text-white leading-[1.1] tracking-tight mb-5"
               data-testid="text-hero-title"
             >
               Land anywhere.
@@ -492,103 +491,109 @@ function HeroSection() {
             </h1>
 
             <p
-              className="text-white/60 text-lg sm:text-xl max-w-lg leading-relaxed mb-8"
+              className="text-white/55 text-lg sm:text-xl max-w-lg leading-relaxed mb-6"
               data-testid="text-hero-subtitle"
             >
               Your eSIM is ready the instant you check out. Scan the QR, skip the airport queues, and land with data already working.
             </p>
 
-            <div className="flex flex-wrap items-center gap-3 mb-8">
-              <Link href="/destinations">
-                <Button
-                  size="lg"
-                  className="h-12 px-7 text-base font-bold shadow-xl shadow-primary/30 bg-primary hover:bg-primary/90"
-                  data-testid="button-get-esim"
-                >
-                  Get eSIM Now
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </Link>
-              <Link href="/destinations">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="h-12 bg-white/8 backdrop-blur-sm text-white border-white/20 hover:bg-white/15 hover:text-white text-base font-semibold"
-                  data-testid="button-view-plans"
-                >
-                  View Plans
-                </Button>
-              </Link>
-            </div>
-
             {/* Trust bullets */}
-            <div className="flex flex-col gap-2 mb-4" data-testid="trust-bullets">
+            <div className="flex flex-col gap-2 mb-8" data-testid="trust-bullets">
               {[
                 "QR code delivered to your inbox in seconds",
                 "Your regular number stays fully active",
                 "One flat price — no daily fees, no bill shock",
               ].map((b) => (
-                <div key={b} className="flex items-center gap-2.5 text-white/60 text-sm">
+                <div key={b} className="flex items-center gap-2.5 text-white/55 text-sm">
                   <CheckCircle2 className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
                   {b}
                 </div>
               ))}
             </div>
 
-            {/* Quick plan finder */}
+            {/* ── Plan finder card ── */}
             <div
-              className="mt-8 rounded-2xl bg-white/6 backdrop-blur-md border border-white/12 p-4 sm:p-5"
+              className="rounded-2xl border border-white/12 bg-white/[0.06] backdrop-blur-xl p-5 sm:p-6 shadow-2xl shadow-black/40"
               data-testid="hero-plan-selector"
             >
-              <p className="text-[10px] font-bold uppercase tracking-widest text-white/35 mb-3">Quick plan finder</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-white/35 mb-4">Find your plan</p>
+
+              {/* Destination input */}
+              <div className="mb-4">
+                <label className="text-[11px] font-semibold text-white/40 uppercase tracking-wider block mb-1.5">
+                  Where are you travelling?
+                </label>
                 <CountryCombobox
                   value={heroCode}
                   onSelect={code => setHeroCode(code ?? "")}
-                  placeholder="Destination"
+                  placeholder="Search destination…"
                   allowAny
-                  className="bg-white/10 border-white/20 text-white h-10 text-sm hover:bg-white/15 hover:text-white"
+                  className="bg-white/10 border-white/15 text-white h-11 text-sm hover:bg-white/15 hover:text-white transition-all duration-200 focus-within:ring-2 focus-within:ring-primary/50 w-full"
                   data-testid="hero-select-destination"
                 />
-                <Select onValueChange={setHeroSize} data-testid="hero-select-data">
-                  <SelectTrigger className="bg-white/10 border-white/20 text-white h-10 text-sm [&>span]:text-white/60" data-testid="hero-trigger-data">
-                    <SelectValue placeholder="Data plan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {planSizes.map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select onValueChange={setHeroDuration} data-testid="hero-select-duration">
-                  <SelectTrigger className="bg-white/10 border-white/20 text-white h-10 text-sm [&>span]:text-white/60" data-testid="hero-trigger-duration">
-                    <SelectValue placeholder="Duration" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {planDurations.map((d) => (
-                      <SelectItem key={d} value={d}>{d}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
-              <Button
-                className="w-full font-bold h-10"
+
+              {/* Duration pill buttons */}
+              <div className="mb-5">
+                <label className="text-[11px] font-semibold text-white/40 uppercase tracking-wider block mb-2">
+                  How long?
+                </label>
+                <div className="flex gap-2 flex-wrap" data-testid="hero-duration-buttons">
+                  {DURATION_OPTIONS.map((d) => {
+                    const active = heroDays === d;
+                    return (
+                      <button
+                        key={d}
+                        onClick={() => setHeroDays(active ? null : d)}
+                        className={`
+                          px-4 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 cursor-pointer select-none
+                          ${active
+                            ? "bg-primary border-primary text-white shadow-lg shadow-primary/30 scale-[1.04]"
+                            : "bg-white/8 border-white/15 text-white/65 hover:bg-white/14 hover:border-white/30 hover:text-white hover:shadow-md hover:shadow-primary/10 hover:scale-[1.02]"
+                          }
+                        `}
+                        data-testid={`hero-duration-${d}`}
+                      >
+                        {d} {d === 1 ? "day" : "days"}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setHeroDays(heroDays && heroDays > 7 ? null : 30)}
+                    className={`
+                      px-4 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 cursor-pointer select-none
+                      ${heroDays === 30
+                        ? "bg-primary border-primary text-white shadow-lg shadow-primary/30 scale-[1.04]"
+                        : "bg-white/8 border-white/15 text-white/65 hover:bg-white/14 hover:border-white/30 hover:text-white hover:shadow-md hover:shadow-primary/10 hover:scale-[1.02]"
+                      }
+                    `}
+                    data-testid="hero-duration-30"
+                  >
+                    30 days
+                  </button>
+                </div>
+              </div>
+
+              {/* CTA */}
+              <button
                 onClick={handleHeroFind}
-                data-testid="button-hero-get-esim"
+                className="group w-full flex items-center justify-center gap-2.5 h-12 rounded-xl bg-primary font-bold text-white text-base shadow-xl shadow-primary/30 hover:bg-primary/90 hover:shadow-primary/50 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200"
+                data-testid="button-hero-find-plan"
               >
+                <Search className="w-4 h-4 transition-transform duration-200 group-hover:-translate-y-px" />
                 Find My Plan
-                <ArrowRight className="ml-2 w-4 h-4" />
-              </Button>
+                <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+              </button>
             </div>
           </div>
 
-          {/* Right: Floating plan preview */}
+          {/* ── Right: Floating plan preview ─────────────── */}
           <div className="hidden lg:block" data-testid="card-hero-preview">
             <div className="relative">
-              {/* Glow behind card */}
-              <div className="absolute inset-0 rounded-3xl opacity-30" style={{ background: "radial-gradient(ellipse, #7c3aed 0%, transparent 70%)", filter: "blur(40px)" }} />
-              <div className="relative rounded-3xl border border-white/10 bg-black/50 backdrop-blur-2xl overflow-hidden shadow-2xl">
-                <div className="px-6 pt-6 pb-4 border-b border-white/8 flex items-center justify-between">
+              <div className="absolute inset-0 rounded-3xl opacity-25 pointer-events-none"
+                style={{ background: "radial-gradient(ellipse, #7c3aed 0%, transparent 70%)", filter: "blur(48px)" }} />
+              <div className="relative rounded-3xl border border-white/10 bg-black/55 backdrop-blur-2xl overflow-hidden shadow-2xl">
+                <div className="px-6 pt-6 pb-4 border-b border-white/[0.07] flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-white/35 mb-0.5">Popular Plans</p>
                     <p className="text-sm text-white/50">Starting from <strong className="text-white/90">$9</strong></p>
@@ -602,7 +607,7 @@ function HeroSection() {
                   {mockPlans.map((p) => (
                     <div
                       key={p.dest}
-                      className="flex items-center justify-between py-3 px-4 rounded-xl bg-white/5 border border-white/8 hover:bg-white/8 transition-colors"
+                      className="flex items-center justify-between py-3 px-4 rounded-xl bg-white/[0.04] border border-white/[0.07] hover:bg-white/[0.08] hover:border-white/15 transition-all duration-200 cursor-pointer group"
                       data-testid={`mock-plan-${p.dest.toLowerCase().replace(/\s/g, '-')}`}
                     >
                       <div className="flex items-center gap-3">
@@ -614,24 +619,27 @@ function HeroSection() {
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-bold text-white">{p.price}</p>
-                        <p className="text-[10px] text-white/40">one-off</p>
+                        <p className="text-[10px] text-white/40 group-hover:text-primary/70 transition-colors duration-200">one-off</p>
                       </div>
                     </div>
                   ))}
                 </div>
                 <div className="px-4 pb-5">
                   <Link href="/destinations">
-                    <Button className="w-full font-bold" data-testid="button-hero-card-browse">
+                    <button
+                      className="w-full flex items-center justify-center gap-2 h-11 rounded-xl bg-primary font-bold text-white text-sm shadow-lg shadow-primary/25 hover:bg-primary/90 hover:shadow-primary/40 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200"
+                      data-testid="button-hero-card-browse"
+                    >
                       Browse All Plans
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
                   </Link>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
+        </div>
       </div>
     </section>
   );
