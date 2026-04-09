@@ -533,9 +533,9 @@ function HeroSection() {
             >
               Land anywhere.
               <br />
-              <span className="text-gradient-bright">Stay online.</span>
+              <span className="text-gradient-bright">Stay connected</span>
               <br />
-              From $7.99.
+              in 60 Seconds.
             </h1>
 
             <p
