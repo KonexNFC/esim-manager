@@ -1501,27 +1501,17 @@ function Footer() {
 
         {/* Trust & payment bar */}
         <div className="border-t pt-6 pb-6">
-          <div className="flex flex-col sm:flex-row items-center gap-4 justify-between">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-              <div className="flex items-center gap-1.5 text-muted-foreground" data-testid="trust-bar-rating">
-                <Star className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">4.9/5 · 5,000+ travellers</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-muted-foreground" data-testid="trust-bar-delivery">
-                <Zap className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">Instant QR delivery</span>
-              </div>
-              <div className="flex items-center gap-2.5" data-testid="trust-bar-networks">
-                <SiVodafone className="h-3.5 w-auto" style={{ color: "#E60000" }} title="Vodafone" />
-                <SiTmobile  className="h-3.5 w-auto" style={{ color: "#E20074" }} title="T-Mobile" />
-                <SiOrange   className="h-3.5 w-auto" style={{ color: "#FF7900" }} title="Orange" />
-              </div>
-              <div className="flex items-center gap-1.5 text-muted-foreground" data-testid="trust-bar-support">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">24/7 support</span>
-              </div>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 justify-between">
+            <div className="flex items-center gap-2.5" data-testid="trust-bar-networks">
+              <SiVodafone className="h-3.5 w-auto" style={{ color: "#E60000" }} title="Vodafone" />
+              <SiTmobile  className="h-3.5 w-auto" style={{ color: "#E20074" }} title="T-Mobile" />
+              <SiOrange   className="h-3.5 w-auto" style={{ color: "#FF7900" }} title="Orange" />
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0" data-testid="payment-icons">
+            <div className="flex items-center gap-1.5 text-muted-foreground" data-testid="trust-bar-support">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span className="text-xs font-medium">24/7 support</span>
+            </div>
+            <div className="flex items-center gap-3" data-testid="payment-icons">
               <SiVisa       className="h-4 w-auto text-muted-foreground" data-testid="payment-icon-visa" />
               <SiMastercard className="h-4 w-auto" style={{ color: "#EB001B" }} data-testid="payment-icon-mc" />
               <SiApplepay   className="h-5 w-auto text-foreground" data-testid="payment-icon-apple-pay" />
