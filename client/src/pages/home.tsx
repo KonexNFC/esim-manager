@@ -17,7 +17,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import {
-  ArrowRight, Globe, Zap, Smartphone,
+  ArrowRight, Globe, Zap, Smartphone, Search,
   Wifi, Star, Lock, CheckCircle2,
   Signal, Quote, Radio,
   QrCode, MapPin, Banknote, ShieldCheck,
