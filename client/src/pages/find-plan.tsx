@@ -1,15 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CountryCombobox } from "@/components/country-combobox";
+import { PlanCard, PlanCardGrid, type PlanBadgeVariant } from "@/components/plan-card";
 import { cn } from "@/lib/utils";
-import {
-  Wifi, Clock, Zap, Star, ChevronRight, Sparkles,
-  TrendingDown, Award, Globe, Flame,
-} from "lucide-react";
+import { ChevronRight, Sparkles, TrendingDown } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,184 +56,45 @@ function bucketLabel(bucket: string): string {
 }
 
 function dataLabel(offer: RecommendedOffer): string {
-  if (offer.isUnlimited) return "Unlimited";
-  if (offer.dataGb === null) return "Unlimited";
-  return `${offer.dataGb % 1 === 0 ? offer.dataGb : offer.dataGb.toFixed(1)} GB`;
+  if (offer.isUnlimited || offer.dataGb === null) return "Unlimited";
+  const gb = offer.dataGb;
+  return `${gb % 1 === 0 ? gb : gb.toFixed(1)} GB`;
 }
 
-function offerTypeLabel(type: string): string {
-  const map: Record<string, string> = {
-    UNLIMITED: "Unlimited",
-    ESSENTIAL: "Essential",
-    PLUS: "Plus",
-    MAX: "Max",
+function planTitle(offer: RecommendedOffer): string {
+  if (offer.isUnlimited) return "Unlimited Data Plan";
+  const offerLabels: Record<string, string> = {
+    ESSENTIAL: "Essential Data Plan",
+    PLUS: "Plus Data Plan",
+    MAX: "Max Data Plan",
   };
-  return map[type] ?? type;
+  return offerLabels[offer.offerType] ?? "Data Plan";
 }
+
+const ROLE_BADGE: Record<string, { label: string; variant: PlanBadgeVariant }> = {
+  RECOMMENDED: { label: "Best Value", variant: "recommended" },
+  CHEAPER:     { label: "Budget Pick", variant: "budget" },
+  PREMIUM:     { label: "Premium",    variant: "premium" },
+};
 
 const DURATION_OPTIONS = [1, 2, 3, 4, 5, 6, 7];
 
-// ─── Plan Card ────────────────────────────────────────────────────────────────
-
-interface PlanCardProps {
-  offer: RecommendedOffer;
-  savingsPct: number | null;
-  savingsLabel: string | null;
-  isHighlighted?: boolean;
-  countryCode: string;
-  onSelect: (offer: RecommendedOffer) => void;
-}
-
-function PlanCard({ offer, savingsPct, savingsLabel, isHighlighted, countryCode, onSelect }: PlanCardProps) {
-  const roleConfig = {
-    RECOMMENDED: {
-      label: "Best Value",
-      icon: <Star className="w-3 h-3 fill-current" />,
-      badgeClass: "bg-violet-600 text-white",
-      cardClass: "ring-2 ring-violet-500 shadow-[0_0_30px_rgba(124,58,237,0.25)] dark:shadow-[0_0_40px_rgba(124,58,237,0.35)]",
-      buttonClass: "bg-violet-600 hover:bg-violet-700 text-white",
-      accentClass: "text-violet-600 dark:text-violet-400",
-      glowClass: "bg-violet-500/10",
-    },
-    CHEAPER: {
-      label: "Budget Pick",
-      icon: <TrendingDown className="w-3 h-3" />,
-      badgeClass: "bg-emerald-600 text-white",
-      cardClass: "ring-1 ring-border",
-      buttonClass: "bg-emerald-600 hover:bg-emerald-700 text-white",
-      accentClass: "text-emerald-600 dark:text-emerald-400",
-      glowClass: "bg-emerald-500/5",
-    },
-    PREMIUM: {
-      label: "Premium",
-      icon: <Award className="w-3 h-3" />,
-      badgeClass: "bg-amber-500 text-white",
-      cardClass: "ring-1 ring-border",
-      buttonClass: "bg-amber-500 hover:bg-amber-600 text-white",
-      accentClass: "text-amber-600 dark:text-amber-400",
-      glowClass: "bg-amber-500/5",
-    },
-  };
-
-  const cfg = roleConfig[offer.role] ?? roleConfig.RECOMMENDED;
-
-  return (
-    <div
-      data-testid={`plan-card-${offer.role.toLowerCase()}`}
-      className={cn(
-        "relative rounded-2xl bg-card border border-border overflow-hidden transition-all duration-200 hover:scale-[1.01] hover:shadow-lg",
-        cfg.cardClass,
-        isHighlighted && "scale-[1.01]"
-      )}
-    >
-      {isHighlighted && (
-        <div className="absolute inset-0 pointer-events-none">
-          <div className={cn("absolute inset-0 opacity-40", cfg.glowClass)} />
-        </div>
-      )}
-
-      {/* Top accent bar */}
-      <div className={cn(
-        "h-1",
-        offer.role === "RECOMMENDED" ? "bg-violet-500" :
-        offer.role === "CHEAPER" ? "bg-emerald-500" : "bg-amber-500"
-      )} />
-
-      <div className="p-6">
-        {/* Role badge + synthetic marker */}
-        <div className="flex items-center gap-2 mb-4">
-          <Badge data-testid={`badge-role-${offer.role.toLowerCase()}`} className={cn("flex items-center gap-1 text-xs font-semibold px-2 py-1", cfg.badgeClass)}>
-            {cfg.icon}
-            {cfg.label}
-          </Badge>
-          {offer.isSynthetic && (
-            <Badge variant="outline" className="text-[10px] py-0.5">Bundled</Badge>
-          )}
-          {offer.hotspotSupported && (
-            <Badge variant="outline" className="text-[10px] py-0.5 flex items-center gap-1">
-              <Wifi className="w-2.5 h-2.5" />Hotspot
-            </Badge>
-          )}
-        </div>
-
-        {/* Data + validity */}
-        <div className="mb-4">
-          <div data-testid={`text-data-${offer.role.toLowerCase()}`} className={cn("text-4xl font-bold tracking-tight mb-1", cfg.accentClass)}>
-            {dataLabel(offer)}
-          </div>
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Clock className="w-3.5 h-3.5" />
-            <span>{offer.validityDays}-day plan</span>
-            <span className="text-border">·</span>
-            <span>{bucketLabel(offer.bucket)}</span>
-          </div>
-        </div>
-
-        {/* Savings badge */}
-        {savingsPct !== null && savingsLabel && (
-          <div data-testid={`badge-savings-${offer.role.toLowerCase()}`} className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold px-3 py-1">
-            <Flame className="w-3 h-3" />
-            Save {savingsPct}% {savingsLabel}
-          </div>
-        )}
-
-        {/* Pricing */}
-        <div className="mb-5 pb-4 border-b border-border">
-          <div data-testid={`text-price-${offer.role.toLowerCase()}`} className="text-3xl font-bold">
-            ${offer.priceUsd.toFixed(2)}
-          </div>
-          <div data-testid={`text-price-per-day-${offer.role.toLowerCase()}`} className="text-sm text-muted-foreground mt-0.5">
-            <span className={cn("font-semibold", cfg.accentClass)}>
-              ${offer.pricePerDayUsd.toFixed(2)}/day
-            </span>
-            {" "}· one-time · instant activation
-          </div>
-        </div>
-
-        {/* Features */}
-        <ul className="space-y-2 mb-5 text-sm">
-          <li className="flex items-center gap-2 text-muted-foreground">
-            <Zap className="w-3.5 h-3.5 text-violet-500 flex-shrink-0" />
-            Instant eSIM delivery
-          </li>
-          <li className="flex items-center gap-2 text-muted-foreground">
-            <Globe className="w-3.5 h-3.5 text-violet-500 flex-shrink-0" />
-            No roaming fees
-          </li>
-          <li className="flex items-center gap-2 text-muted-foreground">
-            <Wifi className="w-3.5 h-3.5 text-violet-500 flex-shrink-0" />
-            {offer.isUnlimited ? "Unlimited data" : `${dataLabel(offer)} data`}
-          </li>
-        </ul>
-
-        <Button
-          data-testid={`button-select-${offer.role.toLowerCase()}`}
-          className={cn("w-full font-semibold", cfg.buttonClass)}
-          onClick={() => onSelect(offer)}
-        >
-          Choose Plan
-          <ChevronRight className="w-4 h-4 ml-1" />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Loading skeleton ──────────────────────────────────────────────────────────
+// ─── Loading skeleton ─────────────────────────────────────────────────────────
 
 function PlanCardSkeleton() {
   return (
-    <div className="rounded-2xl border border-border bg-card overflow-hidden">
-      <div className="h-1 bg-muted" />
-      <div className="p-6 space-y-4">
-        <Skeleton className="h-5 w-24" />
-        <Skeleton className="h-10 w-32" />
-        <Skeleton className="h-4 w-40" />
-        <Skeleton className="h-8 w-20" />
-        <div className="space-y-2">
+    <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+      <div className="h-1 bg-gradient-to-r from-muted via-muted/70 to-muted animate-pulse" />
+      <div className="p-5 space-y-4 pt-4">
+        <Skeleton className="h-4 w-24" />
+        <div className="space-y-1.5">
+          <Skeleton className="h-10 w-28" />
+          <Skeleton className="h-3 w-32" />
+        </div>
+        <div className="space-y-2 pt-1">
+          <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-3/4" />
-          <Skeleton className="h-4 w-2/3" />
         </div>
         <Skeleton className="h-10 w-full" />
       </div>
@@ -247,9 +105,8 @@ function PlanCardSkeleton() {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function FindPlan() {
-  const [location, navigate] = useLocation();
+  const [, navigate] = useLocation();
 
-  // Read initial values from URL query string (?country=GB&days=5)
   const searchParams = new URLSearchParams(
     typeof window !== "undefined" ? window.location.search : ""
   );
@@ -279,50 +136,66 @@ export default function FindPlan() {
     setShouldFetch(true);
   }
 
-  function handleSelectOffer(offer: RecommendedOffer) {
-    navigate(`/destinations/${countryCode?.toLowerCase()}`);
-  }
-
   const breakdown = data?.pricing_breakdown;
 
-  const allCards: Array<{
-    offer: RecommendedOffer;
-    savingsPct: number | null;
-    savingsLabel: string | null;
-    isHighlighted: boolean;
-  }> = [];
+  // Build PlanCard props from API response
+  type CardEntry = Parameters<typeof PlanCard>[0] & { _role: string };
+  const allCards: CardEntry[] = [];
 
   if (data?.recommended) {
+    const o = data.recommended;
+    const cfg = ROLE_BADGE[o.role];
+    const savingsPct = breakdown?.savings_rec_vs_premium_pct;
     allCards.push({
-      offer: data.recommended,
-      savingsPct: breakdown?.savings_rec_vs_premium_pct ?? null,
-      savingsLabel: breakdown?.savings_rec_vs_premium_pct ? "vs Premium" : null,
-      isHighlighted: true,
+      _role: "RECOMMENDED",
+      "data-testid": "plan-card-recommended",
+      title: planTitle(o),
+      price: `$${o.priceUsd.toFixed(2)}`,
+      pricePerDay: `$${o.pricePerDayUsd.toFixed(2)}/day`,
+      badge: cfg.label,
+      badgeVariant: cfg.variant,
+      dataAmount: dataLabel(o),
+      coverage: countryCode ?? "—",
+      validity: `${o.validityDays} ${o.validityDays === 1 ? "Day" : "Days"}`,
+      hotspot: o.hotspotSupported,
+      isRecommended: true,
+      savings: savingsPct ? `Save ${savingsPct}% vs Premium` : undefined,
+      ctaLabel: "Get This Plan",
+      onSelect: () => navigate(`/destinations/${countryCode?.toLowerCase()}`),
     });
   }
 
-  for (const alt of data?.alternatives ?? []) {
-    if (alt.role === "CHEAPER") {
-      allCards.push({
-        offer: alt,
-        savingsPct: breakdown?.savings_cheaper_vs_rec_pct ?? null,
-        savingsLabel: breakdown?.savings_cheaper_vs_rec_pct ? "vs Best Value" : null,
-        isHighlighted: false,
-      });
-    } else {
-      allCards.push({ offer: alt, savingsPct: null, savingsLabel: null, isHighlighted: false });
-    }
+  for (const o of data?.alternatives ?? []) {
+    const cfg = ROLE_BADGE[o.role] ?? ROLE_BADGE.PREMIUM;
+    const savingsPct =
+      o.role === "CHEAPER" ? breakdown?.savings_cheaper_vs_rec_pct : null;
+    allCards.push({
+      _role: o.role,
+      "data-testid": `plan-card-${o.role.toLowerCase()}`,
+      title: planTitle(o),
+      price: `$${o.priceUsd.toFixed(2)}`,
+      pricePerDay: `$${o.pricePerDayUsd.toFixed(2)}/day`,
+      badge: cfg.label,
+      badgeVariant: cfg.variant,
+      dataAmount: dataLabel(o),
+      coverage: countryCode ?? "—",
+      validity: `${o.validityDays} ${o.validityDays === 1 ? "Day" : "Days"}`,
+      hotspot: o.hotspotSupported,
+      isRecommended: false,
+      savings: savingsPct ? `Save ${savingsPct}% vs Best Value` : undefined,
+      ctaLabel: o.role === "CHEAPER" ? "Choose Budget Plan" : "Go Premium",
+      onSelect: () => navigate(`/destinations/${countryCode?.toLowerCase()}`),
+    });
   }
 
-  // Sort: RECOMMENDED first, then CHEAPER, then PREMIUM
-  const roleOrder = { RECOMMENDED: 0, CHEAPER: 1, PREMIUM: 2 };
-  allCards.sort((a, b) => (roleOrder[a.offer.role] ?? 9) - (roleOrder[b.offer.role] ?? 9));
+  const roleOrder: Record<string, number> = { RECOMMENDED: 0, CHEAPER: 1, PREMIUM: 2 };
+  allCards.sort((a, b) => (roleOrder[a._role] ?? 9) - (roleOrder[b._role] ?? 9));
 
   const hasResults = !isLoading && !!data;
 
   return (
     <main className="min-h-screen bg-background">
-      {/* Hero / input section */}
+      {/* ── Hero / input section ─────────────────────────────────────────── */}
       <section className="relative overflow-hidden bg-gradient-to-b from-violet-950/20 via-background to-background pt-10 pb-12 sm:pt-16 sm:pb-16">
         <div className="absolute inset-0 pointer-events-none" aria-hidden>
           <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full bg-violet-600/10 blur-[120px]" />
@@ -344,11 +217,10 @@ export default function FindPlan() {
             Tell us your destination and trip length — we'll instantly match you with the best-value plan.
           </p>
 
-          {/* Input card */}
+          {/* ── Input card ── */}
           <div className="bg-card border border-border rounded-2xl p-5 sm:p-6 shadow-lg text-left space-y-5">
-            {/* Country selector */}
             <div>
-              <label className="block text-sm font-medium mb-2">
+              <label className="block text-sm font-semibold mb-2 text-foreground">
                 Destination
               </label>
               <CountryCombobox
@@ -359,15 +231,13 @@ export default function FindPlan() {
                 }}
                 placeholder="Search for a country…"
                 className="w-full"
-                data-testid="input-country"
               />
             </div>
 
-            {/* Duration selector */}
             <div>
-              <label className="block text-sm font-medium mb-2">
+              <label className="block text-sm font-semibold mb-2 text-foreground">
                 Trip Duration
-                <span className="ml-2 font-normal text-muted-foreground">
+                <span className="ml-2 font-normal text-muted-foreground text-xs">
                   ({tripDays} {tripDays === 1 ? "day" : "days"})
                 </span>
               </label>
@@ -381,29 +251,27 @@ export default function FindPlan() {
                       setShouldFetch(false);
                     }}
                     className={cn(
-                      "min-w-[44px] h-10 rounded-lg text-sm font-semibold border transition-all duration-150",
+                      "min-w-[44px] h-10 rounded-xl text-sm font-semibold border transition-all duration-150",
                       tripDays === d
-                        ? "bg-violet-600 border-violet-600 text-white shadow-md"
-                        : "bg-background border-border text-foreground hover:border-violet-400 hover:text-violet-600"
+                        ? "bg-violet-600 border-violet-600 text-white shadow-md scale-[1.05]"
+                        : "bg-background border-border text-muted-foreground hover:border-violet-400 hover:text-violet-600 dark:hover:text-violet-400",
                     )}
                   >
                     {d}d
                   </button>
                 ))}
               </div>
-
-              {/* Duration hint */}
               <p className="text-xs text-muted-foreground mt-2">
-                {tripDays <= 1 && "We'll recommend our 1-day unlimited plan."}
-                {tripDays > 1 && tripDays <= 3 && "We'll recommend our 3-day plan — perfect for a weekend."}
-                {tripDays > 3 && tripDays <= 5 && "We'll recommend our 5-day plan — great value for a short holiday."}
-                {tripDays > 5 && "We'll recommend our 7-day plan — best rate per day."}
+                {tripDays <= 1 && "Recommending our 1-day unlimited plan."}
+                {tripDays > 1 && tripDays <= 3 && "Recommending our 3-day plan — ideal for a weekend trip."}
+                {tripDays > 3 && tripDays <= 5 && "Recommending our 5-day plan — great value for a short holiday."}
+                {tripDays > 5 && "Recommending our 7-day plan — best rate per day."}
               </p>
             </div>
 
             <Button
               data-testid="button-find-plan"
-              className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold h-11 text-base"
+              className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold h-11 text-base shadow-md shadow-violet-500/20 transition-all"
               onClick={handleSearch}
               disabled={!countryCode}
             >
@@ -414,12 +282,12 @@ export default function FindPlan() {
         </div>
       </section>
 
-      {/* Results section */}
-      {(shouldFetch && countryCode) && (
-        <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-16">
-          {/* Section header */}
+      {/* ── Results section ──────────────────────────────────────────────── */}
+      {shouldFetch && countryCode && (
+        <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-20">
+          {/* Header */}
           {hasResults && data && (
-            <div className="text-center mb-8">
+            <div className="text-center mb-10">
               <h2 className="text-xl sm:text-2xl font-bold mb-1">
                 Plans for{" "}
                 <span className="text-violet-600 dark:text-violet-400">
@@ -428,14 +296,15 @@ export default function FindPlan() {
                 {" "}· {data.tripDays}-day trip
               </h2>
               <p className="text-sm text-muted-foreground">
-                {bucketLabel(data.bucket)} coverage · showing {allCards.length} options
+                {bucketLabel(data.bucket)} coverage · showing {allCards.length} curated options
               </p>
             </div>
           )}
 
+          {/* Error state */}
           {isError && (
-            <div className="text-center py-12">
-              <div className="text-4xl mb-3">😕</div>
+            <div className="text-center py-16 max-w-sm mx-auto">
+              <div className="text-5xl mb-4">😕</div>
               <p className="text-lg font-semibold mb-1">No plans found</p>
               <p className="text-muted-foreground text-sm">
                 {(error as Error)?.message ?? "We couldn't find plans for this destination."}
@@ -443,60 +312,84 @@ export default function FindPlan() {
             </div>
           )}
 
-          {/* Cards grid */}
-          <div className={cn(
-            "grid gap-5",
-            allCards.length === 1 ? "grid-cols-1 max-w-sm mx-auto" :
-            allCards.length === 2 ? "grid-cols-1 sm:grid-cols-2 max-w-2xl mx-auto" :
-            "grid-cols-1 sm:grid-cols-3"
-          )}>
-            {isLoading ? (
-              <>
-                <PlanCardSkeleton />
-                <PlanCardSkeleton />
-                <PlanCardSkeleton />
-              </>
-            ) : (
-              allCards.map(({ offer, savingsPct, savingsLabel, isHighlighted }) => (
-                <PlanCard
-                  key={offer.id}
-                  offer={offer}
-                  savingsPct={savingsPct}
-                  savingsLabel={savingsLabel}
-                  isHighlighted={isHighlighted}
-                  countryCode={countryCode ?? ""}
-                  onSelect={handleSelectOffer}
-                />
-              ))
-            )}
-          </div>
+          {/* Cards */}
+          {isLoading ? (
+            <div className={cn(
+              "grid gap-5 items-start",
+              "grid-cols-1 sm:grid-cols-3",
+            )}>
+              <PlanCardSkeleton />
+              <PlanCardSkeleton />
+              <PlanCardSkeleton />
+            </div>
+          ) : (
+            <PlanCardGrid
+              cards={allCards.map(({ _role, ...rest }) => rest)}
+            />
+          )}
 
-          {/* Pricing breakdown table */}
+          {/* Pricing breakdown */}
           {hasResults && breakdown && (
-            <div className="mt-10 bg-muted/40 border border-border rounded-xl p-5 max-w-2xl mx-auto" data-testid="section-pricing-breakdown">
-              <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+            <div
+              data-testid="section-pricing-breakdown"
+              className="mt-10 bg-muted/40 border border-border rounded-2xl p-6 max-w-2xl mx-auto"
+            >
+              <h3 className="text-sm font-semibold mb-5 flex items-center gap-2 text-muted-foreground uppercase tracking-wide">
                 <TrendingDown className="w-4 h-4 text-violet-500" />
-                Pricing Breakdown
+                Price Comparison
               </h3>
               <div className="grid grid-cols-3 gap-4 text-center">
-                {[
-                  { label: "Budget", price: breakdown.cheaper_price_usd, ppd: breakdown.cheaper_per_day_usd, color: "text-emerald-600 dark:text-emerald-400" },
-                  { label: "Best Value", price: breakdown.recommended_price_usd, ppd: breakdown.recommended_per_day_usd, color: "text-violet-600 dark:text-violet-400" },
-                  { label: "Premium", price: breakdown.premium_price_usd, ppd: breakdown.premium_per_day_usd, color: "text-amber-600 dark:text-amber-400" },
-                ].map(({ label, price, ppd, color }) => (
-                  price !== null && (
-                    <div key={label} data-testid={`breakdown-${label.toLowerCase().replace(" ", "-")}`}>
-                      <div className="text-xs text-muted-foreground mb-1">{label}</div>
-                      <div className={cn("text-lg font-bold", color)}>${price?.toFixed(2)}</div>
-                      <div className="text-xs text-muted-foreground">${ppd?.toFixed(2)}/day</div>
+                {(
+                  [
+                    {
+                      label: "Budget",
+                      price: breakdown.cheaper_price_usd,
+                      ppd: breakdown.cheaper_per_day_usd,
+                      color: "text-emerald-600 dark:text-emerald-400",
+                      ring: "ring-1 ring-emerald-200 dark:ring-emerald-900",
+                    },
+                    {
+                      label: "Best Value",
+                      price: breakdown.recommended_price_usd,
+                      ppd: breakdown.recommended_per_day_usd,
+                      color: "text-violet-600 dark:text-violet-400",
+                      ring: "ring-2 ring-violet-300 dark:ring-violet-700",
+                    },
+                    {
+                      label: "Premium",
+                      price: breakdown.premium_price_usd,
+                      ppd: breakdown.premium_per_day_usd,
+                      color: "text-amber-600 dark:text-amber-400",
+                      ring: "ring-1 ring-amber-200 dark:ring-amber-900",
+                    },
+                  ] as const
+                ).map(({ label, price, ppd, color, ring }) =>
+                  price !== null ? (
+                    <div
+                      key={label}
+                      data-testid={`breakdown-${label.toLowerCase().replace(" ", "-")}`}
+                      className={cn(
+                        "rounded-xl p-3 bg-background",
+                        ring,
+                      )}
+                    >
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5 font-semibold">
+                        {label}
+                      </div>
+                      <div className={cn("text-xl font-bold", color)}>
+                        ${price.toFixed(2)}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        ${ppd?.toFixed(2)}/day
+                      </div>
                     </div>
-                  )
-                ))}
+                  ) : null,
+                )}
               </div>
             </div>
           )}
 
-          {/* CTA to full destination page */}
+          {/* View all plans CTA */}
           {hasResults && (
             <div className="mt-8 text-center">
               <p className="text-sm text-muted-foreground mb-3">
@@ -505,8 +398,8 @@ export default function FindPlan() {
               <Button
                 data-testid="button-view-all-plans"
                 variant="outline"
-                className="border-violet-500 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30"
-                onClick={() => navigate(`/destinations/${countryCode?.toLowerCase()}`)}
+                className="border-violet-300 dark:border-violet-700 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 font-semibold"
+                onClick={() => navigate(`/destinations/${countryCode.toLowerCase()}`)}
               >
                 View All Plans
                 <ChevronRight className="w-4 h-4 ml-1" />
@@ -516,15 +409,15 @@ export default function FindPlan() {
         </section>
       )}
 
-      {/* Empty state (before search) */}
+      {/* ── Empty / pre-search state ─────────────────────────────────────── */}
       {!shouldFetch && (
         <section className="pb-16 pt-4 text-center">
           <div className="max-w-md mx-auto px-4">
             <div className="text-6xl mb-4">🌍</div>
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-sm leading-relaxed">
               Select a country and trip duration above, then tap{" "}
               <span className="font-semibold text-foreground">Find My Plan</span>{" "}
-              to see personalised recommendations.
+              to see your personalised recommendations.
             </p>
           </div>
         </section>
