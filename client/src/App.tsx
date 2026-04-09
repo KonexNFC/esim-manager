@@ -25,6 +25,7 @@ import PrivacyPolicy from "@/pages/privacy-policy";
 import TermsOfService from "@/pages/terms-of-service";
 import RefundPolicy from "@/pages/refund-policy";
 import Roadmap from "@/pages/roadmap";
+import FindPlan from "@/pages/find-plan";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -48,6 +49,7 @@ function Router() {
       <Route path="/terms" component={TermsOfService} />
       <Route path="/refund-policy" component={RefundPolicy} />
       <Route path="/roadmap" component={Roadmap} />
+      <Route path="/find-plan" component={FindPlan} />
       <Route component={NotFound} />
     </Switch>
   );

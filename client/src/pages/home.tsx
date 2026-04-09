@@ -449,11 +449,9 @@ function HeroSection() {
   const handleHeroFind = () => {
     const params = new URLSearchParams();
     if (heroDays) params.set("days", String(heroDays));
-    if (heroCode && heroCode !== "any") {
-      navigate(`/destinations/${heroCode}?${params.toString()}`);
-    } else {
-      navigate(params.toString() ? `/destinations?${params.toString()}` : "/destinations");
-    }
+    if (heroCode && heroCode !== "any") params.set("country", heroCode);
+    const qs = params.toString();
+    navigate(qs ? `/find-plan?${qs}` : "/find-plan");
   };
 
   return (

@@ -125,6 +125,17 @@ export function Navbar() {
           </nav>
         ) : (
           <nav className="flex items-center gap-0.5">
+            <Link href="/find-plan">
+              <Button
+                variant={location.startsWith("/find-plan") ? "secondary" : "ghost"}
+                size="sm"
+                data-testid="link-find-plan"
+                className="hidden sm:flex"
+              >
+                <Rocket className="w-4 h-4 mr-1.5" />
+                Find Plan
+              </Button>
+            </Link>
             <Link href="/destinations">
               <Button
                 variant={location.startsWith("/destinations") ? "secondary" : "ghost"}

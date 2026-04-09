@@ -1859,6 +1859,119 @@ export async function registerRoutes(
     const { buildPublicCatalogue, buildInternalCatalogue, buildLadderReport } =
       await import("./catalogue/catalogue-service");
     const { MOCK_SUPPLIER_PLANS } = await import("./catalogue/mock-data");
+    const { GBP_RATE } = await import("./catalogue/pricing-engine");
+
+    // GET /api/recommend?country=XX&days=N
+    // Smart plan recommendation engine: maps trip duration → optimal bucket,
+    // then returns RECOMMENDED / CHEAPER / PREMIUM offers with price-per-day
+    // and savings calculations.
+    app.get("/api/recommend", (req, res) => {
+      try {
+        const country = String(req.query.country ?? "").toUpperCase();
+        const days = parseInt(String(req.query.days ?? "3"), 10);
+
+        if (!country || country.length < 2) {
+          return res.status(400).json({ message: "country query param required (ISO-2 code)" });
+        }
+        if (isNaN(days) || days < 1 || days > 30) {
+          return res.status(400).json({ message: "days must be 1–30" });
+        }
+
+        // Map trip duration → best-fit duration bucket
+        function daysToBucket(d: number): string {
+          if (d <= 1) return "DAY_1";
+          if (d <= 3) return "DAY_3";
+          if (d <= 5) return "DAY_5";
+          return "DAY_7";
+        }
+
+        const BUCKET_VALIDITY: Record<string, number> = {
+          DAY_1: 1, DAY_3: 3, DAY_5: 5, DAY_7: 7,
+        };
+
+        const targetBucket = daysToBucket(days);
+        const catalogue = buildPublicCatalogue(country, MOCK_SUPPLIER_PLANS);
+
+        if (catalogue.availableDurations.length === 0) {
+          return res.status(404).json({ message: `No plans found for country: ${country}` });
+        }
+
+        // Fall back to the closest available bucket if target isn't available
+        const resolvedBucket: string =
+          catalogue.availableDurations.includes(targetBucket as any)
+            ? targetBucket
+            : (catalogue.availableDurations[catalogue.availableDurations.length - 1] as string);
+
+        const slot = (catalogue.durations as any)[resolvedBucket];
+        if (!slot) {
+          return res.status(404).json({ message: `No plans available for duration bucket: ${resolvedBucket}` });
+        }
+
+        const validityDays = BUCKET_VALIDITY[resolvedBucket] ?? 3;
+
+        function toUsd(gbp: number) {
+          return Math.round((gbp / GBP_RATE) * 100) / 100;
+        }
+
+        function pricePerDay(priceUsd: number) {
+          return Math.round((priceUsd / validityDays) * 100) / 100;
+        }
+
+        function savingsPct(cheaper: number, pricier: number): number | null {
+          if (!pricier || pricier <= cheaper) return null;
+          return Math.round((1 - cheaper / pricier) * 100);
+        }
+
+        function enrichOffer(offer: any, role: string) {
+          if (!offer) return null;
+          const priceUsd = toUsd(offer.sellPriceGbp);
+          return {
+            id: offer.id,
+            bucket: offer.bucket,
+            validityDays,
+            offerType: offer.offerType,
+            dataGb: offer.dataGb,
+            isUnlimited: offer.isUnlimited,
+            hotspotSupported: offer.hotspotSupported,
+            isSynthetic: offer.isSynthetic,
+            priceGbp: Math.round(offer.sellPriceGbp * 100) / 100,
+            priceUsd,
+            pricePerDayUsd: pricePerDay(priceUsd),
+            role,
+          };
+        }
+
+        const rec   = enrichOffer(slot.recommended, "RECOMMENDED");
+        const cheap = enrichOffer(slot.cheaper, "CHEAPER");
+        const prem  = enrichOffer(slot.premium, "PREMIUM");
+
+        const alternatives = [cheap, prem].filter(Boolean);
+
+        const pricing_breakdown = {
+          recommended_price_usd:   rec?.priceUsd ?? null,
+          recommended_per_day_usd: rec?.pricePerDayUsd ?? null,
+          cheaper_price_usd:       cheap?.priceUsd ?? null,
+          cheaper_per_day_usd:     cheap?.pricePerDayUsd ?? null,
+          premium_price_usd:       prem?.priceUsd ?? null,
+          premium_per_day_usd:     prem?.pricePerDayUsd ?? null,
+          savings_rec_vs_premium_pct: savingsPct(rec?.priceUsd ?? 0, prem?.priceUsd ?? 0),
+          savings_cheaper_vs_rec_pct: savingsPct(cheap?.priceUsd ?? 0, rec?.priceUsd ?? 0),
+        };
+
+        return res.json({
+          country,
+          tripDays: days,
+          bucket: resolvedBucket,
+          validityDays,
+          recommended: rec,
+          alternatives,
+          pricing_breakdown,
+        });
+      } catch (err: any) {
+        console.error("/api/recommend error:", err.message);
+        return res.status(500).json({ message: "Recommendation engine error" });
+      }
+    });
 
     // GET /api/plans/public/:countryCode
     // Public travel catalogue: only TRAVEL-category, active plans.
