@@ -528,7 +528,7 @@ function HeroSection() {
             </div>
 
             <h1
-              className="font-display text-5xl sm:text-6xl lg:text-[4.5rem] xl:text-[5.5rem] font-bold text-white leading-[1.0] tracking-tight mb-6"
+              className="font-display text-4xl sm:text-5xl lg:text-[3.5rem] xl:text-[4rem] font-bold text-white leading-[1.05] tracking-tight mb-6"
               data-testid="text-hero-title"
             >
               Land anywhere.
