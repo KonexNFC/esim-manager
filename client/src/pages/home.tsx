@@ -480,12 +480,6 @@ function HeroSection() {
 
           {/* Left: Copy */}
           <div>
-            {/* Eyebrow */}
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-white/70 text-xs font-semibold uppercase tracking-widest mb-6 backdrop-blur-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Instant eSIM &nbsp;·&nbsp; 190+ countries &nbsp;·&nbsp; From $7.99
-            </div>
-
             <h1
               className="font-display text-3xl sm:text-4xl lg:text-[2.75rem] xl:text-[3.25rem] font-bold text-white leading-[1.1] tracking-tight mb-6"
               data-testid="text-hero-title"
