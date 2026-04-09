@@ -457,7 +457,7 @@ function HeroSection() {
   };
 
   return (
-    <section className="relative overflow-hidden min-h-[92vh] flex flex-col" data-testid="hero-section">
+    <section className="relative overflow-hidden sm:min-h-[90vh] flex flex-col" data-testid="hero-section">
       {/* Background */}
       <div className="absolute inset-0">
         <img
@@ -474,8 +474,8 @@ function HeroSection() {
           style={{ background: "radial-gradient(circle, #4f46e5 0%, transparent 70%)" }} />
       </div>
 
-      <div className="relative flex-1 max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-0 sm:pt-28 lg:pt-32 w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center pb-16 sm:pb-20">
+      <div className="relative flex-1 max-w-7xl mx-auto px-4 sm:px-6 pt-10 pb-0 sm:pt-24 lg:pt-32 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center pb-10 sm:pb-20">
 
           {/* ── Left: Copy + Search form ─────────────────── */}
           <div>
@@ -491,14 +491,14 @@ function HeroSection() {
             </h1>
 
             <p
-              className="text-white/55 text-lg sm:text-xl max-w-lg leading-relaxed mb-6"
+              className="text-white/55 text-sm sm:text-lg max-w-lg leading-relaxed mb-5"
               data-testid="text-hero-subtitle"
             >
               Your eSIM is ready the instant you check out. Scan the QR, skip the airport queues, and land with data already working.
             </p>
 
             {/* Trust bullets */}
-            <div className="flex flex-col gap-2 mb-8" data-testid="trust-bullets">
+            <div className="flex flex-col gap-1.5 mb-5 sm:mb-8" data-testid="trust-bullets">
               {[
                 "QR code delivered to your inbox in seconds",
                 "Your regular number stays fully active",
@@ -817,7 +817,7 @@ function HowItWorks() {
   return (
     <section id="how-it-works" className="py-16 sm:py-24 border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <Reveal className="mb-14 max-w-xl">
+        <Reveal className="mb-8 sm:mb-14 max-w-xl">
           <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">How it works</p>
           <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.0]" data-testid="text-how-it-works-title">
             Online in<br /><span className="text-gradient">60 seconds.</span>
@@ -888,9 +888,9 @@ function PopularDestinations() {
   const popular = destinations?.filter(d => d.popular).slice(0, 8) ?? [];
 
   return (
-    <section className="py-24 sm:py-32 border-t">
+    <section className="py-12 sm:py-20 lg:py-28 border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6 sm:mb-10">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Popular Destinations</p>
             <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-3">
@@ -987,9 +987,9 @@ function WhyKonex() {
   ];
 
   return (
-    <section className="py-24 sm:py-32 border-t bg-card">
+    <section className="py-12 sm:py-20 lg:py-28 border-t bg-card">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="mb-14 max-w-2xl">
+        <div className="mb-8 sm:mb-14 max-w-2xl">
           <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Why Konex</p>
           <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.0] mb-5" data-testid="text-benefits-title">
             Built for how<br />people actually travel.
@@ -1061,9 +1061,9 @@ const bundles = [
 
 function BundlesSection() {
   return (
-    <section className="py-24 sm:py-32 border-t">
+    <section className="py-12 sm:py-20 lg:py-28 border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="mb-14 max-w-xl">
+        <div className="mb-8 sm:mb-14 max-w-xl">
           <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Travel Bundles</p>
           <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-4" data-testid="text-bundles-title">
             Bundles built<br />for your route.
@@ -1131,7 +1131,7 @@ function CompatibilitySection() {
   ];
 
   return (
-    <section className="py-24 sm:py-32 border-t bg-card">
+    <section className="py-12 sm:py-20 lg:py-28 border-t bg-card">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           <div>
@@ -1208,9 +1208,9 @@ function TestimonialsSection() {
   ];
 
   return (
-    <section className="py-24 sm:py-32 border-t">
+    <section className="py-12 sm:py-20 lg:py-28 border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="mb-14 max-w-xl">
+        <div className="mb-8 sm:mb-14 max-w-xl">
           <div className="flex items-center gap-0.5 mb-5">
             {Array.from({ length: 5 }).map((_, i) => (
               <Star key={i} className="w-5 h-5 fill-yellow-500 text-yellow-500" />
@@ -1222,7 +1222,7 @@ function TestimonialsSection() {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-14">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8 sm:mb-14">
           {testimonials.map((t, idx) => (
             <Reveal key={idx} delay={(idx + 1) as 1 | 2 | 3}>
               <div className="flex flex-col p-7 rounded-2xl border bg-card card-gradient-hover h-full" data-testid={`card-testimonial-${idx}`}>
@@ -1312,7 +1312,7 @@ function FAQSection() {
   ];
 
   return (
-    <section id="faq" className="py-24 sm:py-32 border-t">
+    <section id="faq" className="py-12 sm:py-20 lg:py-28 border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
           <div>
@@ -1357,7 +1357,7 @@ function FAQSection() {
 // ─────────────────────────────────────────────
 function FinalCTA() {
   return (
-    <section className="py-24 sm:py-32 border-t relative overflow-hidden bg-card">
+    <section className="py-12 sm:py-20 lg:py-28 border-t relative overflow-hidden bg-card">
       {/* Background accent */}
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-blue-500/5 pointer-events-none" />
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] opacity-10 pointer-events-none"
@@ -1367,7 +1367,7 @@ function FinalCTA() {
         <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-[1.0]" data-testid="text-final-cta-title">
           Get travel data<br />before you land.
         </h2>
-        <p className="text-muted-foreground text-lg max-w-xl mx-auto mb-10 leading-relaxed" data-testid="text-final-cta-subtitle">
+        <p className="text-muted-foreground text-sm sm:text-lg max-w-xl mx-auto mb-8 sm:mb-10 leading-relaxed" data-testid="text-final-cta-subtitle">
           Choose your destination, activate in minutes, and stay connected in 190+ countries with KONEX eSIM.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
@@ -1565,7 +1565,7 @@ function MobileStickyCTA() {
 // ─────────────────────────────────────────────
 export default function Home() {
   return (
-    <div className="min-h-screen pb-20 sm:pb-0">
+    <div className="min-h-screen pb-20 sm:pb-0 overflow-x-hidden">
       <EventsCarousel />
       <StatsStrip />
       <HeroSection />

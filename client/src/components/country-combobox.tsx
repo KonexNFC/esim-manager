@@ -147,7 +147,7 @@ export function CountryCombobox({
       </PopoverTrigger>
 
       <PopoverContent
-        className="p-0 w-72"
+        className="p-0 w-[min(18rem,calc(100vw-2rem))]"
         align="start"
         sideOffset={4}
       >

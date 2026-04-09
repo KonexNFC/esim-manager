@@ -178,8 +178,8 @@ export function Navbar() {
                     size="sm"
                     data-testid="link-login"
                   >
-                    <LogIn className="w-4 h-4 mr-1.5" />
-                    Log In
+                    <LogIn className="w-4 h-4 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Log In</span>
                   </Button>
                 </Link>
               )

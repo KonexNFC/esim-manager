@@ -332,6 +332,12 @@
     animation: shimmer-slide 3s linear infinite;
   }
 
+  /* Prevent horizontal scroll from absolute-positioned decorative elements */
+  html, body {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
   /* Noise overlay for hero */
   .noise-overlay::after {
     content: "";
