@@ -1118,63 +1118,6 @@ function CompatibilitySection() {
 }
 
 // ─────────────────────────────────────────────
-// 8. BUILT FOR REAL ROUTES
-// ─────────────────────────────────────────────
-function BuiltForTravellers() {
-  const routes = [
-    { flag: "🇬🇧🇪🇺", label: "UK → Europe",        desc: "Single eSIM across 28 EU countries. No SIM swaps mid-trip." },
-    { flag: "🇬🇧🇳🇬", label: "UK ↔ Nigeria",       desc: "Stay connected in both directions without local SIM hassle." },
-    { flag: "🇬🇧🇦🇪", label: "UK → Dubai / UAE",  desc: "Fast 4G/5G coverage across the UAE. Activates before you land." },
-    { flag: "🌍",     label: "Multi-stop global", desc: "One plan, every continent. Built for the modern nomad." },
-  ];
-
-  return (
-    <section className="py-24 sm:py-32 border-t">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Built for real routes</p>
-            <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-built-for-title">
-              Optimised for the world's most popular travel corridors
-            </h2>
-            <p className="text-muted-foreground leading-relaxed mb-8">
-              Konex isn't a generic eSIM reseller. We've built pricing, coverage, and plans around the routes real travellers actually take.
-            </p>
-            <div className="flex flex-wrap gap-2.5">
-              {["No app required", "Works worldwide", "No contracts", "Instant activation"].map((item) => (
-                <span
-                  key={item}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-card text-sm font-semibold"
-                  data-testid={`microcopy-${item.toLowerCase().replace(/\s/g, '-')}`}
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
-                  {item}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {routes.map((route) => (
-              <div
-                key={route.label}
-                className="flex items-start gap-4 p-5 rounded-2xl border bg-card hover:border-primary/30 transition-colors"
-                data-testid={`route-card-${route.label.toLowerCase().replace(/[\s→↔\/]/g, '-').replace(/-+/g, '-').replace(/[^a-z0-9-]/g, '')}`}
-              >
-                <span className="text-2xl leading-none mt-0.5 flex-shrink-0">{route.flag}</span>
-                <div>
-                  <p className="font-bold text-sm mb-0.5">{route.label}</p>
-                  <p className="text-sm text-muted-foreground leading-snug">{route.desc}</p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground/40 ml-auto flex-shrink-0 mt-0.5" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 // ─────────────────────────────────────────────
 // 10. TESTIMONIALS
@@ -1570,7 +1513,6 @@ export default function Home() {
       <Reveal><PopularDestinations /></Reveal>
       <Reveal><TestimonialsSection /></Reveal>
       <Reveal><WhyKonex /></Reveal>
-      <Reveal><BuiltForTravellers /></Reveal>
       <Reveal><BundlesSection /></Reveal>
       <Reveal><CompatibilitySection /></Reveal>
       <Reveal><FinalCTA /></Reveal>
