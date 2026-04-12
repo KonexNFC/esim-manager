@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
-import { Search, Smartphone, LayoutDashboard, LogIn, ChevronDown, Rocket } from "lucide-react";
+import { Search, Smartphone, LayoutDashboard, LogIn, ChevronDown, Rocket, CreditCard } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { KonexLogo } from "./konex-logo";
 import { useCurrency, CURRENCIES } from "@/lib/currency";
@@ -81,6 +81,16 @@ export function Navbar() {
               </button>
             ))}
 
+            <Link href="/nfc-card">
+              <button
+                className="hidden lg:flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground rounded-lg hover:bg-white/5 hover:text-foreground transition-colors gap-1.5"
+                data-testid="nav-nfc-card"
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                NFC Card
+              </button>
+            </Link>
+
             <Link href="/roadmap">
               <button
                 className="hidden lg:flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground rounded-lg hover:bg-white/5 hover:text-foreground transition-colors gap-1.5"
@@ -156,6 +166,17 @@ export function Navbar() {
               >
                 <Smartphone className="w-4 h-4 mr-1.5" />
                 Check Device
+              </Button>
+            </Link>
+            <Link href="/nfc-card">
+              <Button
+                variant={location.startsWith("/nfc-card") ? "secondary" : "ghost"}
+                size="sm"
+                data-testid="link-nfc-card"
+                className="hidden sm:flex"
+              >
+                <CreditCard className="w-4 h-4 mr-1.5" />
+                NFC Card
               </Button>
             </Link>
             <Link href="/roadmap">

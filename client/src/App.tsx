@@ -26,6 +26,7 @@ import TermsOfService from "@/pages/terms-of-service";
 import RefundPolicy from "@/pages/refund-policy";
 import Roadmap from "@/pages/roadmap";
 import FindPlan from "@/pages/find-plan";
+import NfcCard from "@/pages/nfc-card";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -50,6 +51,7 @@ function Router() {
       <Route path="/refund-policy" component={RefundPolicy} />
       <Route path="/roadmap" component={Roadmap} />
       <Route path="/find-plan" component={FindPlan} />
+      <Route path="/nfc-card" component={NfcCard} />
       <Route component={NotFound} />
     </Switch>
   );
