@@ -81,7 +81,7 @@ export function Navbar() {
               </button>
             ))}
 
-            <Link href="/nfc-card">
+            <a href="https://konexnfc.com/konex-cards" target="_blank" rel="noopener noreferrer">
               <button
                 className="hidden lg:flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground rounded-lg hover:bg-white/5 hover:text-foreground transition-colors gap-1.5"
                 data-testid="nav-nfc-card"
@@ -89,7 +89,7 @@ export function Navbar() {
                 <CreditCard className="w-3.5 h-3.5" />
                 NFC Card
               </button>
-            </Link>
+            </a>
 
             <Link href="/roadmap">
               <button
@@ -168,17 +168,16 @@ export function Navbar() {
                 Check Device
               </Button>
             </Link>
-            <Link href="/nfc-card">
+            <a href="https://konexnfc.com/konex-cards" target="_blank" rel="noopener noreferrer" className="hidden sm:flex">
               <Button
-                variant={location.startsWith("/nfc-card") ? "secondary" : "ghost"}
+                variant="ghost"
                 size="sm"
                 data-testid="link-nfc-card"
-                className="hidden sm:flex"
               >
                 <CreditCard className="w-4 h-4 mr-1.5" />
                 NFC Card
               </Button>
-            </Link>
+            </a>
             <Link href="/roadmap">
               <Button
                 variant={location.startsWith("/roadmap") ? "secondary" : "ghost"}
