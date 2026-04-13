@@ -11,7 +11,7 @@ import {
   Smartphone, BarChart2, ShoppingCart, Lock, ChevronDown,
   Flame, Gauge, Timer, TrendingUp,
 } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useCurrency } from "@/lib/currency";
@@ -1594,6 +1594,22 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
   );
 }
 
+// ─── PayPal JS SDK loader ──────────────────────────────────────────────────────
+
+function loadPayPalScript(clientId: string, sandbox: boolean): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if ((window as any).paypal) { resolve(); return; }
+    const existing = document.getElementById("paypal-sdk");
+    if (existing) { existing.addEventListener("load", () => resolve()); return; }
+    const script = document.createElement("script");
+    script.id = "paypal-sdk";
+    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&intent=capture&components=buttons`;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load PayPal SDK"));
+    document.head.appendChild(script);
+  });
+}
+
 // ─── Public plan checkout modal ────────────────────────────────────────────────
 
 function PublicCheckoutModal({
@@ -1606,6 +1622,12 @@ function PublicCheckoutModal({
   onClose: () => void;
 }) {
   const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [step, setStep] = useState<"email" | "pay">("email");
+  const [paddleLoading, setPaddleLoading] = useState(false);
+  const [paypalReady, setPaypalReady] = useState(false);
+  const [paypalError, setPaypalError] = useState("");
+  const paypalContainerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { fmt, isApprox, currency } = useCurrency();
 
@@ -1613,103 +1635,273 @@ function PublicCheckoutModal({
     queryKey: ["/api/auth/me"],
   });
 
+  const { data: checkoutConfig } = useQuery<{
+    paypal: { enabled: boolean; clientId: string; sandbox: boolean };
+    paddle: { enabled: boolean; clientToken: string; sandbox: boolean };
+  }>({ queryKey: ["/api/checkout/config"] });
+
   const bucketDays = parseInt(plan.bucket.replace("DAY_", ""), 10);
   const dataLabel = publicPlanDataLabel(plan);
   const validityLabel = `${bucketDays} ${bucketDays === 1 ? "Day" : "Days"}`;
-  const priceUsd = plan.sellPriceGbp * GBP_TO_USD;
+  const priceUsd = parseFloat((plan.sellPriceGbp * GBP_TO_USD).toFixed(2));
+  const resolvedEmail = me?.email || email;
 
-  const checkout = useMutation({
-    mutationFn: () =>
-      apiRequest("POST", "/api/checkout/country-plan", {
-        normalizedPlanId: plan.id,
-        countryCode,
-        dataLabel,
-        validityLabel,
-        dataAmountGb: plan.isUnlimited ? 999 : (plan.dataGb ?? 0),
-        validityDays: bucketDays,
-        email: me?.email || email,
-        name: me?.name,
-      }),
-    onSuccess: async (res: any) => {
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
-    },
-    onError: (err: any) => {
-      toast({ title: "Checkout failed", description: err.message, variant: "destructive" });
-    },
-  });
+  const isEmailValid = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleEmailContinue = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!me && !email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-      toast({ title: "Enter a valid email", variant: "destructive" });
+    if (!me && !isEmailValid(email)) {
+      setEmailError("Please enter a valid email address");
       return;
     }
-    checkout.mutate();
+    setEmailError("");
+    setStep("pay");
   };
 
+  // Mount PayPal buttons when step = "pay" and SDK is available
+  useEffect(() => {
+    if (step !== "pay" || !checkoutConfig?.paypal.enabled) return;
+    const { clientId, sandbox } = checkoutConfig.paypal;
+
+    let cancelled = false;
+    loadPayPalScript(clientId, sandbox)
+      .then(() => {
+        if (cancelled) return;
+        const paypal = (window as any).paypal;
+        if (!paypal || !paypalContainerRef.current) return;
+
+        paypalContainerRef.current.innerHTML = "";
+        setPaypalReady(false);
+
+        paypal.Buttons({
+          style: { layout: "vertical", color: "blue", shape: "rect", label: "pay", height: 44 },
+          createOrder: async () => {
+            const res = await fetch("/api/checkout/paypal/create-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                normalizedPlanId: plan.id,
+                countryCode,
+                dataLabel,
+                validityLabel,
+                amountUsd: priceUsd,
+                email: resolvedEmail,
+              }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Failed to create order");
+            return data.orderId;
+          },
+          onApprove: async (paypalData: any) => {
+            const res = await fetch("/api/checkout/paypal/capture-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                paypalOrderId: paypalData.orderID,
+                normalizedPlanId: plan.id,
+                countryCode,
+                dataLabel,
+                validityLabel,
+                amountUsd: priceUsd,
+                email: resolvedEmail,
+              }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Capture failed");
+            window.location.href = `/checkout-success?orderId=${data.orderId}&provider=paypal`;
+          },
+          onError: (err: any) => {
+            setPaypalError("Payment failed. Please try again or use a different method.");
+            console.error("[PayPal]", err);
+          },
+        }).render(paypalContainerRef.current).then(() => {
+          if (!cancelled) setPaypalReady(true);
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setPaypalError("Could not load PayPal. Please try Paddle instead.");
+      });
+
+    return () => { cancelled = true; };
+  }, [step, checkoutConfig?.paypal.enabled, checkoutConfig?.paypal.clientId]);
+
+  const handlePaddle = async () => {
+    setPaddleLoading(true);
+    try {
+      const res = await fetch("/api/checkout/paddle/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          normalizedPlanId: plan.id,
+          countryCode,
+          dataLabel,
+          validityLabel,
+          amountUsd: priceUsd,
+          email: resolvedEmail,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Paddle checkout failed");
+      window.location.href = data.checkoutUrl;
+    } catch (err: any) {
+      toast({ title: "Paddle checkout failed", description: err.message, variant: "destructive" });
+    } finally {
+      setPaddleLoading(false);
+    }
+  };
+
+  const noProviders = checkoutConfig &&
+    !checkoutConfig.paypal.enabled &&
+    !checkoutConfig.paddle.enabled;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <Card className="w-full max-w-sm mx-4 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <Card className="w-full max-w-sm p-6">
+        {/* Header */}
         <div className="flex items-center gap-3 mb-4">
           <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
             <ShoppingCart className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h3 className="font-semibold">Confirm your plan</h3>
+            <h3 className="font-semibold" data-testid="text-checkout-title">Your eSIM Plan</h3>
             <p className="text-sm text-muted-foreground">{dataLabel} · {validityLabel}</p>
           </div>
+          <button
+            className="ml-auto text-muted-foreground hover:text-foreground"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            ✕
+          </button>
         </div>
 
-        <div className="bg-muted/50 rounded-lg p-3 mb-4">
-          <div className="flex justify-between text-sm items-end">
-            <span className="text-muted-foreground">Estimated price</span>
+        {/* Price summary */}
+        <div className="bg-muted/50 rounded-lg p-3 mb-5">
+          <div className="flex justify-between items-end text-sm">
+            <span className="text-muted-foreground">Total</span>
             <div className="text-right">
-              <span className="font-bold text-lg">{isApprox ? "≈ " : ""}{fmt(priceUsd)}</span>
-              {isApprox && <p className="text-[11px] text-muted-foreground">£{plan.sellPriceGbp.toFixed(2)} GBP</p>}
+              <span className="font-bold text-lg" data-testid="text-checkout-price">
+                {isApprox ? "≈ " : ""}{fmt(priceUsd)}
+              </span>
+              {isApprox && (
+                <p className="text-[11px] text-muted-foreground">£{plan.sellPriceGbp.toFixed(2)} GBP</p>
+              )}
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
             <Lock className="w-3 h-3" />
-            {isApprox
-              ? `Checkout processed in USD · ${currency.code} is approximate`
-              : "Final price confirmed at checkout"}
+            {isApprox ? `Processed in USD · ${currency.code} shown for reference` : "Price in USD"}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {!me && (
-            <div>
-              <Label htmlFor="pub-checkout-email" className="text-sm">Email for eSIM delivery</Label>
-              <Input
-                id="pub-checkout-email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                className="mt-1"
-                data-testid="input-checkout-email"
-              />
-            </div>
-          )}
-          {me && (
-            <p className="text-sm text-muted-foreground">
-              eSIM will be sent to <strong>{me.email}</strong>
+        {/* Step 1: Email */}
+        {step === "email" && (
+          <form onSubmit={handleEmailContinue} className="space-y-3">
+            {me ? (
+              <p className="text-sm text-muted-foreground">
+                eSIM will be delivered to <strong>{me.email}</strong>
+              </p>
+            ) : (
+              <div>
+                <Label htmlFor="pub-checkout-email" className="text-sm font-medium">
+                  Email for eSIM delivery
+                </Label>
+                <Input
+                  id="pub-checkout-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={e => { setEmail(e.target.value); setEmailError(""); }}
+                  className="mt-1"
+                  data-testid="input-checkout-email"
+                />
+                {emailError && (
+                  <p className="text-xs text-destructive mt-1">{emailError}</p>
+                )}
+              </div>
+            )}
+            <Button type="submit" className="w-full h-11" data-testid="button-continue-to-payment">
+              Continue to Payment
+            </Button>
+            <Button type="button" variant="ghost" className="w-full" onClick={onClose}>
+              Cancel
+            </Button>
+          </form>
+        )}
+
+        {/* Step 2: Payment method */}
+        {step === "pay" && (
+          <div className="space-y-3">
+            <p className="text-xs text-center text-muted-foreground mb-1">
+              Paying as <strong>{resolvedEmail}</strong> ·{" "}
+              <button className="underline hover:text-foreground" onClick={() => setStep("email")}>change</button>
             </p>
-          )}
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={checkout.isPending}
-            data-testid="button-confirm-checkout"
-          >
-            {checkout.isPending ? "Redirecting…" : "Continue to Payment"}
-          </Button>
-          <Button type="button" variant="ghost" className="w-full" onClick={onClose}>
-            Cancel
-          </Button>
-        </form>
+
+            {noProviders ? (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-center">
+                <p className="text-sm font-medium text-destructive mb-1">Payment not yet configured</p>
+                <p className="text-xs text-muted-foreground">
+                  The store owner needs to connect PayPal or Paddle. Please check back shortly.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* PayPal section */}
+                {checkoutConfig?.paypal.enabled && (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                      Pay with PayPal
+                    </p>
+                    {paypalError && (
+                      <p className="text-xs text-destructive mb-2">{paypalError}</p>
+                    )}
+                    <div
+                      ref={paypalContainerRef}
+                      className="min-h-[50px]"
+                      data-testid="container-paypal-buttons"
+                    />
+                    {!paypalReady && !paypalError && (
+                      <div className="h-11 rounded-md bg-muted/50 animate-pulse" />
+                    )}
+                  </div>
+                )}
+
+                {/* Divider */}
+                {checkoutConfig?.paypal.enabled && checkoutConfig?.paddle.enabled && (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="text-[11px] text-muted-foreground uppercase tracking-wider">or</span>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
+                )}
+
+                {/* Paddle section */}
+                {checkoutConfig?.paddle.enabled && (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                      Pay with Paddle
+                    </p>
+                    <Button
+                      className="w-full h-11 bg-[#0c2b5e] hover:bg-[#0a2350] text-white"
+                      onClick={handlePaddle}
+                      disabled={paddleLoading}
+                      data-testid="button-paddle-checkout"
+                    >
+                      {paddleLoading ? "Opening checkout…" : "Pay with Paddle →"}
+                    </Button>
+                    <p className="text-[11px] text-muted-foreground text-center mt-1.5">
+                      Cards, PayPal, Apple Pay & more
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+
+            <Button variant="ghost" className="w-full text-sm" onClick={onClose}>
+              Cancel
+            </Button>
+          </div>
+        )}
       </Card>
     </div>
   );

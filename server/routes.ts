@@ -11,10 +11,8 @@ import {
   hashPassword, verifyPassword, signToken, verifyToken,
   setAuthCookie, clearAuthCookie, getTokenFromRequest, requireAuth, requireAdmin,
 } from "./auth";
-import {
-  createPlanCheckoutSession,
-  createTopupCheckoutSession,
-} from "./services/stripeService";
+import { createPayPalOrder, capturePayPalOrder } from "./services/paypalService";
+import { createPaddleTransaction } from "./services/paddleService";
 import { syncEsimUsage, syncUserEsims, syncAllActiveEsims, runUsageSyncJob, findEsimsLowOnData, findEsimsExpiringSoon, findExpiredEsimsNeedingRenewal } from "./services/usageSync";
 import { getActiveProvider } from "./providers/adapters";
 import { calculateMargin } from "./services/marginEngine";
@@ -277,154 +275,136 @@ export async function registerRoutes(
     }
   });
 
-  // ─── STRIPE CHECKOUT ─────────────────────────────────
+  // ─── CHECKOUT (PayPal + Paddle) ──────────────────────
 
-  // GET /api/stripe/config — publishable key for frontend
-  app.get("/api/stripe/config", async (_req, res) => {
+  // GET /api/checkout/config — payment provider info for frontend
+  app.get("/api/checkout/config", (_req, res) => {
+    res.json({
+      paypal: {
+        enabled: !!(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET),
+        clientId: process.env.PAYPAL_CLIENT_ID ?? "",
+        sandbox: process.env.PAYPAL_SANDBOX === "true",
+      },
+      paddle: {
+        enabled: !!(process.env.PADDLE_API_KEY),
+        clientToken: process.env.PADDLE_CLIENT_TOKEN ?? "",
+        sandbox: process.env.PADDLE_SANDBOX === "true",
+      },
+    });
+  });
+
+  // POST /api/checkout/paypal/create-order
+  // Body: { normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email }
+  app.post("/api/checkout/paypal/create-order", async (req, res) => {
     try {
-      const { getStripePublishableKey } = await import('./stripeClient');
-      const publishableKey = await getStripePublishableKey();
-      res.json({ publishableKey });
-    } catch {
-      res.status(500).json({ message: "Stripe not configured" });
+      const { normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email } = req.body;
+      if (!normalizedPlanId || !amountUsd || !email) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      const { getLocationInfo, normaliseCode } = await import("./services/countryData");
+      const info = getLocationInfo(normaliseCode(countryCode ?? ""));
+      const description = `${info?.name ?? countryCode} eSIM — ${dataLabel} · ${validityLabel}`;
+
+      const { orderId } = await createPayPalOrder({
+        amountUsd: Number(amountUsd),
+        description,
+        customId: `np:${normalizedPlanId}|cc:${countryCode}|em:${email}`,
+      });
+
+      res.json({ orderId });
+    } catch (err: any) {
+      console.error("[paypal/create-order]", err.message);
+      res.status(500).json({ message: err.message || "Failed to create PayPal order" });
     }
   });
 
-  // POST /api/checkout/plan — create Stripe checkout for a plan purchase
-  app.post("/api/checkout/plan", async (req, res) => {
+  // POST /api/checkout/paypal/capture-order
+  // Body: { paypalOrderId, normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email }
+  app.post("/api/checkout/paypal/capture-order", async (req, res) => {
     try {
-      const parsed = planCheckoutSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.flatten() });
+      const { paypalOrderId, normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email } = req.body;
+      if (!paypalOrderId || !email) return res.status(400).json({ message: "Missing paypalOrderId or email" });
 
-      const { planId, email, name, upsellOptionId } = parsed.data;
+      const captured = await capturePayPalOrder(paypalOrderId);
 
-      const plan = await storage.getPlan(planId);
-      if (!plan) return res.status(404).json({ message: "Plan not found" });
-
-      const destination = await storage.getDestination(plan.destinationId);
-
-      // Get user if authenticated
-      let userId: string | undefined;
+      // Create order record
+      const resolvedEmail = captured.payerEmail || email;
+      let resolvedUserId: string | undefined;
       const token = getTokenFromRequest(req);
       if (token) {
         const payload = verifyToken(token);
-        if (payload) userId = payload.userId;
+        if (payload) resolvedUserId = payload.userId;
       }
 
-      // Upsell price map (server-authoritative)
-      const upsellMap: Record<string, { dataGb: number; price: number }> = {
-        "1gb":       { dataGb: 1,  price: 3.00 },
-        "3gb":       { dataGb: 3,  price: 7.00 },
-        "5gb":       { dataGb: 5,  price: 11.00 },
-        "unlimited": { dataGb: 0,  price: 15.00 },
-      };
-      const upsell = upsellOptionId ? upsellMap[upsellOptionId] : undefined;
+      const { db } = await import("./storage");
+      const { orders } = await import("@shared/schema");
+      const [order] = await (db as any).insert(orders).values({
+        planId: null,
+        normalizedPlanId: normalizedPlanId || null,
+        email: resolvedEmail,
+        userId: resolvedUserId ?? null,
+        status: "paid",
+        totalPrice: captured.amountUsd,
+        currency: "USD",
+        providerName: "paypal",
+        purchaseType: "initial_purchase",
+        paypalOrderId: paypalOrderId,
+        paypalCaptureId: captured.captureId,
+      }).returning();
 
-      // Auto-pricing: if pricingMode='auto' and wholesaleCost is set, compute
-      // retail = wholesaleCost / (1 - targetMargin). Server controls this.
-      // Per-plan targetMargin takes precedence over global targetMarginPercent setting.
-      let serverPrice = plan.price;
-      if (plan.pricingMode === 'auto' && plan.wholesaleCost && plan.wholesaleCost > 0) {
-        let targetMargin: number;
-        if (plan.targetMargin && plan.targetMargin > 0 && plan.targetMargin < 1) {
-          targetMargin = plan.targetMargin; // per-plan override
-        } else {
-          const [marginRow] = await db.select().from(settings).where(eq(settings.key, 'targetMarginPercent'));
-          targetMargin = parseFloat(marginRow?.value ?? '0.60');
-        }
-        if (targetMargin > 0 && targetMargin < 1) {
-          // Ceiling to nearest cent to protect margin
-          serverPrice = Math.ceil((plan.wholesaleCost / (1 - targetMargin)) * 100) / 100;
-        }
+      // Fulfill asynchronously — don't block response
+      const { fulfillInitialPurchase } = await import("./services/fulfillment");
+      fulfillInitialPurchase(order.id).catch((err: any) =>
+        console.error(`[PayPal] Fulfill error for order ${order.id}:`, err.message)
+      );
+
+      res.json({ success: true, orderId: order.id });
+    } catch (err: any) {
+      console.error("[paypal/capture-order]", err.message);
+      res.status(500).json({ message: err.message || "Failed to capture PayPal order" });
+    }
+  });
+
+  // POST /api/checkout/paddle/create
+  // Body: { normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email }
+  app.post("/api/checkout/paddle/create", async (req, res) => {
+    try {
+      const { normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email } = req.body;
+      if (!normalizedPlanId || !amountUsd || !email) {
+        return res.status(400).json({ message: "Missing required fields" });
       }
 
-      const { url, sessionId } = await createPlanCheckoutSession({
-        planId: plan.id,
-        planName: plan.name,
-        destination: destination?.name || 'Unknown',
-        countryCode: destination?.countryCode || '',
-        region: destination?.region || plan.coverage,
-        dataAmount: plan.dataAmount,
-        validity: plan.validity,
-        dataAmountGb: plan.dataAmountGb,
-        validityDays: plan.validityDays,
-        price: serverPrice,   // server-controlled: auto-formula or DB price
-        currency: plan.currency,
+      const { getLocationInfo, normaliseCode } = await import("./services/countryData");
+      const info = getLocationInfo(normaliseCode(countryCode ?? ""));
+      const description = `${info?.name ?? countryCode} eSIM — ${dataLabel} · ${validityLabel}`;
+
+      const { checkoutUrl, transactionId } = await createPaddleTransaction({
+        amountUsd: Number(amountUsd),
+        description,
         email,
-        userId,
-        userName: name,
-        upsellDataGb: upsell?.dataGb,
-        upsellPrice: upsell?.price,
+        customData: {
+          normalizedPlanId: normalizedPlanId ?? "",
+          countryCode: countryCode ?? "",
+          dataLabel: dataLabel ?? "",
+          validityLabel: validityLabel ?? "",
+          amountUsd: String(amountUsd),
+          email,
+        },
       });
 
-      res.json({ url, sessionId });
-    } catch (error: any) {
-      console.error('[checkout/plan]', error.message);
-      res.status(500).json({ message: "Failed to create checkout session" });
+      res.json({ checkoutUrl, transactionId });
+    } catch (err: any) {
+      console.error("[paddle/create]", err.message);
+      res.status(500).json({ message: err.message || "Failed to create Paddle checkout" });
     }
   });
 
-  // POST /api/checkout/topup — create Stripe checkout for a top-up
-  app.post("/api/checkout/topup", requireAuth, async (req, res) => {
-    const userId = (req as any).userId;
+  // GET /api/checkout/order/:orderId — look up order by our DB id
+  app.get("/api/checkout/order/:orderId", async (req, res) => {
     try {
-      const parsed = topupCheckoutSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json({ message: "Invalid data", errors: parsed.error.flatten() });
-
-      const { orderId, optionCode, email } = parsed.data;
-      const order = await storage.getOrder(orderId);
-      if (!order) return res.status(404).json({ message: "Order not found" });
-      if (order.userId !== userId) return res.status(403).json({ message: "Not authorized" });
-
-      const provider = getActiveProvider();
-      const options = await provider.getTopupOptions(order.providerEsimId || '');
-      const option = options.find(o => o.optionCode === optionCode);
-      if (!option) return res.status(400).json({ message: "Invalid top-up option" });
-
-      const { url, sessionId, topupId } = await createTopupCheckoutSession({
-        orderId,
-        optionCode,
-        optionName: option.name,
-        price: option.price,
-        currency: option.currency,
-        email,
-        userId,
-      });
-
-      res.json({ url, sessionId, topupId });
-    } catch (error: any) {
-      console.error('[checkout/topup]', error.message);
-      res.status(500).json({ message: "Failed to create top-up checkout session" });
-    }
-  });
-
-  // GET /api/checkout/session/:sessionId — verify a completed session
-  app.get("/api/checkout/session/:sessionId", async (req, res) => {
-    try {
-      const { getUncachableStripeClient } = await import('./stripeClient');
-      const stripe = await getUncachableStripeClient();
-      const session = await stripe.checkout.sessions.retrieve(req.params.sessionId);
-      res.json({
-        id: session.id,
-        status: session.status,
-        paymentStatus: session.payment_status,
-        customerEmail: session.customer_details?.email,
-        metadata: session.metadata,
-        amountTotal: session.amount_total,
-        currency: session.currency,
-      });
-    } catch (error: any) {
-      res.status(500).json({ message: "Failed to retrieve session" });
-    }
-  });
-
-  // GET /api/checkout/order-by-session/:sessionId — look up our DB order by Stripe session ID
-  // Used by the success page to poll for order readiness after webhook fulfillment
-  app.get("/api/checkout/order-by-session/:sessionId", async (req, res) => {
-    try {
-      const order = await storage.getOrderBySessionId(req.params.sessionId);
+      const order = await storage.getOrder(req.params.orderId);
       if (!order) return res.status(404).json({ message: "Order not found yet" });
-      // Sanitize: only return fields the frontend needs
       res.json({
         id: order.id,
         status: order.status,
@@ -437,7 +417,7 @@ export async function registerRoutes(
         planId: order.planId,
         providerEsimId: order.providerEsimId,
       });
-    } catch (error: any) {
+    } catch {
       res.status(500).json({ message: "Failed to look up order" });
     }
   });
@@ -500,7 +480,7 @@ export async function registerRoutes(
     }
   });
 
-  // POST /api/esims/:id/topups/checkout — initiate Stripe top-up checkout
+  // POST /api/esims/:id/topups/checkout — create PayPal top-up order
   app.post("/api/esims/:id/topups/checkout", requireAuth, async (req, res) => {
     const userId = (req as any).userId;
     try {
@@ -509,27 +489,35 @@ export async function registerRoutes(
       if (order.userId !== userId) return res.status(403).json({ message: "Not authorized" });
 
       const user = await storage.getUserById(userId);
-      const parsed = z.object({ optionCode: z.string() }).safeParse(req.body);
+      const parsed = z.object({ optionCode: z.string(), provider: z.enum(["paypal", "paddle"]).default("paypal") }).safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "optionCode required" });
 
       const provider = getActiveProvider();
-      const options = await provider.getTopupOptions(order.providerEsimId || '');
+      const options = await provider.getTopupOptions(order.providerEsimId || "");
       const option = options.find(o => o.optionCode === parsed.data.optionCode);
       if (!option) return res.status(400).json({ message: "Invalid top-up option" });
 
-      const { url, sessionId, topupId } = await createTopupCheckoutSession({
-        orderId: order.id,
-        optionCode: option.optionCode,
-        optionName: option.name,
-        price: option.price,
-        currency: option.currency,
-        email: user?.email || order.email,
-        userId,
-      });
+      const email = user?.email || order.email;
+      const description = `Konex Top-Up — ${option.name} for order ${order.id}`;
 
-      res.json({ url, sessionId, topupId });
+      if (parsed.data.provider === "paddle") {
+        const { checkoutUrl, transactionId } = await createPaddleTransaction({
+          amountUsd: option.price,
+          description,
+          email,
+          customData: { purchaseType: "topup", orderId: order.id, optionCode: option.optionCode, email },
+        });
+        return res.json({ checkoutUrl, transactionId });
+      }
+
+      const { orderId: paypalOrderId } = await createPayPalOrder({
+        amountUsd: option.price,
+        description,
+        customId: `topup:${order.id}|opt:${option.optionCode}|em:${email}`,
+      });
+      res.json({ paypalOrderId });
     } catch (error: any) {
-      console.error('[esims/topups/checkout]', error.message);
+      console.error("[esims/topups/checkout]", error.message);
       res.status(500).json({ message: "Failed to create top-up checkout" });
     }
   });
@@ -700,54 +688,11 @@ export async function registerRoutes(
     }
   });
 
-  // POST /api/checkout/country-plan  ── normalized-plan checkout (no legacy planId)
+  // POST /api/checkout/country-plan  ── redirect to PayPal create-order (kept for backward compat)
   app.post("/api/checkout/country-plan", async (req, res) => {
-    try {
-      const { createCountryPlanCheckoutSession } = await import("./services/stripeService");
-      const { getLocationInfo, normaliseCode } = await import("./services/countryData");
-
-      const {
-        normalizedPlanId,
-        countryCode: rawCode,
-        dataLabel,
-        validityLabel,
-        dataAmountGb,
-        validityDays,
-        email,
-        name,
-      } = req.body;
-
-      if (!normalizedPlanId || !rawCode || !email || !dataLabel || !validityLabel) {
-        return res.status(400).json({ message: "Missing required fields" });
-      }
-
-      const code = normaliseCode(rawCode);
-      const info = getLocationInfo(code);
-      if (!info) return res.status(400).json({ message: "Unknown country or region code" });
-
-      // Optionally attach userId from session
-      const userId = (req as any).user?.id as string | undefined;
-      const userName = ((req as any).user?.name as string | undefined) || name;
-
-      const result = await createCountryPlanCheckoutSession({
-        normalizedPlanId,
-        countryCode: code,
-        countryName: info.name,
-        region: info.region,
-        dataLabel,
-        validityLabel,
-        dataAmountGb: Number(dataAmountGb),
-        validityDays: Number(validityDays),
-        email,
-        userId,
-        userName,
-      });
-
-      res.json(result);
-    } catch (err: any) {
-      console.error("[/api/checkout/country-plan]", err);
-      res.status(500).json({ message: err.message || "Checkout failed" });
-    }
+    res.status(410).json({
+      message: "This endpoint has been retired. Use /api/checkout/paypal/create-order or /api/checkout/paddle/create instead.",
+    });
   });
 
   // ─── DESTINATIONS ────────────────────────────────────

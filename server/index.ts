@@ -4,143 +4,116 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { seedDatabase } from "./seed";
-import { WebhookHandlers } from "./webhookHandlers";
-import { handleCheckoutCompleted, handlePaymentFailed } from "./services/stripeService";
 import { storage } from "./storage";
-import { setWebhookSigningSecret, getWebhookSigningSecret } from "./webhookSecret";
 
 const app = express();
 const httpServer = createServer(app);
 
-// ─── Stripe webhook MUST be registered before express.json() ─────────────────
+// ─── Paddle webhook (raw body required) ───────────────────────────────────────
 app.post(
-  "/api/stripe/webhook",
+  "/api/webhooks/paddle",
   express.raw({ type: "application/json" }),
   async (req, res) => {
-    const signature = req.headers["stripe-signature"];
-    if (!signature) {
-      console.warn("[Webhook] Missing stripe-signature header");
-      return res.status(400).json({ error: "Missing stripe-signature" });
-    }
-
-    const sig = Array.isArray(signature) ? signature[0] : signature;
-
-    // Always acknowledge Stripe first — process business logic async
+    // Acknowledge immediately
     res.status(200).json({ received: true });
 
-    // ── stripe-replit-sync processing (non-blocking) ──────────────────────
     try {
-      await WebhookHandlers.processWebhook(req.body as Buffer, sig);
-    } catch (syncErr: any) {
-      console.error("[Webhook] stripe-replit-sync error:", syncErr.message);
-    }
+      const rawBody = (req.body as Buffer).toString("utf-8");
+      const event = JSON.parse(rawBody);
+      const signature = (req.headers["paddle-signature"] as string) ?? "";
 
-    // ── Business logic: parse event and apply state transitions ──────────
-    try {
-      const { getUncachableStripeClient } = await import("./stripeClient");
-      const stripe = await getUncachableStripeClient();
-
-      let event: any;
-
-      // Try signature verification — use env var, then in-memory secret captured at startup
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || getWebhookSigningSecret() || "";
-      if (webhookSecret) {
-        try {
-          event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
-        } catch {
-          event = null; // fall through to event retrieval
+      // Verify signature in production
+      if (process.env.NODE_ENV === "production" && process.env.PADDLE_WEBHOOK_SECRET) {
+        const { verifyPaddleWebhook } = await import("./services/paddleService");
+        if (!verifyPaddleWebhook(rawBody, signature)) {
+          console.warn("[Paddle] Webhook signature verification failed");
+          return;
         }
       }
 
-      // If signature check failed (or no secret set), retrieve the event directly
-      // from Stripe using the event ID — safe because we use our own API key.
-      if (!event) {
-        try {
-          const rawBody = JSON.parse((req.body as Buffer).toString());
-          const eventId = rawBody?.id;
-          if (!eventId) {
-            console.error("[Webhook] No event ID in payload — cannot process");
-            return;
-          }
-          console.log(`[Webhook] Verifying event ${eventId} via Stripe API`);
-          event = await stripe.events.retrieve(eventId);
-        } catch (fetchErr: any) {
-          if (process.env.NODE_ENV !== "production") {
-            // Dev-only fallback: parse raw JSON without any verification
-            console.warn("[Webhook] Stripe retrieval failed (dev mode) — using raw payload");
-            event = JSON.parse((req.body as Buffer).toString());
-          } else {
-            console.error("[Webhook] Failed to verify event:", fetchErr.message);
-            return;
-          }
-        }
-      }
+      const eventType: string = event.event_type ?? event.notification_type ?? "";
+      const data = event.data ?? event;
+      const transactionId: string = data.id ?? data.transaction_id ?? "";
 
-      await dispatchWebhookEvent(event);
+      console.log(`[Paddle] Event: ${eventType} | transaction=${transactionId}`);
+
+      if (eventType === "transaction.completed" || eventType === "payment.completed") {
+        await handlePaddleTransactionCompleted(data);
+      }
     } catch (err: any) {
-      console.error("[Webhook] Business logic error:", err.message);
+      console.error("[Paddle] Webhook error:", err.message);
     }
   }
 );
 
-// ─── Event dispatcher ─────────────────────────────────────────────────────────
-async function dispatchWebhookEvent(event: any): Promise<void> {
-  const eventId = event.id ?? `evt_${Date.now()}`;
-
-  // Idempotency check
-  const existing = await storage.getPaymentEvent(eventId).catch(() => null);
-  if (existing?.status === "processed") {
-    console.log(`[Webhook] Event ${eventId} already processed — skipping`);
-    return;
-  }
-
-  // Record the event (upsert-style: only create if not already present)
-  if (!existing) {
-    await storage.createPaymentEvent({
-      externalEventId: eventId,
-      eventType: event.type,
-      payloadJson: { type: event.type, objectId: event.data?.object?.id },
-    }).catch(() => {/* duplicate key — already recorded */});
-  }
-
+async function handlePaddleTransactionCompleted(data: any) {
   try {
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object;
-        console.log(`[Webhook] checkout.session.completed — session=${session.id} status=${session.payment_status}`);
-        if (session.payment_status === "paid") {
-          await handleCheckoutCompleted(session);
-        }
-        break;
-      }
-      case "checkout.session.async_payment_succeeded": {
-        const session = event.data.object;
-        console.log(`[Webhook] async_payment_succeeded — session=${session.id}`);
-        await handleCheckoutCompleted(session);
-        break;
-      }
-      case "checkout.session.async_payment_failed":
-      case "payment_intent.payment_failed": {
-        const obj = event.data.object;
-        console.log(`[Webhook] Payment failed — ${event.type}`);
-        await handlePaymentFailed(obj);
-        break;
-      }
-      default:
-        // Unhandled events are fine — just log them
-        console.log(`[Webhook] Ignored event: ${event.type}`);
+    const transactionId: string = data.id ?? data.transaction_id ?? "";
+    const customData: Record<string, string> = data.custom_data ?? {};
+    const email: string =
+      data.customer?.email ??
+      customData.email ??
+      data.billing_details?.email ??
+      "";
+    const amountUsd: number =
+      parseFloat(data.details?.totals?.subtotal ?? "0") / 100 ||
+      parseFloat(customData.amountUsd ?? "0");
+
+    const normalizedPlanId: string = customData.normalizedPlanId ?? "";
+    const countryCode: string = customData.countryCode ?? "";
+
+    // Idempotency check
+    const eventId = `paddle_${transactionId}`;
+    const existing = await storage.getPaymentEvent(eventId).catch(() => null);
+    if (existing?.status === "processed") {
+      console.log(`[Paddle] Event ${eventId} already processed`);
+      return;
     }
 
+    if (!existing) {
+      await storage.createPaymentEvent({
+        externalEventId: eventId,
+        eventType: "transaction.completed",
+        payloadJson: { type: "transaction.completed", objectId: transactionId },
+      }).catch(() => {});
+    }
+
+    // Create order record
+    const { db } = await import("./storage");
+    const { orders, users } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+
+    let resolvedUserId: string | undefined;
+    if (email) {
+      const [user] = await (db as any).select().from(users).where(eq(users.email, email));
+      if (user) resolvedUserId = user.id;
+    }
+
+    const { fulfillInitialPurchase } = await import("./services/fulfillment");
+
+    const [order] = await (db as any).insert(orders).values({
+      planId: null,
+      normalizedPlanId: normalizedPlanId || null,
+      email,
+      userId: resolvedUserId ?? null,
+      status: "paid",
+      totalPrice: amountUsd,
+      currency: "USD",
+      providerName: customData.providerKey ?? "paddle",
+      purchaseType: "initial_purchase",
+      selectedProviderKey: customData.providerKey ?? null,
+      wholesaleCostUsd: customData.wholesaleCostUsd ? parseFloat(customData.wholesaleCostUsd) : null,
+    }).returning();
+
     await storage.markPaymentEventProcessed(eventId);
+    console.log(`[Paddle] Order ${order.id} created — fulfilling...`);
+    await fulfillInitialPurchase(order.id);
   } catch (err: any) {
-    console.error(`[Webhook] Event ${eventId} processing failed:`, err.message);
-    // Mark as failed so it can be retried manually
-    await storage.updatePaymentEventStatus(eventId, "failed").catch(() => {});
-    throw err; // rethrow so caller knows
+    console.error("[Paddle] handleTransactionCompleted error:", err.message);
   }
 }
 
-// ─── Standard middleware (AFTER webhook route) ────────────────────────────────
+// ─── Standard middleware ───────────────────────────────────────────────────────
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -178,80 +151,10 @@ app.use((req, res, next) => {
   next();
 });
 
-
-// ─── Stripe initialization ────────────────────────────────────────────────────
-async function initStripe() {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    console.warn("[Stripe] DATABASE_URL not set — skipping Stripe init");
-    return;
-  }
-
-  // ── Schema migrations (stripe-replit-sync table setup) ──────────────────
-  try {
-    const { runMigrations } = await import("stripe-replit-sync");
-    await runMigrations({ databaseUrl, schema: "stripe" });
-    console.log("[Stripe] Schema ready");
-  } catch (err: any) {
-    console.warn("[Stripe] Schema migration skipped:", err.message);
-  }
-
-  // ── Webhook endpoint registration (direct Stripe API — resilient) ────────
-  try {
-    const { getUncachableStripeClient } = await import("./stripeClient");
-    const stripe = await getUncachableStripeClient();
-    const domains = process.env.REPLIT_DOMAINS?.split(",");
-
-    if (domains?.[0]) {
-      const webhookUrl = `https://${domains[0]}/api/stripe/webhook`;
-
-      // List existing webhook endpoints and find ours
-      const existing = await stripe.webhookEndpoints.list({ limit: 50 });
-      const match = existing.data.find((w: any) => w.url === webhookUrl && w.status === "enabled");
-
-      if (match) {
-        console.log("[Stripe] Webhook endpoint found:", match.url);
-        // Signing secret is not retrievable after creation — rely on event retrieval fallback
-      } else {
-        // Create a fresh webhook endpoint
-        const created = await stripe.webhookEndpoints.create({
-          url: webhookUrl,
-          enabled_events: [
-            "checkout.session.completed",
-            "checkout.session.async_payment_succeeded",
-            "checkout.session.async_payment_failed",
-            "payment_intent.payment_failed",
-            "customer.created",
-            "customer.updated",
-          ],
-          description: "Konex managed webhook",
-        });
-        if ((created as any).secret) setWebhookSigningSecret((created as any).secret);
-        console.log("[Stripe] Webhook created:", created.url, "— signing secret captured");
-      }
-    }
-  } catch (err: any) {
-    console.warn("[Stripe] Webhook registration skipped:", err.message);
-  }
-
-  // ── Sync backfill (stripe-replit-sync — non-blocking) ────────────────────
-  try {
-    const { getStripeSync } = await import("./stripeClient");
-    const stripeSync = await getStripeSync();
-    stripeSync.syncBackfill()
-      .then(() => console.log("[Stripe] Backfill complete"))
-      .catch((err: any) => console.error("[Stripe] Backfill error:", err.message));
-  } catch (err: any) {
-    console.warn("[Stripe] Sync init skipped:", err.message);
-  }
-}
-
 (async () => {
   await seedDatabase().catch(err => console.error("Seed error:", err));
-  await initStripe();
   await registerRoutes(httpServer, app);
 
-  // Start provider catalogue sync scheduler (60s delay, then every 6h)
   const { startProviderSyncScheduler } = await import("./services/providerSync");
   startProviderSyncScheduler();
 

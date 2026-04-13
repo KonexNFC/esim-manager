@@ -101,6 +101,11 @@ export const orders = pgTable("orders", {
   // Computed and saved once at checkout/fulfillment so analytics never need
   // to re-derive it from volatile plan data.
   profit: doublePrecision("profit"),
+  // PayPal fields
+  paypalOrderId: text("paypal_order_id"),
+  paypalCaptureId: text("paypal_capture_id"),
+  // Paddle fields
+  paddleTransactionId: text("paddle_transaction_id"),
 });
 
 // ─── PROVIDER SYNC RUNS ───────────────────────────────
