@@ -193,7 +193,8 @@ async function autoUpdateInternalPlanCosts(): Promise<{ plansUpdated: number; pr
 
   for (const { plan, dest } of rows) {
     const regionCode = (dest?.countryCode ?? "GLOBAL").toUpperCase();
-    const dataMb = Math.round((plan.dataAmountGb ?? 0) * 1024);
+    const rawGb = plan.dataAmountGb ?? 0;
+    const dataMb = rawGb >= 999 ? 999999 : Math.round(rawGb * 1024);
     const validityDays = plan.validityDays;
 
     const [normPlan] = await db
