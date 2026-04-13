@@ -913,7 +913,45 @@ function AlternativePlanRow({
   );
 }
 
-// ─── All plans comparison table ────────────────────────────────────────────────
+// ─── Public-plans types (for /api/plans/public/:code) ─────────────────────────
+
+interface PublicPlan {
+  id: string;
+  bucket: string;
+  offerType: string;
+  dataGb: number | null;
+  isUnlimited: boolean;
+  hotspotSupported: boolean;
+  isSynthetic: boolean;
+  wholesaleCostUsd: number;
+  sellPriceGbp: number;
+  recommendationRole: string;
+  score: number;
+  inTargetBand: boolean;
+}
+
+interface DurationData {
+  bucket: string;
+  recommended: PublicPlan | null;
+  cheaper: PublicPlan | null;
+  premium: PublicPlan | null;
+  browseAll: PublicPlan[];
+}
+
+interface PublicPlansResponse {
+  countryCode: string;
+  defaultDuration: string;
+  availableDurations: string[];
+  durations: Record<string, DurationData>;
+}
+
+const BUCKET_LABELS: Record<string, string> = {
+  DAY_1: "1 Day", DAY_3: "3 Days", DAY_5: "5 Days", DAY_7: "7 Days",
+};
+
+const GBP_TO_USD = 1 / 0.79;
+
+// ─── All plans comparison table (legacy use) ──────────────────────────────────
 
 function AllPlansTable({
   plans,
@@ -1047,152 +1085,6 @@ function AllPlansTable({
   );
 }
 
-// ─── Curated plans section ─────────────────────────────────────────────────────
-
-function CuratedPlansSection({
-  plans,
-  countryCode,
-  countryName,
-  highlightedPlanId,
-  onSelect,
-  onHighlight,
-}: {
-  plans: CountryPlan[];
-  countryCode: string;
-  countryName: string;
-  highlightedPlanId: string | null;
-  onSelect: (p: CountryPlan) => void;
-  onHighlight: (id: string | null) => void;
-}) {
-  const [showAll, setShowAll] = useState(false);
-  const [expandedBuckets, setExpandedBuckets] = useState<Set<string>>(new Set());
-  const { fmt, isApprox } = useCurrency();
-  const profile = getDestinationProfile(countryCode);
-  const buckets = getTripBuckets(profile);
-  const curated = useMemo(() => buildCuratedPlans(plans, profile), [plans, profile]);
-
-  const totalPlans = plans.length;
-
-  function toggleBucketAlternatives(bucketId: string) {
-    setExpandedBuckets(prev => {
-      const next = new Set(prev);
-      if (next.has(bucketId)) next.delete(bucketId);
-      else next.add(bucketId);
-      return next;
-    });
-  }
-
-  return (
-    <div>
-      {/* Section header */}
-      <div className="mb-8">
-        <h2 className="text-xl font-bold mb-1" data-testid="text-curated-title">
-          Recommended plans for {countryName}
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Pick the right plan based on how long you're staying and how much data you need.
-        </p>
-      </div>
-
-      {/* Grouped buckets — one primary card per bucket, alternatives behind toggle */}
-      <div className="space-y-8 mb-10">
-        {buckets.map(bucket => {
-          const bucketPlans = curated.filter(p => p.bucketId === bucket.id);
-          if (bucketPlans.length === 0) return null;
-
-          const primaryPlan  = bucketPlans[0];
-          const alternatives = bucketPlans.slice(1);
-          const isExpanded   = expandedBuckets.has(bucket.id);
-          const BucketIcon   = bucket.icon;
-
-          return (
-            <div key={bucket.id} data-testid={`section-bucket-${bucket.id}`}>
-              {/* Bucket header */}
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <BucketIcon className="w-4 h-4 text-primary" />
-                </div>
-                <div>
-                  <p className="font-bold leading-tight">{bucket.label}</p>
-                  <p className="text-xs text-muted-foreground">{bucket.description}</p>
-                </div>
-              </div>
-
-              {/* Primary recommended plan — full card, dominant */}
-              <CuratedPlanCard
-                plan={primaryPlan}
-                isHighlightedByCalc={highlightedPlanId === primaryPlan.normalizedPlanId}
-                onSelect={onSelect}
-              />
-
-              {/* Alternatives — hidden by default, shown as compact rows */}
-              {alternatives.length > 0 && (
-                <div className="mt-3">
-                  <button
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => toggleBucketAlternatives(bucket.id)}
-                    data-testid={`button-alternatives-${bucket.id}`}
-                  >
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
-                    {isExpanded
-                      ? "Hide other options"
-                      : `Compare alternatives (${alternatives.length})`}
-                  </button>
-
-                  {isExpanded && (
-                    <div className="mt-3 space-y-2">
-                      {alternatives.map(plan => (
-                        <AlternativePlanRow
-                          key={plan.normalizedPlanId}
-                          plan={plan}
-                          isHighlightedByCalc={highlightedPlanId === plan.normalizedPlanId}
-                          fmt={fmt}
-                          isApprox={isApprox}
-                          onSelect={onSelect}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Data usage calculator — find the right plan by usage style + trip length */}
-      <DataCalculatorNew plans={plans} onHighlight={onHighlight} />
-
-      {/* Full inventory — low prominence, available for those who want to compare everything */}
-      <div className="mt-8 pt-6 border-t border-border/50">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-xs text-muted-foreground">
-            {showAll ? "Full plan list" : `Not seeing the right fit?`}
-          </p>
-          <button
-            onClick={() => setShowAll(v => !v)}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            data-testid="button-toggle-all-plans"
-          >
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAll ? "rotate-180" : ""}`} />
-            {showAll ? "Hide" : `Browse all ${totalPlans} plans`}
-          </button>
-        </div>
-
-        {showAll && (
-          <AllPlansTable
-            plans={plans}
-            curatedIds={new Set(curated.map(c => c.normalizedPlanId))}
-            highlightedPlanId={highlightedPlanId}
-            isApprox={isApprox}
-            fmt={fmt}
-            onSelect={onSelect}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ─── Legacy mode (UUID-based destinations) ────────────────────────────────────
 
@@ -1310,347 +1202,283 @@ function LegacyDetail({ destId }: { destId: string }) {
   );
 }
 
-// ─── Short-Stay Flow ──────────────────────────────────────────────────────────
-
-// Duration buckets: validity window [minDays, maxDays] for each button
-const DURATION_BUCKETS = [
-  { days: 1, label: "1 Day",  minDays: 1, maxDays: 2  },
-  { days: 3, label: "3 Days", minDays: 3, maxDays: 4  },
-  { days: 5, label: "5 Days", minDays: 5, maxDays: 6  },
-  { days: 7, label: "7 Days", minDays: 7, maxDays: 9  },
-] as const;
+// ─── Travel Plans Flow (duration-based, using /api/plans/public/:code) ────────
 
 // ─── Pricing engine ───────────────────────────────────────────────────────────
 
-// Fixed USD tier prices for unlimited plans, one per duration bucket.
-// All countries pay the same structured price — predictable, trustworthy, conversion-optimised.
-const USD_UNLIMITED_TIERS: Record<number, number> = {
-  1: 5.99,
-  3: 11.99,
-  5: 16.99,
-  7: 21.99,
-};
+// ─── Plan data label helpers ──────────────────────────────────────────────────
 
-/** Round a USD amount to the nearest $X.49 or $X.99.
- *  Works in integer cents to avoid IEEE-754 edge cases. */
-function roundToNineNine(usd: number): number {
-  const cents = Math.round(usd * 100);
-  const base = Math.floor(cents / 100);
-  const rem = cents % 100;
-  if (rem <= 49) return base + 0.49;
-  if (rem <= 99) return base + 0.99;
-  return base + 1 + 0.49;
+function publicPlanDataLabel(plan: PublicPlan): string {
+  if (plan.isUnlimited) return "Unlimited";
+  if (plan.dataGb === null) return "—";
+  return plan.dataGb >= 1
+    ? `${Math.round(plan.dataGb * 10) / 10} GB`
+    : `${Math.round(plan.dataGb * 1024)} MB`;
 }
 
-/**
- * Compute the sell price in USD for display via fmt().
- * - Unlimited plans: fixed structured tier price by duration ($5.99/$11.99/$16.99/$21.99).
- *   Same price globally — no floating, no per-country drift.
- * - Fixed-data plans: 2× wholesale markup rounded to .49/.99, minimum $1.99.
- *   Allows fixed plans to genuinely undercut unlimited pricing.
- */
-function computeSellPriceUsd(plan: CountryPlan, bucketDays: number): number {
+function publicPlanTitle(plan: PublicPlan): string {
+  if (plan.isUnlimited) return "Unlimited Data";
+  if (plan.dataGb === null) return "Data Plan";
+  const gb = plan.dataGb;
+  return gb >= 1 ? `${Math.round(gb * 10) / 10} GB Data` : `${Math.round(gb * 1024)} MB Data`;
+}
+
+function travelCopy(plan: PublicPlan, durationDays: number): string {
   if (plan.isUnlimited) {
-    return USD_UNLIMITED_TIERS[bucketDays] ?? USD_UNLIMITED_TIERS[3];
-  } else {
-    const costUsd = plan.wholesaleCostUsd ?? plan.estimatedPriceUsd * 0.5;
-    const markedUpUsd = costUsd * 2.0;
-    const rawUsd = Math.max(markedUpUsd, 1.99);
-    return roundToNineNine(rawUsd);
+    if (durationDays <= 1) return "Full-speed data all day — maps, streaming, video calls, no limits.";
+    if (durationDays <= 3) return "No data caps for your whole trip — stream, navigate, and stay in touch freely.";
+    if (durationDays <= 5) return "Five days of unlimited data — perfect for an extended break or city trip.";
+    return "A full week of unlimited data — ideal for business travel, streaming, and hotspot.";
   }
+  const gb = plan.dataGb ?? 0;
+  if (gb < 0.5) return "Essential connectivity — messaging apps and light browsing for the trip.";
+  if (gb < 2) return "Maps, WhatsApp, and ride apps — everything you need for a short visit.";
+  if (gb < 5) return "Maps, social media, and video calls — great if you'll also have Wi-Fi access.";
+  return `${publicPlanDataLabel(plan)} of data — browse, share photos, and video call without running out.`;
 }
 
-/** Filter out unlimited plans with suspiciously low wholesale cost (< $0.25 = probable junk entry) */
-function isLowValueUnlimited(plan: CountryPlan): boolean {
-  const costUsd = plan.wholesaleCostUsd ?? plan.estimatedPriceUsd * 0.5;
-  return costUsd < 0.25;
+// ─── Travel Plans Flow (uses /api/plans/public/:code data) ────────────────────
+
+function PlanTrustBadges() {
+  return (
+    <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5 mt-4">
+      {["Instant QR delivery", "Works on arrival", "No roaming charges"].map(t => (
+        <span key={t} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <Check className="w-3 h-3 text-primary flex-shrink-0" /> {t}
+        </span>
+      ))}
+    </div>
+  );
 }
 
-interface DurationGroup {
-  days: number;
-  label: string;
-  primaryUnlimited: CountryPlan | null;
-  fixedAlternatives: CountryPlan[];
-  available: boolean;
-  pricingAnomaly: boolean;
-}
-
-function buildDurationGroups(plans: CountryPlan[]): DurationGroup[] {
-  const groups: DurationGroup[] = DURATION_BUCKETS.map(bucket => {
-    // All plans in this validity window (no cost filter for availability check)
-    const allInBucket = plans.filter(
-      p => p.validityDays >= bucket.minDays && p.validityDays <= bucket.maxDays
-    );
-
-    // Unlimited: only suppress genuinely garbage plans (wholesale < £1)
-    const unlimitedOpts = allInBucket
-      .filter(p => p.isUnlimited && !isLowValueUnlimited(p))
-      .sort((a, b) => a.estimatedPriceUsd - b.estimatedPriceUsd);
-
-    // Fixed alternatives: minimum 1 GB data, sorted by computed sell price (cheapest first)
-    // No wholesale-cost filter — the floor only applies to unlimited, so cheap fixed plans
-    // will genuinely undercut unlimited and make valid "cheaper option" alternatives.
-    const fixedCandidates = allInBucket
-      .filter(p => !p.isUnlimited && p.dataAmountGb >= 1)
-      .sort((a, b) => computeSellPriceUsd(a, bucket.days) - computeSellPriceUsd(b, bucket.days));
-
-    // Pre-filter: if unlimited exists, only keep fixed plans genuinely cheaper (≥$0.50 below).
-    // If no unlimited, show all fixed plans (they'll be alternatives to each other).
-    const unlimitedSellUsd = unlimitedOpts[0]
-      ? computeSellPriceUsd(unlimitedOpts[0], bucket.days)
-      : Infinity;
-    const cheaperFixed = unlimitedOpts[0]
-      ? fixedCandidates.filter(p => computeSellPriceUsd(p, bucket.days) < unlimitedSellUsd - 0.50)
-      : fixedCandidates;
-
-    // Pick: (1) cheapest plan, (2) plan with most data among the cheaper options
-    // This shows the "how cheap can I go?" and "how much data for less?" spectrum.
-    const alts: CountryPlan[] = [];
-    if (cheaperFixed.length > 0) {
-      alts.push(cheaperFixed[0]); // cheapest (sorted by sell price)
-      const mostData = [...cheaperFixed].sort((a, b) => b.dataAmountGb - a.dataAmountGb)[0];
-      if (mostData.normalizedPlanId !== cheaperFixed[0].normalizedPlanId) {
-        alts.push(mostData);
-      }
-    }
-
-    return {
-      days: bucket.days,
-      label: bucket.label,
-      primaryUnlimited: unlimitedOpts[0] ?? null,
-      fixedAlternatives: alts,
-      available: allInBucket.length > 0,
-      pricingAnomaly: false,
-    };
-  });
-
-  // Pricing ladder: unlimited tier prices always strictly increase with duration
-  // ($5.99 → $11.99 → $16.99 → $21.99) so no anomaly suppression needed.
-  // This loop is kept for safety in case custom buckets are added later.
-  let prevUnlimitedPrice = -Infinity;
-  for (const g of groups) {
-    if (g.primaryUnlimited) {
-      const tierPrice = computeSellPriceUsd(g.primaryUnlimited, g.days);
-      if (tierPrice <= prevUnlimitedPrice) {
-        g.primaryUnlimited = null;
-        g.pricingAnomaly = true;
-      } else {
-        prevUnlimitedPrice = tierPrice;
-      }
-    }
-  }
-
-  return groups;
-}
-
-function ShortStayFlow({
+function PublicBrowseAll({
   plans,
+  fmt,
   onSelect,
 }: {
-  plans: CountryPlan[];
-  onSelect: (p: CountryPlan) => void;
+  plans: PublicPlan[];
+  fmt: (usd: number) => string;
+  onSelect: (p: PublicPlan) => void;
 }) {
-  const groups = useMemo(() => buildDurationGroups(plans), [plans]);
-  const availableGroups = groups.filter(g => g.available);
+  if (plans.length === 0) return null;
 
-  const [selectedDays, setSelectedDays] = useState<number>(() =>
-    availableGroups.find(g => g.days === 3)?.days ?? availableGroups[0]?.days ?? 3
+  const unlimited = plans.filter(p => p.isUnlimited).sort((a, b) => a.sellPriceGbp - b.sellPriceGbp);
+  const fixed = plans.filter(p => !p.isUnlimited && (p.dataGb ?? 0) >= 0.5)
+    .sort((a, b) => a.sellPriceGbp - b.sellPriceGbp);
+
+  const renderGroup = (items: PublicPlan[], label: string) => {
+    if (items.length === 0) return null;
+    return (
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">{label}</p>
+        <div className="space-y-1.5">
+          {items.map(p => (
+            <div
+              key={p.id}
+              className="flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-border bg-muted/20 hover:border-primary/30 hover:bg-primary/[0.02] transition-colors"
+              data-testid={`row-browse-${p.id}`}
+            >
+              <div className="min-w-0">
+                <span className="font-semibold text-sm">{publicPlanDataLabel(p)}</span>
+                <span className="text-muted-foreground text-xs ml-2">
+                  {`· ${BUCKET_LABELS[p.bucket] ?? p.bucket} validity`}
+                </span>
+              </div>
+              <div className="flex items-center gap-2.5 flex-shrink-0 ml-3">
+                <span className="font-bold text-sm">{fmt(p.sellPriceGbp * GBP_TO_USD)}</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs px-3"
+                  onClick={() => onSelect(p)}
+                  data-testid={`button-browse-select-${p.id}`}
+                >
+                  Select
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="mt-4 space-y-4">
+      {renderGroup(unlimited, `Unlimited plans (${unlimited.length})`)}
+      {renderGroup(fixed, `Fixed data plans (${fixed.length})`)}
+    </div>
   );
-  const [showAll, setShowAll] = useState(false);
+}
+
+function TravelPlansFlow({
+  data,
+  onSelectPublic,
+}: {
+  data: PublicPlansResponse;
+  onSelectPublic: (p: PublicPlan) => void;
+}) {
   const { fmt, isApprox } = useCurrency();
+  const availBuckets = data.availableDurations.filter(b => BUCKET_LABELS[b]);
+  const defaultBucket = availBuckets.includes(data.defaultDuration)
+    ? data.defaultDuration
+    : availBuckets[0] ?? "DAY_3";
 
-  const currentGroup = groups.find(g => g.days === selectedDays) ?? null;
-  const primaryUnlimited = currentGroup?.primaryUnlimited ?? null;
-  const fixedAlternatives = currentGroup?.fixedAlternatives ?? [];
+  const [selectedBucket, setSelectedBucket] = useState(defaultBucket);
+  const [showAll, setShowAll] = useState(false);
 
-  // Use the selected bucket's days for price-floor / margin calculations
-  const groupDays = currentGroup?.days ?? selectedDays;
+  const dur = data.durations[selectedBucket];
+  const recommended = dur?.recommended ?? null;
+  const cheaper = dur?.cheaper ?? null;
+  const browseAll = dur?.browseAll ?? [];
 
-  // If unlimited is suppressed (pricing anomaly) or absent, promote best fixed as primary
-  const primaryFixed = !primaryUnlimited ? (fixedAlternatives[0] ?? null) : null;
+  const bucketDays = parseInt(selectedBucket.replace("DAY_", ""), 10);
 
-  // fixedAlternatives from buildDurationGroups are already pre-filtered:
-  // - when unlimited exists: only plans cheaper than unlimited (≥£0.50 below)
-  // - when no unlimited: all ≥1GB fixed plans sorted cheapest first
-  // When fixed is primary, skip [0] (already shown as primary), show the rest.
-  const shownAlternatives = primaryUnlimited ? fixedAlternatives : fixedAlternatives.slice(1);
+  const showCheaper = cheaper &&
+    recommended &&
+    cheaper.id !== recommended.id &&
+    cheaper.sellPriceGbp < recommended.sellPriceGbp - 0.50;
 
-  // Section heading changes based on context
-  const alternativesSectionLabel = primaryUnlimited ? "Prefer a cheaper option?" : "Need more data?";
-
-  const showUnlimited = !!primaryUnlimited;
+  const totalBrowse = browseAll.filter(p =>
+    p.id !== recommended?.id && p.id !== cheaper?.id
+  ).length;
 
   return (
     <div>
-      {/* Duration selector */}
+      {/* Duration tabs */}
       <div className="mb-7">
         <h2 className="text-lg font-bold mb-3" data-testid="text-duration-title">
           How long is your trip?
         </h2>
         <div className="flex gap-2 flex-wrap">
-          {availableGroups.map(g => (
+          {availBuckets.map(b => (
             <button
-              key={g.days}
-              onClick={() => setSelectedDays(g.days)}
+              key={b}
+              onClick={() => { setSelectedBucket(b); setShowAll(false); }}
               className={`px-5 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-150 min-w-[80px] ${
-                selectedDays === g.days
+                selectedBucket === b
                   ? "border-primary bg-primary text-primary-foreground shadow-sm"
                   : "border-border bg-background text-foreground hover:border-primary/40"
               }`}
-              data-testid={`button-duration-${g.days}`}
+              data-testid={`button-duration-${b}`}
             >
-              {g.label}
+              {BUCKET_LABELS[b]}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Primary: Unlimited plan */}
-      {showUnlimited && (
-        <div className="mb-5" data-testid="card-unlimited-primary">
+      {/* Primary recommended plan */}
+      {recommended ? (
+        <div className="mb-5" data-testid="card-recommended-primary">
           <Card className="p-5 sm:p-6 ring-2 ring-primary bg-primary/[0.03] shadow-lg">
             <div className="flex items-center gap-2 mb-4">
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-primary text-primary-foreground">
                 <Zap className="w-3 h-3" /> Recommended
               </span>
+              {recommended.isUnlimited && (
+                <span className="text-[11px] text-muted-foreground">No data cap</span>
+              )}
             </div>
 
             <div className="flex items-start justify-between gap-3 mb-1">
               <div>
-                <p className="text-2xl font-bold tracking-tight">Unlimited Data</p>
+                <p className="text-2xl font-bold tracking-tight">{publicPlanTitle(recommended)}</p>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  {primaryUnlimited!.validityLabel} validity
-                  {primaryUnlimited!.providerCount > 1 && ` · ${primaryUnlimited!.providerCount} providers`}
+                  {bucketDays} {bucketDays === 1 ? "day" : "days"} validity
                 </p>
               </div>
               <div className="text-right flex-shrink-0">
-                <p className="text-3xl font-bold tracking-tight" data-testid="text-unlimited-price">
-                  {fmt(computeSellPriceUsd(primaryUnlimited!, groupDays))}
+                <p className="text-3xl font-bold tracking-tight" data-testid="text-recommended-price">
+                  {isApprox ? "≈ " : ""}{fmt(recommended.sellPriceGbp * GBP_TO_USD)}
+                </p>
+                {isApprox && (
+                  <p className="text-[11px] text-muted-foreground">£{recommended.sellPriceGbp.toFixed(2)} GBP</p>
+                )}
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-5 mt-3 leading-relaxed">
+              {travelCopy(recommended, bucketDays)}
+            </p>
+
+            <Button
+              className="w-full h-11 text-sm font-semibold"
+              onClick={() => onSelectPublic(recommended)}
+              data-testid="button-get-recommended"
+            >
+              {recommended.isUnlimited ? "Get unlimited plan" : "Select this plan"}
+            </Button>
+
+            <PlanTrustBadges />
+          </Card>
+        </div>
+      ) : (
+        <div className="mb-5 p-6 rounded-xl border border-dashed text-center text-muted-foreground text-sm">
+          No plans available for this duration — try another trip length above.
+        </div>
+      )}
+
+      {/* Cheaper alternative */}
+      {showCheaper && (
+        <div className="mb-7">
+          <p className="text-sm font-medium text-muted-foreground mb-3">
+            {recommended?.isUnlimited ? "Prefer a data allowance?" : "Looking for a cheaper option?"}
+          </p>
+          <Card
+            className="p-4 hover:border-primary/30 transition-colors cursor-pointer"
+            data-testid="card-cheaper-alternative"
+            onClick={() => onSelectPublic(cheaper!)}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-bold text-base">{publicPlanTitle(cheaper!)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {travelCopy(cheaper!, bucketDays)}
                 </p>
               </div>
-            </div>
-
-            <p className="text-sm text-muted-foreground mb-5 mt-3 leading-relaxed">
-              No limits. No stress. Perfect for travel, maps, streaming, and hotspot.
-            </p>
-
-            <Button
-              className="w-full h-11 text-sm font-semibold"
-              onClick={() => onSelect(primaryUnlimited!)}
-              data-testid="button-get-unlimited"
-            >
-              Get unlimited plan
-            </Button>
-
-            <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5 mt-4">
-              {["Instant QR delivery", "Works on arrival", "No roaming charges"].map(t => (
-                <span key={t} className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <Check className="w-3 h-3 text-primary flex-shrink-0" /> {t}
-                </span>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* Primary fallback: best fixed-data when no unlimited exists */}
-      {!showUnlimited && primaryFixed && (
-        <div className="mb-5" data-testid="card-primary-fixed">
-          <Card className="p-5 sm:p-6 ring-2 ring-primary bg-primary/[0.03] shadow-lg">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-primary text-primary-foreground">
-                <Star className="w-3 h-3" /> Recommended
-              </span>
-            </div>
-            <div className="flex items-start justify-between gap-3 mb-1">
-              <div>
-                <p className="text-2xl font-bold">{primaryFixed.dataLabel}</p>
-                <p className="text-sm text-muted-foreground mt-0.5">{primaryFixed.validityLabel} validity</p>
-              </div>
-              <p className="text-3xl font-bold tracking-tight flex-shrink-0" data-testid="text-primary-fixed-price">
-                {fmt(computeSellPriceUsd(primaryFixed, groupDays))}
-              </p>
-            </div>
-            <p className="text-sm text-muted-foreground mb-5 mt-3 leading-relaxed">
-              Maps, messaging, and browsing covered for your trip.
-            </p>
-            <Button
-              className="w-full h-11 text-sm font-semibold"
-              onClick={() => onSelect(primaryFixed)}
-              data-testid="button-select-primary-fixed"
-            >
-              Select plan
-            </Button>
-            <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5 mt-4">
-              {["Instant QR delivery", "Works on arrival", "No roaming charges"].map(t => (
-                <span key={t} className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <Check className="w-3 h-3 text-primary flex-shrink-0" /> {t}
-                </span>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* Secondary: cheaper fixed-data alternatives (or more-data options when no unlimited) */}
-      {shownAlternatives.length > 0 && (
-        <div className="mb-8">
-          <p className="text-sm text-muted-foreground mb-3 font-medium">{alternativesSectionLabel}</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {shownAlternatives.map(plan => (
-              <Card
-                key={plan.normalizedPlanId}
-                className="p-4 hover:border-primary/30 transition-colors"
-                data-testid={`card-alternative-${plan.normalizedPlanId}`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="font-bold text-sm">{plan.dataLabel}</p>
-                    <p className="text-xs text-muted-foreground">{plan.validityLabel} validity</p>
-                  </div>
-                  <p className="font-bold text-base flex-shrink-0">{fmt(computeSellPriceUsd(plan, groupDays))}</p>
-                </div>
+              <div className="text-right flex-shrink-0">
+                <p className="font-bold text-lg" data-testid="text-cheaper-price">
+                  {isApprox ? "≈ " : ""}{fmt(cheaper!.sellPriceGbp * GBP_TO_USD)}
+                </p>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full h-8 text-xs mt-2"
-                  onClick={() => onSelect(plan)}
-                  data-testid={`button-select-data-${plan.normalizedPlanId}`}
+                  className="mt-1.5 h-8 text-xs px-4"
+                  onClick={e => { e.stopPropagation(); onSelectPublic(cheaper!); }}
+                  data-testid="button-select-cheaper"
                 >
                   Select
                 </Button>
-              </Card>
-            ))}
-          </div>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
 
-      {/* Full inventory — low prominence */}
-      <div className="pt-5 border-t border-border/50">
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">Not seeing the right fit?</p>
-          <button
-            onClick={() => setShowAll(v => !v)}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            data-testid="button-toggle-all-plans"
-          >
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAll ? "rotate-180" : ""}`} />
-            {showAll ? "Hide" : `Browse all ${plans.length} plans`}
-          </button>
-        </div>
-        {showAll && (
-          <div className="mt-6">
-            <AllPlansTable
-              plans={plans}
-              curatedIds={new Set<string>()}
-              highlightedPlanId={null}
-              isApprox={isApprox}
-              fmt={fmt}
-              onSelect={onSelect}
-            />
+      {/* Browse all options — collapsed, travel-friendly */}
+      {totalBrowse > 0 && (
+        <div className="pt-5 border-t border-border/50">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Not seeing the right fit?</p>
+            <button
+              onClick={() => setShowAll(v => !v)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              data-testid="button-toggle-all-plans"
+            >
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAll ? "rotate-180" : ""}`} />
+              {showAll ? "Hide options" : `Browse all ${totalBrowse} options`}
+            </button>
           </div>
-        )}
-      </div>
+          {showAll && (
+            <PublicBrowseAll
+              plans={browseAll.filter(p => p.id !== recommended?.id && p.id !== cheaper?.id)}
+              fmt={fmt}
+              onSelect={onSelectPublic}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1658,7 +1486,7 @@ function ShortStayFlow({
 // ─── New mode (country-code-based destinations) ───────────────────────────────
 
 function CountryDetail({ countryCode }: { countryCode: string }) {
-  const [checkoutPlan, setCheckoutPlan] = useState<CountryPlan | null>(null);
+  const [checkoutPlan, setCheckoutPlan] = useState<PublicPlan | null>(null);
   const code = countryCode.toUpperCase();
 
   const { data: meta, isLoading: metaLoading } = useQuery<CountryMeta>({
@@ -1670,10 +1498,10 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
     },
   });
 
-  const { data: planData, isLoading: plansLoading } = useQuery<{ countryCode: string; plans: CountryPlan[] }>({
-    queryKey: ["/api/countries", code, "plans"],
+  const { data: publicPlans, isLoading: plansLoading } = useQuery<PublicPlansResponse>({
+    queryKey: ["/api/plans/public", code],
     queryFn: async () => {
-      const res = await fetch(`/api/countries/${code}/plans`);
+      const res = await fetch(`/api/plans/public/${code}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -1691,12 +1519,25 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
   if (isLoading) return <LoadingSkeleton />;
   if (!meta) return <NotFoundState />;
 
-  const plans = planData?.plans ?? [];
+  const hasPlans = publicPlans && publicPlans.availableDurations.length > 0;
+  const totalPlansCount = publicPlans
+    ? Object.values(publicPlans.durations).reduce((acc, d) => {
+        const ids = new Set([
+          ...(d.recommended ? [d.recommended.id] : []),
+          ...(d.cheaper ? [d.cheaper.id] : []),
+          ...(d.premium ? [d.premium.id] : []),
+          ...(d.browseAll ?? []).map(p => p.id),
+        ]);
+        return acc + ids.size;
+      }, 0)
+    : 0;
+
+  const handleSelectPublic = (p: PublicPlan) => setCheckoutPlan(p);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       {checkoutPlan && (
-        <CheckoutModal
+        <PublicCheckoutModal
           plan={checkoutPlan}
           countryCode={code}
           onClose={() => setCheckoutPlan(null)}
@@ -1707,7 +1548,6 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
 
       {/* Hero */}
       <div className="relative rounded-xl overflow-hidden mb-8 h-48 sm:h-56 bg-muted">
-        {/* Flag image (only for country codes; hidden for regions via onError) */}
         {!meta.isRegion && (
           <img
             src={`https://flagcdn.com/w1280/${code.toLowerCase()}.png`}
@@ -1716,7 +1556,6 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
             onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = "0"; }}
           />
         )}
-        {/* Decorative gradient background for regions */}
         {meta.isRegion && (
           <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-primary/10 to-transparent" />
         )}
@@ -1732,25 +1571,146 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
             </p>
           </div>
         </div>
-        {plans.length > 0 && (
+        {totalPlansCount > 0 && (
           <div className="absolute top-4 right-4">
             <Badge className="bg-black/50 text-white border-white/20 backdrop-blur-sm">
-              {plans.length} plan{plans.length !== 1 ? "s" : ""} available
+              {totalPlansCount} plan{totalPlansCount !== 1 ? "s" : ""} available
             </Badge>
           </div>
         )}
       </div>
 
-      {plans.length > 0 ? (
-        <ShortStayFlow
-          plans={plans}
-          onSelect={setCheckoutPlan}
+      {hasPlans ? (
+        <TravelPlansFlow
+          data={publicPlans!}
+          onSelectPublic={handleSelectPublic}
         />
       ) : (
         <EmptyPlans />
       )}
 
       <CompatibilityCard />
+    </div>
+  );
+}
+
+// ─── Public plan checkout modal ────────────────────────────────────────────────
+
+function PublicCheckoutModal({
+  plan,
+  countryCode,
+  onClose,
+}: {
+  plan: PublicPlan;
+  countryCode: string;
+  onClose: () => void;
+}) {
+  const [email, setEmail] = useState("");
+  const { toast } = useToast();
+  const { fmt, isApprox, currency } = useCurrency();
+
+  const { data: me } = useQuery<{ id: string; email: string; name: string } | null>({
+    queryKey: ["/api/auth/me"],
+  });
+
+  const bucketDays = parseInt(plan.bucket.replace("DAY_", ""), 10);
+  const dataLabel = publicPlanDataLabel(plan);
+  const validityLabel = `${bucketDays} ${bucketDays === 1 ? "Day" : "Days"}`;
+  const priceUsd = plan.sellPriceGbp * GBP_TO_USD;
+
+  const checkout = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", "/api/checkout/country-plan", {
+        normalizedPlanId: plan.id,
+        countryCode,
+        dataLabel,
+        validityLabel,
+        dataAmountGb: plan.isUnlimited ? 999 : (plan.dataGb ?? 0),
+        validityDays: bucketDays,
+        email: me?.email || email,
+        name: me?.name,
+      }),
+    onSuccess: async (res: any) => {
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    },
+    onError: (err: any) => {
+      toast({ title: "Checkout failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!me && !email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      toast({ title: "Enter a valid email", variant: "destructive" });
+      return;
+    }
+    checkout.mutate();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <Card className="w-full max-w-sm mx-4 p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
+            <ShoppingCart className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-semibold">Confirm your plan</h3>
+            <p className="text-sm text-muted-foreground">{dataLabel} · {validityLabel}</p>
+          </div>
+        </div>
+
+        <div className="bg-muted/50 rounded-lg p-3 mb-4">
+          <div className="flex justify-between text-sm items-end">
+            <span className="text-muted-foreground">Estimated price</span>
+            <div className="text-right">
+              <span className="font-bold text-lg">{isApprox ? "≈ " : ""}{fmt(priceUsd)}</span>
+              {isApprox && <p className="text-[11px] text-muted-foreground">£{plan.sellPriceGbp.toFixed(2)} GBP</p>}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+            <Lock className="w-3 h-3" />
+            {isApprox
+              ? `Checkout processed in USD · ${currency.code} is approximate`
+              : "Final price confirmed at checkout"}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {!me && (
+            <div>
+              <Label htmlFor="pub-checkout-email" className="text-sm">Email for eSIM delivery</Label>
+              <Input
+                id="pub-checkout-email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                className="mt-1"
+                data-testid="input-checkout-email"
+              />
+            </div>
+          )}
+          {me && (
+            <p className="text-sm text-muted-foreground">
+              eSIM will be sent to <strong>{me.email}</strong>
+            </p>
+          )}
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={checkout.isPending}
+            data-testid="button-confirm-checkout"
+          >
+            {checkout.isPending ? "Redirecting…" : "Continue to Payment"}
+          </Button>
+          <Button type="button" variant="ghost" className="w-full" onClick={onClose}>
+            Cancel
+          </Button>
+        </form>
+      </Card>
     </div>
   );
 }
