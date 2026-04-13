@@ -242,7 +242,7 @@ export class EsimGoProvider implements EsimProvider {
       body: JSON.stringify({
         type: "transaction",
         assign: true,
-        order: [
+        Order: [
           {
             type: "bundle",
             quantity: 1,
