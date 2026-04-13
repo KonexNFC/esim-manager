@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CountryCombobox } from "@/components/country-combobox";
 import { PlanCard, PlanCardGrid, type PlanBadgeVariant } from "@/components/plan-card";
 import { cn } from "@/lib/utils";
+import { useCurrency } from "@/lib/currency";
 import { ChevronRight, Sparkles, TrendingDown } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -106,6 +107,7 @@ function PlanCardSkeleton() {
 
 export default function FindPlan() {
   const [, navigate] = useLocation();
+  const { fmt } = useCurrency();
 
   const searchParams = new URLSearchParams(
     typeof window !== "undefined" ? window.location.search : ""
@@ -150,8 +152,8 @@ export default function FindPlan() {
       _role: "RECOMMENDED",
       "data-testid": "plan-card-recommended",
       title: planTitle(o),
-      price: `$${o.priceUsd.toFixed(2)}`,
-      pricePerDay: `$${o.pricePerDayUsd.toFixed(2)}/day`,
+      price: fmt(o.priceUsd),
+      pricePerDay: `${fmt(o.pricePerDayUsd)}/day`,
       badge: cfg.label,
       badgeVariant: cfg.variant,
       dataAmount: dataLabel(o),
@@ -173,8 +175,8 @@ export default function FindPlan() {
       _role: o.role,
       "data-testid": `plan-card-${o.role.toLowerCase()}`,
       title: planTitle(o),
-      price: `$${o.priceUsd.toFixed(2)}`,
-      pricePerDay: `$${o.pricePerDayUsd.toFixed(2)}/day`,
+      price: fmt(o.priceUsd),
+      pricePerDay: `${fmt(o.pricePerDayUsd)}/day`,
       badge: cfg.label,
       badgeVariant: cfg.variant,
       dataAmount: dataLabel(o),
@@ -377,10 +379,10 @@ export default function FindPlan() {
                         {label}
                       </div>
                       <div className={cn("text-xl font-bold", color)}>
-                        ${price.toFixed(2)}
+                        {fmt(price)}
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        ${ppd?.toFixed(2)}/day
+                        {ppd !== null && ppd !== undefined ? `${fmt(ppd)}/day` : ""}
                       </div>
                     </div>
                   ) : null,

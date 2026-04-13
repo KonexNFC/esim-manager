@@ -1852,20 +1852,19 @@ export async function registerRoutes(
   // ── Catalogue API ──────────────────────────────────────────────────────────
   // New modular catalogue layer: normalisation, synthetic bundling, smart
   // pricing, scoring, and recommendation assignment.
-  // These routes use mock seed data; swap MOCK_SUPPLIER_PLANS for live DB data
-  // when the live provider sync is wired up.
+  // Routes use live DB data fetched from provider_offers + normalized_plans.
 
   {
     const { buildPublicCatalogue, buildInternalCatalogue, buildLadderReport } =
       await import("./catalogue/catalogue-service");
-    const { MOCK_SUPPLIER_PLANS } = await import("./catalogue/mock-data");
     const { GBP_RATE } = await import("./catalogue/pricing-engine");
+    const { getDbSupplierPlans } = await import("./catalogue/db-supplier-plans");
 
     // GET /api/recommend?country=XX&days=N
     // Smart plan recommendation engine: maps trip duration → optimal bucket,
     // then returns RECOMMENDED / CHEAPER / PREMIUM offers with price-per-day
     // and savings calculations.
-    app.get("/api/recommend", (req, res) => {
+    app.get("/api/recommend", async (req, res) => {
       try {
         const country = String(req.query.country ?? "").toUpperCase();
         const days = parseInt(String(req.query.days ?? "3"), 10);
@@ -1890,7 +1889,8 @@ export async function registerRoutes(
         };
 
         const targetBucket = daysToBucket(days);
-        const catalogue = buildPublicCatalogue(country, MOCK_SUPPLIER_PLANS);
+        const supplierPlans = await getDbSupplierPlans(country);
+        const catalogue = buildPublicCatalogue(country, supplierPlans);
 
         if (catalogue.availableDurations.length === 0) {
           return res.status(404).json({ message: `No plans found for country: ${country}` });
@@ -1976,10 +1976,11 @@ export async function registerRoutes(
     // GET /api/plans/public/:countryCode
     // Public travel catalogue: only TRAVEL-category, active plans.
     // M2M/M2D bulk products are excluded.
-    app.get("/api/plans/public/:countryCode", (req, res) => {
+    app.get("/api/plans/public/:countryCode", async (req, res) => {
       try {
         const code = req.params.countryCode.toUpperCase();
-        const catalogue = buildPublicCatalogue(code, MOCK_SUPPLIER_PLANS);
+        const supplierPlans = await getDbSupplierPlans(code);
+        const catalogue = buildPublicCatalogue(code, supplierPlans);
         if (catalogue.availableDurations.length === 0) {
           return res.status(404).json({ message: `No public plans found for ${code}` });
         }
@@ -1993,10 +1994,11 @@ export async function registerRoutes(
     // GET /api/plans/internal/:countryCode
     // Full internal catalogue including M2M / M2D bulk segments.
     // Should be protected by admin auth in production.
-    app.get("/api/plans/internal/:countryCode", requireAdmin, (req, res) => {
+    app.get("/api/plans/internal/:countryCode", requireAdmin, async (req, res) => {
       try {
         const code = req.params.countryCode.toUpperCase();
-        const result = buildInternalCatalogue(code, MOCK_SUPPLIER_PLANS);
+        const supplierPlans = await getDbSupplierPlans(code);
+        const result = buildInternalCatalogue(code, supplierPlans);
         return res.json(result);
       } catch (err: any) {
         console.error("/api/plans/internal error:", err.message);
@@ -2008,10 +2010,11 @@ export async function registerRoutes(
     // Price-ladder analysis for QA: shows sell prices per bucket, margin
     // health, ladder violations, and which buckets are synthetic.
     // No auth required — useful for automated QA pipelines.
-    app.get("/api/debug/ladder/:countryCode", (req, res) => {
+    app.get("/api/debug/ladder/:countryCode", async (req, res) => {
       try {
         const code = req.params.countryCode.toUpperCase();
-        const report = buildLadderReport(code, MOCK_SUPPLIER_PLANS);
+        const supplierPlans = await getDbSupplierPlans(code);
+        const report = buildLadderReport(code, supplierPlans);
         return res.json(report);
       } catch (err: any) {
         console.error("/api/debug/ladder error:", err.message);
