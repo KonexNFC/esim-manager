@@ -14,7 +14,7 @@
 
 import { db } from '../storage';
 import { orders, esims, users, topups, plans, destinations, normalizedPlans, providerSyncLogs, providerAttempts } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { getActiveProvider, getProviderAdapterByKey } from '../providers/adapters';
 import type { ProviderAdapter, ProviderPurchaseParams, CustomerContext, EsimProvisionResult } from '../providers/adapters';
 import {
@@ -194,23 +194,84 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
     }
   }
 
+  // Dynamic fallback chain built when normalizedPlanId is a provider_offers.id
+  let dynamicFallbackChain: FallbackEntry[] | null = null;
+
   if (!planData && order.normalizedPlanId) {
-    const [np] = await db.select().from(normalizedPlans).where(eq(normalizedPlans.id, order.normalizedPlanId));
-    if (np) {
-      const dataAmountGb = np.dataMb / 1024;
-      const dataAmountLabel = np.isUnlimited ? 'Unlimited' : dataAmountGb >= 1 ? `${dataAmountGb} GB` : `${np.dataMb} MB`;
-      const validityLabel = `${np.validityDays} Day${np.validityDays !== 1 ? 's' : ''}`;
+    // New checkout flow: normalizedPlanId = provider_offers.id
+    const offerRows = await db.execute<{
+      id: string; provider_key: string; provider_plan_code: string;
+      region_code: string; validity_days: number; data_mb: number | null;
+      is_unlimited: boolean; name: string; normalized_plan_id: string;
+    }>(sql`
+      SELECT po.id, po.provider_key, po.provider_plan_code,
+             np.region_code, np.validity_days, np.data_mb, np.is_unlimited, np.name,
+             po.normalized_plan_id
+      FROM provider_offers po
+      JOIN normalized_plans np ON np.id = po.normalized_plan_id
+      WHERE po.id = ${order.normalizedPlanId}
+      LIMIT 1
+    `);
+    const offer = offerRows.rows[0];
+
+    if (offer) {
+      const dataAmountGb = offer.is_unlimited ? 0 : (offer.data_mb ?? 0) / 1024;
+      const dataAmountLabel = offer.is_unlimited
+        ? 'Unlimited'
+        : dataAmountGb >= 1 ? `${Math.round(dataAmountGb * 10) / 10} GB` : `${offer.data_mb ?? 0} MB`;
+      const validityLabel = `${offer.validity_days} Day${offer.validity_days !== 1 ? 's' : ''}`;
       planData = {
-        countryCode: np.regionCode,
+        countryCode: offer.region_code,
         dataAmountGb,
-        validityDays: np.validityDays,
-        providerRef: undefined, // overridden per-entry in the fallback chain
-        name: np.name,
-        destination: np.regionCode,
+        validityDays: offer.validity_days,
+        providerRef: offer.provider_plan_code,
+        name: offer.name,
+        destination: offer.region_code,
         region: '',
         dataAmount: dataAmountLabel,
         validity: validityLabel,
       };
+
+      // Build dynamic fallback chain from all active providers for this plan
+      if (!order.selectedProviderKey) {
+        const allOffersRows = await db.execute<{ provider_key: string; provider_plan_code: string }>(sql`
+          SELECT po2.provider_key, po2.provider_plan_code
+          FROM provider_offers po2
+          JOIN providers p ON p.key = po2.provider_key
+          WHERE po2.normalized_plan_id = ${offer.normalized_plan_id}
+            AND po2.is_active = true
+            AND p.enabled = true
+            AND p.auto_paused = false
+          ORDER BY CASE WHEN po2.id = ${order.normalizedPlanId} THEN 0 ELSE 1 END,
+                   po2.wholesale_price_usd ASC
+        `);
+        if (allOffersRows.rows.length > 0) {
+          dynamicFallbackChain = allOffersRows.rows.map(r => ({
+            k: r.provider_key,
+            c: r.provider_plan_code,
+          }));
+          console.log(`[Fulfillment] Dynamic chain for ${orderId}: ${dynamicFallbackChain.map(e => e.k).join(' → ')}`);
+        }
+      }
+    } else {
+      // Legacy fallback: look in normalized_plans directly (old checkout path)
+      const [np] = await db.select().from(normalizedPlans).where(eq(normalizedPlans.id, order.normalizedPlanId));
+      if (np) {
+        const dataAmountGb = np.dataMb / 1024;
+        const dataAmountLabel = np.isUnlimited ? 'Unlimited' : dataAmountGb >= 1 ? `${dataAmountGb} GB` : `${np.dataMb} MB`;
+        const validityLabel = `${np.validityDays} Day${np.validityDays !== 1 ? 's' : ''}`;
+        planData = {
+          countryCode: np.regionCode,
+          dataAmountGb,
+          validityDays: np.validityDays,
+          providerRef: undefined,
+          name: np.name,
+          destination: np.regionCode,
+          region: '',
+          dataAmount: dataAmountLabel,
+          validity: validityLabel,
+        };
+      }
     }
   }
 
@@ -241,18 +302,21 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
     let resolvedProviderKey: string;
 
     // ── Routing-aware path ──────────────────────────────────────────────────
-    // Use if the order was created through the routing engine (has fallback chain).
+    // Use if: (a) order has a pre-computed routing chain from the routing engine, OR
+    //         (b) we dynamically built a chain from the provider_offers lookup above.
     const hasFallbackChain =
-      order.selectedProviderKey &&
-      Array.isArray(order.fallbackProvidersJson) &&
-      (order.fallbackProvidersJson as any[]).length > 0;
+      (order.selectedProviderKey &&
+        Array.isArray(order.fallbackProvidersJson) &&
+        (order.fallbackProvidersJson as any[]).length > 0) ||
+      (dynamicFallbackChain !== null && dynamicFallbackChain.length > 0);
 
     const countryCode = planData.countryCode;
 
     if (hasFallbackChain) {
-      const chain = order.fallbackProvidersJson as unknown as FallbackEntry[];
+      const chain = dynamicFallbackChain ??
+        (order.fallbackProvidersJson as unknown as FallbackEntry[]);
       console.log(
-        `[Fulfillment] Using routing fallback chain for order ${orderId}: ` +
+        `[Fulfillment] Using ${dynamicFallbackChain ? 'dynamic' : 'routing'} fallback chain for order ${orderId}: ` +
         chain.map(e => e.k).join(' → '),
       );
       const fulfilled = await fulfillWithFallbackChain(
