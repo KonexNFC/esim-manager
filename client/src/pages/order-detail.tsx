@@ -4,74 +4,22 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft, ArrowRight, CheckCircle2, QrCode, Wifi, Clock,
-  Globe, Smartphone, Copy, LayoutGrid, ShieldCheck
+  Globe, Smartphone, LayoutGrid, ShieldCheck,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import type { Order, Plan, Destination } from "@shared/schema";
-
-// ─── Install Guide ────────────────────────────────────
-function InstallGuide() {
-  const iosSteps = [
-    "Open Settings on your iPhone",
-    "Tap Cellular or Mobile Data",
-    "Tap Add eSIM or Add Cellular Plan",
-    "Select Use QR Code",
-    "Scan the QR code above",
-    "Label your plan — e.g. \"Travel Data\"",
-    "Choose it as your data line when prompted",
-  ];
-  const androidSteps = [
-    "Open Settings on your device",
-    "Tap Network & Internet or Connections",
-    "Tap SIMs or Mobile Network",
-    "Tap Add eSIM or Download SIM",
-    "Scan the QR code above",
-    "Follow the on-screen steps",
-    "Enable mobile data for the new eSIM",
-  ];
-
-  return (
-    <Tabs defaultValue="ios" className="w-full">
-      <TabsList className="w-full rounded-xl h-10">
-        <TabsTrigger value="ios" className="flex-1" data-testid="tab-ios">
-          <Smartphone className="w-3.5 h-3.5 mr-1.5" />
-          iPhone
-        </TabsTrigger>
-        <TabsTrigger value="android" className="flex-1" data-testid="tab-android">
-          <Smartphone className="w-3.5 h-3.5 mr-1.5" />
-          Android
-        </TabsTrigger>
-      </TabsList>
-      {[{ id: "ios", steps: iosSteps }, { id: "android", steps: androidSteps }].map(({ id, steps }) => (
-        <TabsContent key={id} value={id}>
-          <ol className="space-y-3 mt-5">
-            {steps.map((step, i) => (
-              <li key={i} className="flex items-start gap-3">
-                <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold mt-0.5">
-                  {i + 1}
-                </span>
-                <span className="text-sm leading-relaxed">{step}</span>
-              </li>
-            ))}
-          </ol>
-        </TabsContent>
-      ))}
-    </Tabs>
-  );
-}
+import { EsimQrDisplay } from "@/components/EsimQrDisplay";
 
 // ─── Plan Summary ─────────────────────────────────────
 function PlanSummary({ plan, destination, order }: { plan: Plan; destination: Destination; order: Order }) {
   const isActive = order.status === "completed";
   const stats = [
-    { icon: Globe,      label: "Destination", value: `${destination.flagEmoji ?? ""} ${destination.name}` },
-    { icon: Wifi,       label: "Data",         value: plan.dataAmount },
-    { icon: Clock,      label: "Validity",     value: plan.validity   },
-    { icon: ShieldCheck, label: "Status",      value: isActive ? "Active" : "Pending", highlight: isActive },
+    { icon: Globe,       label: "Destination", value: `${destination.flagEmoji ?? ""} ${destination.name}` },
+    { icon: Wifi,        label: "Data",         value: plan.dataAmount },
+    { icon: Clock,       label: "Validity",     value: plan.validity   },
+    { icon: ShieldCheck, label: "Status",       value: isActive ? "Active" : "Pending", highlight: isActive },
   ];
   return (
     <div className="grid grid-cols-2 gap-3">
@@ -90,7 +38,7 @@ function PlanSummary({ plan, destination, order }: { plan: Plan; destination: De
   );
 }
 
-// ─── Loading ──────────────────────────────────────────
+// ─── Loading skeleton ─────────────────────────────────
 function OrderDetailSkeleton() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-5">
@@ -101,7 +49,7 @@ function OrderDetailSkeleton() {
           <Skeleton className="h-7 w-44" />
           <Skeleton className="h-4 w-56" />
         </div>
-        <Skeleton className="h-56 w-56 rounded-xl mx-auto" />
+        <Skeleton className="h-64 w-64 rounded-2xl mx-auto" />
         <div className="grid grid-cols-2 gap-3">
           <Skeleton className="h-20 rounded-xl" />
           <Skeleton className="h-20 rounded-xl" />
@@ -118,7 +66,6 @@ function OrderDetailSkeleton() {
 export default function OrderDetail() {
   useEffect(() => { document.title = "Order Details | Konex eSIM"; }, []);
   const [, params] = useRoute("/orders/:id");
-  const { toast } = useToast();
   const orderId = params?.id;
 
   const { data: order, isLoading: orderLoading } = useQuery<Order>({
@@ -151,13 +98,6 @@ export default function OrderDetail() {
     enabled: !!plan?.destinationId,
   });
 
-  function copyIccid() {
-    if (order?.iccid) {
-      navigator.clipboard.writeText(order.iccid);
-      toast({ title: "Copied", description: "ICCID copied to clipboard" });
-    }
-  }
-
   if (orderLoading) return <OrderDetailSkeleton />;
 
   if (!order) {
@@ -175,6 +115,8 @@ export default function OrderDetail() {
     );
   }
 
+  const isReady = order.status === "fulfilled" || order.status === "completed";
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-5">
 
@@ -189,59 +131,33 @@ export default function OrderDetail() {
       {/* ── Main card ── */}
       <div className="rounded-2xl border bg-card overflow-hidden shadow-sm">
 
-        {/* Success banner */}
+        {/* Status banner */}
         <div className="bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border-b px-6 py-7 text-center">
           <div className="w-14 h-14 rounded-full bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center mx-auto mb-4">
             <CheckCircle2 className="w-7 h-7 text-emerald-500" />
           </div>
           <h1 className="text-xl font-bold mb-1" data-testid="text-order-success">
-            {order.status === "completed" ? "Your eSIM is ready" : "eSIM order received"}
+            {isReady ? "Your eSIM is ready" : "eSIM order received"}
           </h1>
           <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-            {order.status === "completed"
-              ? "Scan the QR code below to install it on your device."
+            {isReady
+              ? "Hold down the QR code below to install it directly on this device."
               : "We're preparing your eSIM. You'll receive it shortly."}
           </p>
         </div>
 
-        {/* QR code */}
+        {/* QR code + install section */}
         {order.qrCode ? (
-          <div className="flex flex-col items-center py-8 px-6 border-b">
-            <div className="p-3.5 bg-white rounded-2xl border-2 border-border shadow-sm mb-4">
-              <img
-                src={order.qrCode}
-                alt="eSIM QR Code"
-                className="w-52 h-52 rounded-lg"
-                data-testid="img-qr-code"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground text-center">
-              Scan with your device camera · or use the install steps below
-            </p>
+          <div className="px-6 py-8 border-b">
+            <EsimQrDisplay qrCode={order.qrCode} iccid={order.iccid} />
           </div>
         ) : (
           <div className="flex flex-col items-center py-10 border-b">
-            <div className="w-52 h-52 rounded-2xl border-2 border-dashed border-border bg-muted/30 flex items-center justify-center mb-4">
+            <div className="w-56 h-56 rounded-2xl border-2 border-dashed border-border bg-muted/30 flex items-center justify-center mb-4">
               <div className="text-center">
                 <QrCode className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
                 <p className="text-xs text-muted-foreground">QR code being generated</p>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* ICCID */}
-        {order.iccid && (
-          <div className="px-6 py-4 border-b bg-muted/10">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">ICCID</p>
-                <p className="text-sm font-mono font-semibold tracking-wider" data-testid="text-iccid">{order.iccid}</p>
-              </div>
-              <Button size="sm" variant="outline" onClick={copyIccid} className="gap-1.5 flex-shrink-0" data-testid="button-copy-iccid">
-                <Copy className="w-3.5 h-3.5" />
-                Copy
-              </Button>
             </div>
           </div>
         )}
@@ -265,17 +181,6 @@ export default function OrderDetail() {
             <span className="font-mono text-muted-foreground">{order.id.slice(0, 8).toUpperCase()}</span>
           </div>
         </div>
-      </div>
-
-      {/* ── Installation guide ── */}
-      <div className="rounded-2xl border bg-card p-6">
-        <h2 className="font-semibold mb-1 flex items-center gap-2">
-          <Smartphone className="w-4 h-4 text-primary" />
-          Installation guide
-        </h2>
-        <p className="text-xs text-muted-foreground mb-5">Follow these steps to install your eSIM on your device.</p>
-        <Separator className="mb-5" />
-        <InstallGuide />
       </div>
 
       {/* ── Dashboard CTA ── */}

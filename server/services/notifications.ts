@@ -186,68 +186,95 @@ function callToAction(href: string, text: string): string {
 
 // ─── eSIM Ready Email ─────────────────────────────────────────────────────────
 
+function extractLpaUri(qrCodeUrl: string): string | null {
+  try { return new URL(qrCodeUrl).searchParams.get('data'); } catch { return null; }
+}
+
 export async function sendEsimReadyEmail(data: EsimReadyData): Promise<void> {
   const displayName = data.name ? ` ${esc(data.name.split(' ')[0])}` : '';
   const destination = esc(data.destination);
+  const lpaUri = data.manualCode ?? extractLpaUri(data.qrCodeUrl);
+
+  // Build a larger QR URL for email display
+  let largeQrUrl = data.qrCodeUrl;
+  try {
+    const u = new URL(data.qrCodeUrl);
+    u.searchParams.set('size', '440x440');
+    u.searchParams.set('margin', '1');
+    largeQrUrl = u.toString();
+  } catch { /* keep original */ }
 
   const content = `
     ${heading(`Your eSIM is ready to install! 🎉`)}
-    ${subheading(`Hi${displayName}, your Konex for <strong>${destination}</strong> has been activated and is ready to use.`)}
+    ${subheading(`Hi${displayName}, your Konex eSIM for <strong>${destination}</strong> has been activated and is ready to use.`)}
+
+    <!-- Hold-to-install tip -->
+    <div style="background:#f8f5ff;border:1px solid #ddd6fe;border-radius:10px;padding:14px 18px;margin:0 0 24px;text-align:center;">
+      <p style="margin:0;font-size:14px;color:#5b21b6;font-weight:700;">📲 Open this email on your phone</p>
+      <p style="margin:6px 0 0;font-size:13px;color:#6d28d9;">
+        On iPhone: <strong>hold down the QR code</strong> below and tap <em>"Add Cellular Plan"</em> to install instantly — no second phone needed.
+      </p>
+    </div>
 
     <!-- QR Code -->
-    <div style="text-align:center;margin:28px 0;">
-      <p style="margin:0 0 12px;font-size:14px;color:#555;font-weight:600;">SCAN THIS QR CODE TO INSTALL YOUR eSIM</p>
-      <img
-        src="${data.qrCodeUrl}"
-        alt="eSIM QR Code"
-        width="220"
-        height="220"
-        style="border:4px solid #f0f0f0;border-radius:12px;display:block;margin:0 auto;"
-      />
-      ${data.iccid ? `<p style="margin:12px 0 0;font-size:12px;color:#888;">ICCID: <strong style="font-family:monospace;color:#111;">${esc(data.iccid)}</strong></p>` : ''}
-      ${data.manualCode ? `<p style="margin:6px 0 0;font-size:11px;color:#aaa;">Manual code: <span style="font-family:monospace;">${esc(data.manualCode)}</span></p>` : ''}
+    <div style="text-align:center;margin:0 0 24px;">
+      <p style="margin:0 0 14px;font-size:12px;color:#888;font-weight:600;letter-spacing:.06em;text-transform:uppercase;">Hold down to install · or scan with camera</p>
+      <div style="display:inline-block;background:#fff;border:6px solid #f0f0f0;border-radius:16px;padding:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+        <img
+          src="${largeQrUrl}"
+          alt="eSIM QR Code — hold down on iPhone to install"
+          width="220"
+          height="220"
+          style="display:block;border-radius:8px;"
+        />
+      </div>
+      ${data.iccid ? `<p style="margin:14px 0 0;font-size:12px;color:#888;">ICCID: <strong style="font-family:monospace;color:#111;">${esc(data.iccid)}</strong></p>` : ''}
     </div>
 
     <!-- Divider -->
-    <hr style="border:none;border-top:1px solid #f0f0f0;margin:24px 0;" />
+    <hr style="border:none;border-top:1px solid #f0f0f0;margin:4px 0 24px;" />
 
     <!-- Install Steps -->
-    <p style="margin:0 0 16px;font-size:15px;font-weight:700;color:#111;">How to install your eSIM</p>
+    <p style="margin:0 0 14px;font-size:15px;font-weight:700;color:#111;">How to install your eSIM</p>
 
     <!-- iOS -->
-    <div style="background:#f8f5ff;border-left:3px solid #7c3aed;border-radius:0 8px 8px 0;padding:16px 18px;margin-bottom:16px;">
-      <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#5b21b6;">📱 iPhone / iOS</p>
-      <ol style="margin:0;padding-left:20px;color:#444;font-size:13px;line-height:1.9;">
-        <li>Open <strong>Settings</strong> → <strong>Cellular</strong></li>
-        <li>Tap <strong>Add eSIM</strong> or <strong>Add Cellular Plan</strong></li>
-        <li>Choose <strong>Use QR Code</strong></li>
-        <li>Scan the QR code above</li>
-        <li>Follow on-screen prompts to activate</li>
-        <li>Set as primary or secondary line as preferred</li>
+    <div style="background:#f8f5ff;border-left:3px solid #7c3aed;border-radius:0 8px 8px 0;padding:16px 18px;margin-bottom:14px;">
+      <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#5b21b6;">📱 iPhone — fastest method</p>
+      <ol style="margin:0;padding-left:20px;color:#444;font-size:13px;line-height:2;">
+        <li><strong>Hold down this QR code</strong> → tap <em>"Add Cellular Plan"</em> (iOS 14+)</li>
+        <li>Or: <strong>Settings → Cellular → Add eSIM → Use QR Code</strong></li>
+        <li>Scan the QR code, then follow the on-screen steps</li>
+        <li>Label it e.g. <em>"Travel Data"</em> and set as active when you travel</li>
       </ol>
     </div>
 
     <!-- Android -->
-    <div style="background:#f0faf5;border-left:3px solid #10b981;border-radius:0 8px 8px 0;padding:16px 18px;margin-bottom:24px;">
+    <div style="background:#f0faf5;border-left:3px solid #10b981;border-radius:0 8px 8px 0;padding:16px 18px;margin-bottom:14px;">
       <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#059669;">🤖 Android</p>
-      <ol style="margin:0;padding-left:20px;color:#444;font-size:13px;line-height:1.9;">
-        <li>Open <strong>Settings</strong> → <strong>Connections</strong> → <strong>SIM Manager</strong></li>
-        <li>Tap <strong>Add eSIM</strong> or <strong>Download SIM</strong></li>
-        <li>Choose <strong>Scan QR code</strong></li>
-        <li>Scan the QR code above</li>
-        <li>Follow the activation prompts</li>
-        <li><em>Note: Menu names vary by manufacturer (Samsung, Google, etc.)</em></li>
+      <ol style="margin:0;padding-left:20px;color:#444;font-size:13px;line-height:2;">
+        <li><strong>Settings → Network &amp; Internet → SIMs → Add eSIM</strong></li>
+        <li>Tap <em>"Download a SIM"</em> or <em>"Scan QR code"</em></li>
+        <li>Scan the QR code above and follow the activation prompts</li>
+        <li>Enable mobile data for the new eSIM when you're ready to use it</li>
       </ol>
     </div>
 
+    ${lpaUri ? `
+    <!-- Manual activation code -->
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
+      <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#6b7280;letter-spacing:.06em;text-transform:uppercase;">Manual activation code</p>
+      <p style="margin:0;font-size:11px;font-family:monospace;color:#111;word-break:break-all;line-height:1.7;">${esc(lpaUri)}</p>
+      <p style="margin:8px 0 0;font-size:11px;color:#9ca3af;">Use this if the QR code scan doesn't work — paste it into your device's eSIM settings.</p>
+    </div>` : ''}
+
     <!-- Tips -->
     <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 16px;margin-bottom:24px;">
-      <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#92400e;">💡 Tips for the best experience</p>
+      <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#92400e;">💡 Tips</p>
       <ul style="margin:0;padding-left:18px;color:#78350f;font-size:13px;line-height:1.8;">
-        <li>Enable data roaming for your Konex line when abroad</li>
-        <li>Keep Wi-Fi on when installing — you need internet to download the profile</li>
-        <li>Your eSIM validity starts when you first use data, not on install</li>
-        <li>If the QR code scan fails, you can enter the manual code in your device settings</li>
+        <li>Keep Wi-Fi on while installing — internet is needed to download the profile</li>
+        <li>Enable <strong>data roaming</strong> for your Konex line when abroad</li>
+        <li>Your eSIM validity starts when you <strong>first use data</strong>, not on install</li>
+        <li>Each QR code can only be installed on <strong>one device</strong></li>
       </ul>
     </div>
 
@@ -257,7 +284,7 @@ export async function sendEsimReadyEmail(data: EsimReadyData): Promise<void> {
 
   await sendEmail(
     data.email,
-    `Your Konex for ${data.destination} is ready to install 🌐`,
+    `Your Konex eSIM for ${data.destination} is ready — install now 🌐`,
     layout(content, 'Your eSIM is Ready'),
   );
 }
