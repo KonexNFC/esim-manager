@@ -1,7 +1,11 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
-import { Search, Smartphone, LayoutDashboard, LogIn, ChevronDown, Rocket, CreditCard } from "lucide-react";
+import {
+  Search, Smartphone, LayoutDashboard, LogIn, ChevronDown,
+  Rocket, CreditCard, Menu, X, ShoppingBag, Globe,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { KonexLogo } from "./konex-logo";
 import { useCurrency, CURRENCIES } from "@/lib/currency";
@@ -11,6 +15,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 function CurrencySelector() {
   const { currency, setCurrencyCode } = useCurrency();
@@ -44,6 +53,179 @@ function CurrencySelector() {
   );
 }
 
+function MobileMenu({ isHome, user, isLoading, scrollTo }: {
+  isHome: boolean;
+  user: any;
+  isLoading: boolean;
+  scrollTo: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
+
+  const linkClass =
+    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-foreground hover:bg-muted transition-colors w-full";
+  const sectionLabel = "px-4 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground";
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="sm:hidden h-9 w-9"
+          data-testid="button-mobile-menu"
+          aria-label="Open menu"
+        >
+          <Menu className="w-5 h-5" />
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="right" className="w-72 p-0 flex flex-col">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-border/50">
+          <KonexLogo size="md" />
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={close} data-testid="button-close-mobile-menu">
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto py-2">
+          {isHome ? (
+            <>
+              <p className={sectionLabel}>Explore</p>
+              <button className={linkClass} onClick={() => { scrollTo("plans"); close(); }} data-testid="mobile-nav-plans">
+                <Globe className="w-4 h-4 text-primary" />
+                Plans
+              </button>
+              <button className={linkClass} onClick={() => { scrollTo("how-it-works"); close(); }} data-testid="mobile-nav-how-it-works">
+                <Rocket className="w-4 h-4 text-primary" />
+                How It Works
+              </button>
+              <button className={linkClass} onClick={() => { scrollTo("faq"); close(); }} data-testid="mobile-nav-faq">
+                <Search className="w-4 h-4 text-primary" />
+                FAQ
+              </button>
+              <p className={sectionLabel}>Navigation</p>
+              <Link href="/find-plan" onClick={close}>
+                <span className={linkClass} data-testid="mobile-link-find-plan">
+                  <Rocket className="w-4 h-4 text-primary" />
+                  Find My Plan
+                </span>
+              </Link>
+              <Link href="/destinations" onClick={close}>
+                <span className={linkClass} data-testid="mobile-link-browse">
+                  <Search className="w-4 h-4 text-primary" />
+                  Browse Destinations
+                </span>
+              </Link>
+              <Link href="/compatibility" onClick={close}>
+                <span className={linkClass} data-testid="mobile-link-compatibility">
+                  <Smartphone className="w-4 h-4 text-primary" />
+                  Check Device
+                </span>
+              </Link>
+              <a href="https://konexnfc.com/konex-cards" target="_blank" rel="noopener noreferrer" onClick={close}>
+                <span className={linkClass} data-testid="mobile-link-nfc">
+                  <CreditCard className="w-4 h-4 text-primary" />
+                  NFC Card
+                </span>
+              </a>
+              <Link href="/roadmap" onClick={close}>
+                <span className={linkClass} data-testid="mobile-link-roadmap">
+                  <Rocket className="w-4 h-4 text-primary" />
+                  Roadmap
+                </span>
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className={sectionLabel}>Navigation</p>
+              <Link href="/find-plan" onClick={close}>
+                <span className={linkClass} data-testid="mobile-link-find-plan">
+                  <Rocket className="w-4 h-4 text-primary" />
+                  Find My Plan
+                </span>
+              </Link>
+              <Link href="/destinations" onClick={close}>
+                <span className={linkClass} data-testid="mobile-link-browse">
+                  <Search className="w-4 h-4 text-primary" />
+                  Browse Destinations
+                </span>
+              </Link>
+              <Link href="/compatibility" onClick={close}>
+                <span className={linkClass} data-testid="mobile-link-compatibility">
+                  <Smartphone className="w-4 h-4 text-primary" />
+                  Check Device
+                </span>
+              </Link>
+              <a href="https://konexnfc.com/konex-cards" target="_blank" rel="noopener noreferrer" onClick={close}>
+                <span className={linkClass} data-testid="mobile-link-nfc">
+                  <CreditCard className="w-4 h-4 text-primary" />
+                  NFC Card
+                </span>
+              </a>
+              <Link href="/roadmap" onClick={close}>
+                <span className={linkClass} data-testid="mobile-link-roadmap">
+                  <Rocket className="w-4 h-4 text-primary" />
+                  Roadmap
+                </span>
+              </Link>
+            </>
+          )}
+
+          <p className={sectionLabel}>Account</p>
+          {!isLoading && (
+            user ? (
+              <>
+                <Link href="/dashboard" onClick={close}>
+                  <span className={linkClass} data-testid="mobile-link-dashboard">
+                    <LayoutDashboard className="w-4 h-4 text-primary" />
+                    Dashboard
+                  </span>
+                </Link>
+                <Link href="/orders" onClick={close}>
+                  <span className={linkClass} data-testid="mobile-link-orders">
+                    <ShoppingBag className="w-4 h-4 text-primary" />
+                    My eSIMs
+                  </span>
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/login" onClick={close}>
+                  <span className={linkClass} data-testid="mobile-link-login">
+                    <LogIn className="w-4 h-4 text-primary" />
+                    Log In
+                  </span>
+                </Link>
+                <Link href="/signup" onClick={close}>
+                  <span className={linkClass} data-testid="mobile-link-signup">
+                    <Rocket className="w-4 h-4 text-primary" />
+                    Sign Up
+                  </span>
+                </Link>
+              </>
+            )
+          )}
+        </nav>
+
+        <div className="border-t border-border/50 px-4 py-3 flex items-center justify-between">
+          <CurrencySelector />
+          <ThemeToggle />
+        </div>
+
+        {!user && (
+          <div className="px-4 pb-4">
+            <Link href="/destinations" onClick={close}>
+              <Button className="w-full font-semibold" data-testid="mobile-cta-get-started">
+                Get Started
+              </Button>
+            </Link>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export function Navbar() {
   const [location] = useLocation();
   const isHome = location === "/";
@@ -63,9 +245,9 @@ export function Navbar() {
           <KonexLogo size="md" data-testid="text-brand-name" className="cursor-pointer" />
         </Link>
 
-        {/* Home nav */}
+        {/* Home nav — desktop only */}
         {isHome ? (
-          <nav className="flex items-center gap-0.5">
+          <nav className="hidden sm:flex items-center gap-0.5">
             {[
               { label: "Plans",        id: "plans"        },
               { label: "How It Works", id: "how-it-works" },
@@ -120,12 +302,12 @@ export function Navbar() {
             )}
 
             <Link href="/destinations">
-              <Button size="sm" className="ml-1 font-semibold hidden sm:inline-flex" data-testid="nav-get-started">
+              <Button size="sm" className="ml-1 font-semibold" data-testid="nav-get-started">
                 Get Started
               </Button>
             </Link>
             <Link href="/orders">
-              <Button size="sm" variant="outline" className="font-semibold hidden sm:inline-flex" data-testid="nav-my-esims">
+              <Button size="sm" variant="outline" className="font-semibold" data-testid="nav-my-esims">
                 My eSIMs
               </Button>
             </Link>
@@ -134,13 +316,12 @@ export function Navbar() {
             <ThemeToggle />
           </nav>
         ) : (
-          <nav className="flex items-center gap-0.5">
+          <nav className="hidden sm:flex items-center gap-0.5">
             <Link href="/find-plan">
               <Button
                 variant={location.startsWith("/find-plan") ? "secondary" : "ghost"}
                 size="sm"
                 data-testid="link-find-plan"
-                className="hidden sm:flex"
               >
                 <Rocket className="w-4 h-4 mr-1.5" />
                 Find Plan
@@ -151,7 +332,6 @@ export function Navbar() {
                 variant={location.startsWith("/destinations") ? "secondary" : "ghost"}
                 size="sm"
                 data-testid="link-destinations"
-                className="hidden sm:flex"
               >
                 <Search className="w-4 h-4 mr-1.5" />
                 Browse
@@ -162,13 +342,12 @@ export function Navbar() {
                 variant={location.startsWith("/compatibility") ? "secondary" : "ghost"}
                 size="sm"
                 data-testid="link-compatibility"
-                className="hidden sm:flex"
               >
                 <Smartphone className="w-4 h-4 mr-1.5" />
                 Check Device
               </Button>
             </Link>
-            <a href="https://konexnfc.com/konex-cards" target="_blank" rel="noopener noreferrer" className="hidden sm:flex">
+            <a href="https://konexnfc.com/konex-cards" target="_blank" rel="noopener noreferrer" className="flex">
               <Button
                 variant="ghost"
                 size="sm"
@@ -183,7 +362,6 @@ export function Navbar() {
                 variant={location.startsWith("/roadmap") ? "secondary" : "ghost"}
                 size="sm"
                 data-testid="link-roadmap"
-                className="hidden sm:flex"
               >
                 <Rocket className="w-4 h-4 mr-1.5" />
                 Roadmap
@@ -216,12 +394,12 @@ export function Navbar() {
               )
             )}
             <Link href="/destinations">
-              <Button size="sm" className="font-semibold hidden sm:inline-flex" data-testid="nav-get-started-other">
+              <Button size="sm" className="font-semibold" data-testid="nav-get-started-other">
                 Get Started
               </Button>
             </Link>
             <Link href="/orders">
-              <Button size="sm" variant="outline" className="font-semibold hidden sm:inline-flex" data-testid="nav-my-esims-other">
+              <Button size="sm" variant="outline" className="font-semibold" data-testid="nav-my-esims-other">
                 My eSIMs
               </Button>
             </Link>
@@ -229,6 +407,19 @@ export function Navbar() {
             <ThemeToggle />
           </nav>
         )}
+
+        {/* Mobile right-side controls */}
+        <div className="flex sm:hidden items-center gap-1">
+          <CurrencySelector />
+          <ThemeToggle />
+          <MobileMenu
+            isHome={isHome}
+            user={user}
+            isLoading={isLoading}
+            scrollTo={scrollTo}
+          />
+        </div>
+
       </div>
     </header>
   );
