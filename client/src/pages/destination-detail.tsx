@@ -1251,6 +1251,17 @@ function PlanTrustBadges() {
   );
 }
 
+function deduplicatePlans(plans: PublicPlan[]): PublicPlan[] {
+  const seen = new Map<string, PublicPlan>();
+  for (const p of plans) {
+    const key = p.isUnlimited
+      ? `unlimited::${p.sellPriceGbp.toFixed(2)}`
+      : `fixed::${(p.dataGb ?? 0).toFixed(3)}::${p.sellPriceGbp.toFixed(2)}`;
+    if (!seen.has(key)) seen.set(key, p);
+  }
+  return Array.from(seen.values());
+}
+
 function PublicBrowseAll({
   plans,
   fmt,
@@ -1262,9 +1273,12 @@ function PublicBrowseAll({
 }) {
   if (plans.length === 0) return null;
 
-  const unlimited = plans.filter(p => p.isUnlimited).sort((a, b) => a.sellPriceGbp - b.sellPriceGbp);
-  const fixed = plans.filter(p => !p.isUnlimited && (p.dataGb ?? 0) >= 0.5)
-    .sort((a, b) => a.sellPriceGbp - b.sellPriceGbp);
+  const allUnlimited = plans.filter(p => p.isUnlimited).sort((a, b) => a.sellPriceGbp - b.sellPriceGbp);
+  const allFixed = plans.filter(p => !p.isUnlimited && (p.dataGb ?? 0) >= 0.5)
+    .sort((a, b) => (a.dataGb ?? 0) - (b.dataGb ?? 0) || a.sellPriceGbp - b.sellPriceGbp);
+
+  const unlimited = deduplicatePlans(allUnlimited);
+  const fixed = deduplicatePlans(allFixed);
 
   const renderGroup = (items: PublicPlan[], label: string) => {
     if (items.length === 0) return null;
@@ -1305,8 +1319,8 @@ function PublicBrowseAll({
 
   return (
     <div className="mt-4 space-y-4">
+      {renderGroup(fixed, `Data allowance plans (${fixed.length})`)}
       {renderGroup(unlimited, `Unlimited plans (${unlimited.length})`)}
-      {renderGroup(fixed, `Fixed data plans (${fixed.length})`)}
     </div>
   );
 }
@@ -1314,9 +1328,11 @@ function PublicBrowseAll({
 function TravelPlansFlow({
   data,
   onSelectPublic,
+  initialBucket,
 }: {
   data: PublicPlansResponse;
   onSelectPublic: (p: PublicPlan) => void;
+  initialBucket?: string;
 }) {
   const { fmt, isApprox } = useCurrency();
   const availBuckets = data.availableDurations.filter(b => BUCKET_LABELS[b]);
@@ -1324,7 +1340,11 @@ function TravelPlansFlow({
     ? data.defaultDuration
     : availBuckets[0] ?? "DAY_3";
 
-  const [selectedBucket, setSelectedBucket] = useState(defaultBucket);
+  const resolvedInitial = initialBucket && availBuckets.includes(initialBucket)
+    ? initialBucket
+    : defaultBucket;
+
+  const [selectedBucket, setSelectedBucket] = useState(resolvedInitial);
   const [showAll, setShowAll] = useState(false);
 
   const dur = data.durations[selectedBucket];
@@ -1489,6 +1509,10 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
   const [checkoutPlan, setCheckoutPlan] = useState<PublicPlan | null>(null);
   const code = countryCode.toUpperCase();
 
+  const urlBucket = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("bucket") ?? undefined
+    : undefined;
+
   const { data: meta, isLoading: metaLoading } = useQuery<CountryMeta>({
     queryKey: ["/api/countries", code],
     queryFn: async () => {
@@ -1584,6 +1608,7 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
         <TravelPlansFlow
           data={publicPlans!}
           onSelectPublic={handleSelectPublic}
+          initialBucket={urlBucket}
         />
       ) : (
         <EmptyPlans />

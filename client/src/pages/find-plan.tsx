@@ -163,7 +163,7 @@ export default function FindPlan() {
       isRecommended: true,
       savings: savingsPct ? `Save ${savingsPct}% vs Premium` : undefined,
       ctaLabel: "Get This Plan",
-      onSelect: () => navigate(`/destinations/${countryCode?.toLowerCase()}`),
+      onSelect: () => navigate(`/destinations/${countryCode?.toLowerCase()}?bucket=${data?.bucket ?? "DAY_3"}`),
     });
   }
 
@@ -186,7 +186,7 @@ export default function FindPlan() {
       isRecommended: false,
       savings: savingsPct ? `Save ${savingsPct}% vs Best Value` : undefined,
       ctaLabel: o.role === "CHEAPER" ? "Choose Budget Plan" : "Go Premium",
-      onSelect: () => navigate(`/destinations/${countryCode?.toLowerCase()}`),
+      onSelect: () => navigate(`/destinations/${countryCode?.toLowerCase()}?bucket=${data?.bucket ?? "DAY_3"}`),
     });
   }
 
@@ -401,7 +401,7 @@ export default function FindPlan() {
                 data-testid="button-view-all-plans"
                 variant="outline"
                 className="border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 font-semibold"
-                onClick={() => navigate(`/destinations/${countryCode.toLowerCase()}`)}
+                onClick={() => navigate(`/destinations/${countryCode.toLowerCase()}?bucket=${data?.bucket ?? "DAY_3"}`)}
               >
                 View All Plans
                 <ChevronRight className="w-4 h-4 ml-1" />
