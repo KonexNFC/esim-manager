@@ -33,25 +33,27 @@ const MIN_MARGIN_PCT = 25;
 
 /**
  * Target price bands for the public storefront.
- * Unlimited should sit 15–45% above its fixed-data equivalent.
+ * Unlimited plans sit 15–45% above their fixed-data equivalent.
+ * Fixed-data bands use .49 floors (budget-friendly look);
+ * unlimited bands use .99 floors (quality anchor).
  * Adjust these constants to shift the entire pricing structure.
  */
 export const TARGET_BANDS: Record<DurationBucket, BucketBands> = {
   [DurationBucket.DAY_1]: {
     unlimited: { min: 4.99, max: 5.99 },
-    fixed:     { min: 2.99, max: 4.99 },
+    fixed:     { min: 2.49, max: 4.49 },
   },
   [DurationBucket.DAY_3]: {
     unlimited: { min: 8.99,  max: 11.99 },
-    fixed:     { min: 5.99,  max: 8.99  },
+    fixed:     { min: 5.49,  max: 8.49  },
   },
   [DurationBucket.DAY_5]: {
     unlimited: { min: 11.99, max: 15.99 },
-    fixed:     { min: 8.99,  max: 12.99 },
+    fixed:     { min: 8.49,  max: 12.49 },
   },
   [DurationBucket.DAY_7]: {
     unlimited: { min: 14.99, max: 19.99 },
-    fixed:     { min: 10.99, max: 15.99 },
+    fixed:     { min: 9.49,  max: 14.49 },
   },
 };
 
@@ -67,25 +69,26 @@ export function getTargetBand(bucket: DurationBucket, offerType: OfferType): Pri
 }
 
 /**
- * Round a raw GBP price up to the nearest .99 psychological price point.
+ * Smart psychological rounding — produces .49 or .99 endings to avoid the
+ * monotony of everything landing on .99.
+ *
+ * Rule: look at the sub-pound portion (0–99p).
+ *   0–49p  → round UP to .49  (budget-friendly anchor)
+ *   50–99p → round UP to .99  (standard anchor)
  *
  * Examples:
- *   4.30 → 4.99
- *   4.99 → 4.99
- *   5.00 → 5.99
- *   11.50 → 11.99
+ *   2.10 → 2.49   4.49 → 4.49   4.50 → 4.99
+ *   5.12 → 5.49   5.67 → 5.99   8.49 → 8.49
+ *   8.99 → 8.99   9.00 → 9.49  11.99 → 11.99
  *
- * Uses integer-pence arithmetic to avoid IEEE-754 float precision traps
- * (e.g. Math.round(4.99 × 100) = 499, not 500).
+ * Uses integer-pence arithmetic to avoid IEEE-754 float precision traps.
  */
 export function roundPsychological(gbp: number): number {
-  const pence = Math.round(gbp * 100); // e.g. 499 for £4.99
-  const base = Math.floor(pence / 100);
-  const rem  = pence % 100;
-  // Round up to this integer's .99 if there is any fractional part,
-  // otherwise the value is already an integer pound — bump to .99 anyway.
-  if (rem <= 99) return base + 0.99;
-  return base + 1 + 0.99;
+  const pence = Math.round(gbp * 100);
+  const base  = Math.floor(pence / 100);
+  const rem   = pence % 100;
+  if (rem <= 49) return base + 0.49;
+  return base + 0.99;
 }
 
 /**

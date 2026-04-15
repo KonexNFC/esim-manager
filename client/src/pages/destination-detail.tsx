@@ -1354,13 +1354,40 @@ function TravelPlansFlow({
 
   const bucketDays = parseInt(selectedBucket.replace("DAY_", ""), 10);
 
-  const showCheaper = cheaper &&
-    recommended &&
-    cheaper.id !== recommended.id &&
-    cheaper.sellPriceGbp < recommended.sellPriceGbp - 0.50;
+  // ── Build up to 3 data-tier cards (Light / Standard / Heavy) ─────────────
+  // Pool: cheaper plan + all non-unlimited browseAll plans, deduped by GB+price
+  const dataTiers: PublicPlan[] = (() => {
+    const pool = [
+      ...(cheaper && !cheaper.isUnlimited ? [cheaper] : []),
+      ...browseAll.filter(p => !p.isUnlimited),
+    ];
+    const seen = new Set<string>();
+    const unique: PublicPlan[] = [];
+    for (const p of pool) {
+      const key = `${(p.dataGb ?? 0).toFixed(2)}::${p.sellPriceGbp.toFixed(2)}`;
+      if (!seen.has(key)) { seen.add(key); unique.push(p); }
+    }
+    // Tier boundaries: Light ≤ 2.5 GB, Standard ≤ 7 GB, Heavy > 7 GB
+    const tiers = [
+      unique.filter(p => (p.dataGb ?? 0) <= 2.5),
+      unique.filter(p => (p.dataGb ?? 0) > 2.5 && (p.dataGb ?? 0) <= 7),
+      unique.filter(p => (p.dataGb ?? 0) > 7),
+    ];
+    const picks: PublicPlan[] = [];
+    for (const tier of tiers) {
+      if (tier.length === 0) continue;
+      // Best value = most GB per pound
+      const best = tier.sort(
+        (a, b) => (b.dataGb ?? 0) / b.sellPriceGbp - (a.dataGb ?? 0) / a.sellPriceGbp
+      )[0];
+      picks.push(best);
+    }
+    return picks;
+  })();
 
-  const totalBrowse = browseAll.filter(p =>
-    p.id !== recommended?.id && p.id !== cheaper?.id
+  const dataTierIds = new Set(dataTiers.map(p => p.id));
+  const totalBrowse = browseAll.filter(
+    p => p.id !== recommended?.id && p.id !== cheaper?.id && !dataTierIds.has(p.id)
   ).length;
 
   return (
@@ -1439,40 +1466,40 @@ function TravelPlansFlow({
         </div>
       )}
 
-      {/* Cheaper alternative */}
-      {showCheaper && (
+      {/* Data tier grid — shown when unlimited is recommended and fixed options exist */}
+      {recommended?.isUnlimited && dataTiers.length > 0 && (
         <div className="mb-7">
-          <p className="text-sm font-medium text-muted-foreground mb-3">
-            {recommended?.isUnlimited ? "Prefer a data allowance?" : "Looking for a cheaper option?"}
-          </p>
-          <Card
-            className="p-4 hover:border-primary/30 transition-colors cursor-pointer"
-            data-testid="card-cheaper-alternative"
-            onClick={() => onSelectPublic(cheaper!)}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-bold text-base">{publicPlanTitle(cheaper!)}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {travelCopy(cheaper!, bucketDays)}
-                </p>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="font-bold text-lg" data-testid="text-cheaper-price">
-                  {isApprox ? "≈ " : ""}{fmt(cheaper!.sellPriceGbp * GBP_TO_USD)}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-1.5 h-8 text-xs px-4"
-                  onClick={e => { e.stopPropagation(); onSelectPublic(cheaper!); }}
-                  data-testid="button-select-cheaper"
+          <p className="text-sm font-semibold text-foreground mb-1">Prefer a fixed data plan?</p>
+          <p className="text-xs text-muted-foreground mb-3">Choose an allowance that fits your trip</p>
+          <div className={`grid gap-3 ${dataTiers.length === 1 ? "grid-cols-1" : dataTiers.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+            {dataTiers.map((plan, idx) => {
+              const tierLabels = ["Light", "Standard", "Heavy"];
+              const tierLabel = tierLabels[idx] ?? "";
+              const perDayGbp = plan.sellPriceGbp / bucketDays;
+              return (
+                <button
+                  key={plan.id}
+                  onClick={() => onSelectPublic(plan)}
+                  className="group flex flex-col items-center text-center p-3.5 rounded-xl border-2 border-border hover:border-primary/50 hover:bg-primary/[0.02] transition-all duration-150 bg-background cursor-pointer"
+                  data-testid={`card-data-tier-${idx}`}
                 >
-                  Select
-                </Button>
-              </div>
-            </div>
-          </Card>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">{tierLabel}</span>
+                  <span className="text-xl font-bold tracking-tight text-foreground leading-none mb-1">
+                    {publicPlanTitle(plan)}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground mb-2.5">
+                    £{perDayGbp.toFixed(2)}/day
+                  </span>
+                  <span className="text-base font-bold text-primary">
+                    {isApprox ? "≈ " : ""}{fmt(plan.sellPriceGbp * GBP_TO_USD)}
+                  </span>
+                  <span className="mt-2 text-[11px] font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                    Select →
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -1492,7 +1519,7 @@ function TravelPlansFlow({
           </div>
           {showAll && (
             <PublicBrowseAll
-              plans={browseAll.filter(p => p.id !== recommended?.id && p.id !== cheaper?.id)}
+              plans={browseAll.filter(p => p.id !== recommended?.id && !dataTierIds.has(p.id))}
               fmt={fmt}
               onSelect={onSelectPublic}
             />
