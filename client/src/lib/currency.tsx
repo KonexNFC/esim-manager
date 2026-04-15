@@ -31,7 +31,10 @@ interface CurrencyContextValue {
   setCurrencyCode: (code: string) => void;
   /** Format a USD amount into the selected currency string, e.g. "£12.50" */
   fmt: (usd: number) => string;
-  /** Whether the displayed currency is not USD (show a "≈" prefix when true) */
+  /**
+   * Whether the displayed currency is approximate (show a "≈" prefix when true).
+   * False for USD (source currency) and GBP (native store currency — exact round-trip).
+   */
   isApprox: boolean;
 }
 
@@ -58,7 +61,9 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     return `${currency.symbol}${parts.join(".")}`;
   };
 
-  const isApprox = currency.code !== "USD";
+  // USD is the source currency (exact), GBP is the native store currency (exact round-trip).
+  // All other currencies are approximations converted from USD.
+  const isApprox = currency.code !== "USD" && currency.code !== "GBP";
 
   return (
     <CurrencyContext.Provider value={{ currency, setCurrencyCode, fmt, isApprox }}>

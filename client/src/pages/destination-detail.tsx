@@ -1390,6 +1390,24 @@ function TravelPlansFlow({
     p => p.id !== recommended?.id && p.id !== cheaper?.id && !dataTierIds.has(p.id)
   ).length;
 
+  // ── Detect price inversion (e.g. 1-day more expensive than 3-day) ──────────
+  // If the current bucket's recommended price is higher than a longer duration,
+  // surface a nudge so customers pick the better-value option.
+  const BUCKET_ORDER = ["DAY_1", "DAY_3", "DAY_5", "DAY_7"];
+  const betterValueBucket: { bucket: string; price: number; label: string } | null = (() => {
+    if (!recommended) return null;
+    const currentPrice = recommended.sellPriceGbp;
+    const currentIdx = BUCKET_ORDER.indexOf(selectedBucket);
+    for (let i = currentIdx + 1; i < BUCKET_ORDER.length; i++) {
+      const b = BUCKET_ORDER[i];
+      const bRec = data.durations[b]?.recommended;
+      if (bRec && bRec.sellPriceGbp < currentPrice) {
+        return { bucket: b, price: bRec.sellPriceGbp, label: BUCKET_LABELS[b] };
+      }
+    }
+    return null;
+  })();
+
   return (
     <div>
       {/* Duration tabs */}
@@ -1463,6 +1481,24 @@ function TravelPlansFlow({
       ) : (
         <div className="mb-5 p-6 rounded-xl border border-dashed text-center text-muted-foreground text-sm">
           No plans available for this duration — try another trip length above.
+        </div>
+      )}
+
+      {/* Better-value nudge — shown when a longer duration is actually cheaper */}
+      {betterValueBucket && (
+        <div className="mb-5 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50">
+          <span className="text-amber-500 text-base flex-shrink-0">💡</span>
+          <p className="text-sm text-amber-800 dark:text-amber-300 leading-snug">
+            <strong>Better value:</strong> the {betterValueBucket.label} plan is only{" "}
+            <strong>{isApprox ? "≈ " : ""}{fmt(betterValueBucket.price * GBP_TO_USD)}</strong> — save money and get more time to use your eSIM.{" "}
+            <button
+              className="underline font-semibold hover:no-underline"
+              onClick={() => setSelectedBucket(betterValueBucket.bucket)}
+              data-testid="button-switch-better-value"
+            >
+              Switch to {betterValueBucket.label} →
+            </button>
+          </p>
         </div>
       )}
 
