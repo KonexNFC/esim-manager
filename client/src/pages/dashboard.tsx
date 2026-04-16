@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { EsimQrDisplay } from "@/components/EsimQrDisplay";
 
 // ─── Types ────────────────────────────────────────────
 type EnrichedOrder = {
@@ -130,41 +131,54 @@ function UsageBar({ used, total, isUnlimited }: { used: number; total: number; i
 
 // ─── QR Modal ─────────────────────────────────────────
 function QrModal({ order, open, onClose }: { order: EnrichedOrder; open: boolean; onClose: () => void }) {
+  const isFailed = order.status === "fulfillment_failed";
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm" data-testid="qr-modal">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" data-testid="qr-modal">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="text-xl">{order.flagEmoji}</span>
-            Install eSIM — {order.destinationName}
+            {order.qrCode ? `Install eSIM — ${order.destinationName}` : "eSIM Status"}
           </DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col items-center gap-5 pt-2">
-          {order.qrCode ? (
-            <div className="p-3 bg-white rounded-xl border-2 border-border">
-              <img src={order.qrCode} alt="eSIM QR Code" className="w-44 h-44 rounded-lg" data-testid="img-qr-code" />
+
+        {order.qrCode ? (
+          /* ── Fully provisioned: show rich install experience ── */
+          <EsimQrDisplay qrCode={order.qrCode} iccid={order.iccid} />
+        ) : isFailed ? (
+          /* ── Fulfillment failed ── */
+          <div className="flex flex-col items-center gap-4 py-6 text-center">
+            <div className="w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+              <AlertCircle className="w-7 h-7 text-red-500" />
             </div>
-          ) : (
-            <div className="w-44 h-44 rounded-xl border bg-muted flex items-center justify-center text-muted-foreground text-sm">
-              QR code unavailable
+            <div>
+              <p className="font-semibold text-base">eSIM provisioning failed</p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+                We were unable to issue your eSIM after payment. Our team has been notified.
+                Please contact support with your Order ID for a full refund or retry.
+              </p>
             </div>
-          )}
-          {order.iccid && (
             <div className="w-full rounded-xl border bg-muted/30 p-3 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1.5">ICCID</p>
-              <p className="text-sm font-mono font-semibold tracking-wider" data-testid="text-iccid">{order.iccid}</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Order ID</p>
+              <p className="text-sm font-mono font-semibold" data-testid="text-order-id-failed">{order.id.slice(0, 8).toUpperCase()}</p>
             </div>
-          )}
-          <div className="w-full rounded-xl border bg-muted/20 p-4 space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Installation steps</p>
-            <ol className="list-decimal list-inside space-y-1.5 text-sm">
-              <li>Open <strong>Settings → Cellular / Mobile Data</strong></li>
-              <li>Tap <strong>"Add eSIM"</strong> or <strong>"Add Data Plan"</strong></li>
-              <li>Scan the QR code above</li>
-              <li>Follow the on-screen prompts</li>
-            </ol>
           </div>
-        </div>
+        ) : (
+          /* ── Still being prepared ── */
+          <div className="flex flex-col items-center gap-4 py-6 text-center">
+            <div className="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+              <QrCode className="w-7 h-7 text-blue-500 animate-pulse" />
+            </div>
+            <div>
+              <p className="font-semibold text-base">Preparing your eSIM…</p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+                Your QR code is being generated. This usually takes under a minute.
+                Check back shortly or refresh the page.
+              </p>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

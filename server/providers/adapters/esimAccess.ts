@@ -147,10 +147,13 @@ export class EsimAccessAdapter implements ProviderAdapter {
     const orderNo = orderResp.obj?.orderNo;
     if (!orderNo) throw new Error('eSIM Access order returned no orderNo');
 
-    // Poll up to 10×3 s = 30 s for profile allocation
+    // Poll up to 20×5 s = 100 s for profile allocation.
+    // eSIM Access can take 60–90 s to allocate a profile on some routes —
+    // the previous 30 s timeout caused orders to be marked as failed even
+    // though eSIM Access had already billed and was still allocating.
     let esimData: any;
-    for (let attempt = 0; attempt < 10; attempt++) {
-      await new Promise(r => setTimeout(r, 3_000));
+    for (let attempt = 0; attempt < 20; attempt++) {
+      await new Promise(r => setTimeout(r, 5_000));
       try {
         const q = await this.req<{ obj: { esimList: any[] } }>('/esim/query', { orderNo });
         const list = q.obj?.esimList ?? [];
@@ -158,7 +161,7 @@ export class EsimAccessAdapter implements ProviderAdapter {
       } catch { /* keep polling */ }
     }
 
-    if (!esimData) throw new Error(`eSIM Access order ${orderNo} placed but no profile allocated within 30 s`);
+    if (!esimData) throw new Error(`eSIM Access order ${orderNo} placed but no profile allocated within 100 s`);
 
     const activationUrl = `LPA:1$${esimData.smdpAddress}$${esimData.matchingId}`;
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(activationUrl)}`;
