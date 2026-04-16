@@ -28,6 +28,7 @@ import { SiVisa, SiMastercard, SiApplepay, SiStripe, SiGooglepay, SiVodafone, Si
 import type { Destination, Plan } from "@shared/schema";
 import { CountryCombobox } from "@/components/country-combobox";
 import { useInView } from "@/hooks/use-in-view";
+import worldMapImg from "@assets/IMG_9153_1776332722553.jpeg";
 
 // ─── Reveal wrapper ──────────────────────────────────────────────────────────
 function Reveal({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
@@ -1057,6 +1058,73 @@ const bundles = [
   },
 ];
 
+// ─────────────────────────────────────────────
+// WORLD COVERAGE MAP
+// ─────────────────────────────────────────────
+function WorldCoverageSection() {
+  const { ref, inView } = useInView(0.15);
+  return (
+    <section
+      className="py-14 sm:py-20 lg:py-28 border-t overflow-hidden"
+      data-testid="section-world-coverage"
+      ref={ref}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        {/* Heading */}
+        <div className={`text-center mb-8 sm:mb-12 reveal ${inView ? "in-view" : ""}`}>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-semibold uppercase tracking-wider mb-4">
+            <Globe className="w-3.5 h-3.5" />
+            Worldwide Coverage
+          </div>
+          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-3">
+            Stay connected in <span className="text-blue-500">190+ countries</span>
+          </h2>
+          <p className="text-muted-foreground text-base sm:text-lg max-w-xl mx-auto">
+            From downtown Tokyo to a Moroccan riad — if you're travelling there, we've got you covered.
+          </p>
+        </div>
+
+        {/* Map card */}
+        <div
+          className={`relative rounded-2xl sm:rounded-3xl overflow-hidden border border-border/60 shadow-2xl reveal reveal-delay-1 ${inView ? "in-view" : ""}`}
+        >
+          {/* Top gradient fade for a premium feel */}
+          <div className="absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none" />
+          {/* Bottom gradient fade */}
+          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-background/80 to-transparent z-10 pointer-events-none" />
+
+          <img
+            src={worldMapImg}
+            alt="World map showing Konex eSIM coverage across 190+ countries"
+            className="w-full object-cover block"
+            style={{ maxHeight: "520px", objectPosition: "center 30%" }}
+            data-testid="img-world-coverage-map"
+          />
+        </div>
+
+        {/* Stats row under map */}
+        <div className={`mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4 reveal reveal-delay-2 ${inView ? "in-view" : ""}`}>
+          {[
+            { label: "Countries", value: "190+", icon: <MapPin className="w-4 h-4" /> },
+            { label: "Networks", value: "800+", icon: <Signal className="w-4 h-4" /> },
+            { label: "Activates instantly", value: "< 60s", icon: <Zap className="w-4 h-4" /> },
+            { label: "No roaming fees", value: "Ever", icon: <ShieldCheck className="w-4 h-4" /> },
+          ].map(stat => (
+            <div
+              key={stat.label}
+              className="flex flex-col items-center gap-1.5 py-4 px-3 rounded-xl border bg-muted/30 text-center"
+            >
+              <span className="text-blue-500">{stat.icon}</span>
+              <span className="font-bold text-xl sm:text-2xl tracking-tight">{stat.value}</span>
+              <span className="text-xs text-muted-foreground">{stat.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function BundlesSection() {
   return (
     <section className="py-12 sm:py-20 lg:py-28 border-t">
@@ -1600,6 +1668,7 @@ export default function Home() {
       <Reveal><PopularDestinations /></Reveal>
       <Reveal><TestimonialsSection /></Reveal>
       <Reveal><WhyKonex /></Reveal>
+      <Reveal><WorldCoverageSection /></Reveal>
       <Reveal><BundlesSection /></Reveal>
       <Reveal><CompatibilitySection /></Reveal>
       <Reveal><FinalCTA /></Reveal>
