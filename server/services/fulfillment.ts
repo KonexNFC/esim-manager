@@ -232,7 +232,11 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
         validity: validityLabel,
       };
 
-      // Build dynamic fallback chain from all active providers for this plan
+      // Build dynamic fallback chain from all active providers for this plan.
+      // IMPORTANT: Only include providers that have a registered purchase adapter.
+      // Providers synced into the catalogue (e.g. Zendit) but without an adapter
+      // implementation must be excluded — otherwise the entire chain silently skips
+      // and the customer is left with no eSIM after a successful payment.
       if (!order.selectedProviderKey) {
         const allOffersRows = await db.execute<{ provider_key: string; provider_plan_code: string }>(sql`
           SELECT po2.provider_key, po2.provider_plan_code
@@ -245,12 +249,33 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
           ORDER BY CASE WHEN po2.id = ${order.normalizedPlanId} THEN 0 ELSE 1 END,
                    po2.wholesale_price_usd ASC
         `);
+
         if (allOffersRows.rows.length > 0) {
-          dynamicFallbackChain = allOffersRows.rows.map(r => ({
-            k: r.provider_key,
-            c: r.provider_plan_code,
-          }));
-          console.log(`[Fulfillment] Dynamic chain for ${orderId}: ${dynamicFallbackChain.map(e => e.k).join(' → ')}`);
+          // Filter to only providers that have a working adapter
+          const adapterReady = allOffersRows.rows.filter(r => {
+            const adapter = getProviderAdapterByKey(r.provider_key);
+            if (!adapter) {
+              console.warn(`[Fulfillment] Excluding "${r.provider_key}" from dynamic chain — no adapter registered`);
+              return false;
+            }
+            return true;
+          });
+
+          if (adapterReady.length > 0) {
+            dynamicFallbackChain = adapterReady.map(r => ({
+              k: r.provider_key,
+              c: r.provider_plan_code,
+            }));
+            console.log(`[Fulfillment] Dynamic chain for ${orderId}: ${dynamicFallbackChain.map(e => e.k).join(' → ')}`);
+          } else {
+            // All offers belong to providers without adapters — log and fall through
+            // to the legacy getActiveProvider() path below so we still attempt fulfillment.
+            // Clear providerRef so the active provider does a spec-based plan search
+            // (the stored code belongs to the non-adapter provider and is meaningless to eSIMGo).
+            console.warn(`[Fulfillment] No adapter-ready providers in dynamic chain for ${orderId} — falling through to active provider (spec-based lookup)`);
+            planData.providerRef = undefined;
+            dynamicFallbackChain = null;
+          }
         }
       }
     } else {
@@ -452,7 +477,7 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
 async function markFulfillmentFailed(orderId: string, reason: string) {
   console.error(`[Fulfillment] Failed for ${orderId}: ${reason}`);
   await db.update(orders)
-    .set({ status: 'fulfillment_failed', esimStatus: 'issued' })
+    .set({ status: 'fulfillment_failed', esimStatus: null })
     .where(eq(orders.id, orderId));
 
   try {

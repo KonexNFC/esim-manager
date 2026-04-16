@@ -59,6 +59,11 @@ export async function getDbSupplierPlans(
       AND p.enabled     = true
       AND p.auto_paused = false
       AND po.wholesale_price_usd > 0
+      -- Only include providers that have a registered purchase adapter.
+      -- Providers synced into the catalogue without a fulfillment adapter (e.g. zendit)
+      -- must be excluded to prevent customers purchasing plans we cannot deliver.
+      -- Update this list when a new adapter is implemented.
+      AND po.provider_key IN ('esimgo', 'esimaccess', 'mock')
     ORDER BY po.wholesale_price_usd ASC
   `);
 
