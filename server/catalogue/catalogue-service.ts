@@ -37,6 +37,7 @@ const STANDARD_DURATIONS: DurationBucket[] = [
   DurationBucket.DAY_3,
   DurationBucket.DAY_5,
   DurationBucket.DAY_7,
+  DurationBucket.DAY_30,
 ];
 
 // ─── Pipeline helpers ─────────────────────────────────────────────────────────

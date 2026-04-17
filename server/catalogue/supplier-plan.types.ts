@@ -6,10 +6,11 @@
 
 /** Clean travel-friendly duration buckets exposed to the public storefront */
 export enum DurationBucket {
-  DAY_1 = "DAY_1",
-  DAY_3 = "DAY_3",
-  DAY_5 = "DAY_5",
-  DAY_7 = "DAY_7",
+  DAY_1  = "DAY_1",
+  DAY_3  = "DAY_3",
+  DAY_5  = "DAY_5",
+  DAY_7  = "DAY_7",
+  DAY_30 = "DAY_30",
 }
 
 /**
@@ -66,7 +67,7 @@ export enum PlanStatus {
  */
 export interface SupplierPlan {
   id: string;
-  supplier: "breeze" | "esimgo" | "esimaccess";
+  supplier: "breeze" | "esimgo" | "esimaccess" | "zendit";
   countryCode: string;          // ISO-3166-1 alpha-2
   validityDays: number;         // raw days from supplier
   dataMb: number | null;        // null → unlimited

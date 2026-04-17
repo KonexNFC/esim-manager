@@ -55,6 +55,10 @@ export const TARGET_BANDS: Record<DurationBucket, BucketBands> = {
     unlimited: { min: 14.99, max: 19.99 },
     fixed:     { min: 9.49,  max: 14.49 },
   },
+  [DurationBucket.DAY_30]: {
+    unlimited: { min: 29.99, max: 49.99 },
+    fixed:     { min: 14.99, max: 34.99 },
+  },
 };
 
 // ─── Exported helpers ─────────────────────────────────────────────────────────

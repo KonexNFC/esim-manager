@@ -613,8 +613,10 @@ export async function registerRoutes(
 
       const code = normaliseCode(req.params.code);
 
-      // Get all normalized plans for this country that have active offers
-      // GROUP BY (dataMb, validityDays) to deduplicate — pick cheapest wholesale
+      // Get all normalized plans for this country that have active offers.
+      // Deduplicate by (data_mb, validity_days) across all providers —
+      // pick the cheapest offer spec and the corresponding normalized_plan_id.
+      // Only include providers that have a registered purchase adapter.
       const rows = await db.execute<{
         normalized_plan_id: string;
         data_mb: string;
@@ -623,23 +625,25 @@ export async function registerRoutes(
         min_wholesale: string;
         offer_count: string;
       }>(sql`
-        SELECT
+        SELECT DISTINCT ON (np.data_mb, np.validity_days, np.is_unlimited)
           np.id          AS normalized_plan_id,
           np.data_mb,
           np.validity_days,
           np.is_unlimited,
-          MIN(po.wholesale_price_usd) AS min_wholesale,
-          COUNT(po.id)::int           AS offer_count
+          MIN(po.wholesale_price_usd) OVER (PARTITION BY np.data_mb, np.validity_days, np.is_unlimited) AS min_wholesale,
+          COUNT(po.id)   OVER (PARTITION BY np.data_mb, np.validity_days, np.is_unlimited)::int         AS offer_count
         FROM   normalized_plans np
         JOIN   provider_offers po    ON po.normalized_plan_id = np.id
-        LEFT JOIN providers    prov  ON prov.key = po.provider_key
-        WHERE  np.region_code   = ${code}
-          AND  po.is_active     = true
-          AND  np.is_active     = true
-          AND  COALESCE(prov.enabled,     true)  = true
-          AND  COALESCE(prov.auto_paused, false) = false
-        GROUP BY np.id, np.data_mb, np.validity_days, np.is_unlimited
-        ORDER BY np.data_mb ASC, np.validity_days ASC
+        JOIN   providers       prov  ON prov.key = po.provider_key
+        WHERE  np.region_code        = ${code}
+          AND  po.is_active          = true
+          AND  np.is_active          = true
+          AND  prov.enabled          = true
+          AND  prov.auto_paused      = false
+          AND  po.provider_key       IN ('esimgo', 'esimaccess', 'zendit', 'mock')
+          AND  po.wholesale_price_usd > 0
+        ORDER BY np.data_mb, np.validity_days, np.is_unlimited,
+                 po.wholesale_price_usd ASC
       `);
 
       const { calculateRetailPrice } = await import("./services/pricingEngine");

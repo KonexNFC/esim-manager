@@ -1,6 +1,7 @@
 import { MockProviderAdapter } from './mock';
 import { EsimGoAdapter } from './esimgo';
 import { EsimAccessAdapter } from './esimAccess';
+import { ZenditAdapter } from './zendit';
 import { FailoverProviderAdapter } from './failover';
 import type { ProviderAdapter } from './base';
 
@@ -32,6 +33,13 @@ export function getProviderAdapterByKey(key: string): ProviderAdapter | null {
   if (norm === 'esimaccess') {
     if (!eaCode || !eaSecret) { console.warn(`[Provider] getProviderAdapterByKey: eSIM Access keys missing`); return null; }
     return new EsimAccessAdapter(eaCode, eaSecret);
+  }
+
+  if (norm === 'zendit') {
+    const zKey = process.env.ZENDIT_API_KEY;
+    if (!zKey) { console.warn(`[Provider] getProviderAdapterByKey: ZENDIT_API_KEY missing`); return null; }
+    const zEnv = (process.env.ZENDIT_ENV ?? '').toLowerCase() === 'production' ? 'production' : 'test';
+    return new ZenditAdapter(zKey, zEnv);
   }
 
   if (norm === 'mock') {

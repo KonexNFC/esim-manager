@@ -60,10 +60,8 @@ export async function getDbSupplierPlans(
       AND p.auto_paused = false
       AND po.wholesale_price_usd > 0
       -- Only include providers that have a registered purchase adapter.
-      -- Providers synced into the catalogue without a fulfillment adapter (e.g. zendit)
-      -- must be excluded to prevent customers purchasing plans we cannot deliver.
       -- Update this list when a new adapter is implemented.
-      AND po.provider_key IN ('esimgo', 'esimaccess', 'mock')
+      AND po.provider_key IN ('esimgo', 'esimaccess', 'zendit', 'mock')
     ORDER BY po.wholesale_price_usd ASC
   `);
 
@@ -84,8 +82,9 @@ export async function getDbSupplierPlans(
   });
 }
 
-function mapProviderKey(key: string): "esimgo" | "esimaccess" | "breeze" {
+function mapProviderKey(key: string): "esimgo" | "esimaccess" | "zendit" | "breeze" {
   if (key === "esimgo") return "esimgo";
   if (key === "esimaccess") return "esimaccess";
+  if (key === "zendit") return "zendit";
   return "breeze";
 }

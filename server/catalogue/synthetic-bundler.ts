@@ -19,10 +19,11 @@ import {
 
 /** Multiplier applied to DAY_1 cost when building each synthetic bucket */
 const BUNDLE_MULTIPLIER: Record<DurationBucket, number> = {
-  [DurationBucket.DAY_1]: 1,
-  [DurationBucket.DAY_3]: 3,
-  [DurationBucket.DAY_5]: 5,
-  [DurationBucket.DAY_7]: 7,
+  [DurationBucket.DAY_1]:  1,
+  [DurationBucket.DAY_3]:  3,
+  [DurationBucket.DAY_5]:  5,
+  [DurationBucket.DAY_7]:  7,
+  [DurationBucket.DAY_30]: 30,
 };
 
 /** Which target buckets can be synthesised (DAY_1 cannot be synthetic) */
@@ -141,9 +142,10 @@ export function getNativeCoverage(
       o.visibility === Visibility.PUBLIC
   );
   return {
-    [DurationBucket.DAY_1]: native.some((o) => o.bucket === DurationBucket.DAY_1),
-    [DurationBucket.DAY_3]: native.some((o) => o.bucket === DurationBucket.DAY_3),
-    [DurationBucket.DAY_5]: native.some((o) => o.bucket === DurationBucket.DAY_5),
-    [DurationBucket.DAY_7]: native.some((o) => o.bucket === DurationBucket.DAY_7),
+    [DurationBucket.DAY_1]:  native.some((o) => o.bucket === DurationBucket.DAY_1),
+    [DurationBucket.DAY_3]:  native.some((o) => o.bucket === DurationBucket.DAY_3),
+    [DurationBucket.DAY_5]:  native.some((o) => o.bucket === DurationBucket.DAY_5),
+    [DurationBucket.DAY_7]:  native.some((o) => o.bucket === DurationBucket.DAY_7),
+    [DurationBucket.DAY_30]: native.some((o) => o.bucket === DurationBucket.DAY_30),
   };
 }
