@@ -67,7 +67,7 @@ export enum PlanStatus {
  */
 export interface SupplierPlan {
   id: string;
-  supplier: "breeze" | "esimgo" | "esimaccess" | "zendit";
+  supplier: "breeze" | "esimgo" | "esimaccess" | "zendit" | "airalo";
   countryCode: string;          // ISO-3166-1 alpha-2
   validityDays: number;         // raw days from supplier
   dataMb: number | null;        // null → unlimited

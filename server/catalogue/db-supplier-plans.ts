@@ -61,7 +61,7 @@ export async function getDbSupplierPlans(
       AND po.wholesale_price_usd > 0
       -- Only include providers that have a registered purchase adapter.
       -- Update this list when a new adapter is implemented.
-      AND po.provider_key IN ('esimgo', 'esimaccess', 'zendit', 'mock')
+      AND po.provider_key IN ('esimgo', 'esimaccess', 'zendit', 'airalo', 'mock')
     ORDER BY po.wholesale_price_usd ASC
   `);
 
@@ -82,9 +82,10 @@ export async function getDbSupplierPlans(
   });
 }
 
-function mapProviderKey(key: string): "esimgo" | "esimaccess" | "zendit" | "breeze" {
+function mapProviderKey(key: string): "esimgo" | "esimaccess" | "zendit" | "airalo" | "breeze" {
   if (key === "esimgo") return "esimgo";
   if (key === "esimaccess") return "esimaccess";
   if (key === "zendit") return "zendit";
+  if (key === "airalo") return "airalo";
   return "breeze";
 }

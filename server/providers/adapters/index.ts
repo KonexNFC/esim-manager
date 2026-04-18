@@ -2,6 +2,7 @@ import { MockProviderAdapter } from './mock';
 import { EsimGoAdapter } from './esimgo';
 import { EsimAccessAdapter } from './esimAccess';
 import { ZenditAdapter } from './zendit';
+import { AiraloAdapter } from './airalo';
 import { FailoverProviderAdapter } from './failover';
 import type { ProviderAdapter } from './base';
 
@@ -40,6 +41,14 @@ export function getProviderAdapterByKey(key: string): ProviderAdapter | null {
     if (!zKey) { console.warn(`[Provider] getProviderAdapterByKey: ZENDIT_API_KEY missing`); return null; }
     const zEnv = (process.env.ZENDIT_ENV ?? '').toLowerCase() === 'production' ? 'production' : 'test';
     return new ZenditAdapter(zKey, zEnv);
+  }
+
+  if (norm === 'airalo') {
+    const aId     = process.env.AIRALO_CLIENT_ID;
+    const aSecret = process.env.AIRALO_CLIENT_SECRET;
+    if (!aId || !aSecret) { console.warn(`[Provider] getProviderAdapterByKey: AIRALO_CLIENT_ID/SECRET missing`); return null; }
+    const aEnv = (process.env.AIRALO_ENV ?? '').toLowerCase() === 'sandbox' ? 'sandbox' : 'production';
+    return new AiraloAdapter(aId, aSecret, aEnv);
   }
 
   if (norm === 'mock') {

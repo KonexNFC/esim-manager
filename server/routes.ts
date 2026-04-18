@@ -640,7 +640,7 @@ export async function registerRoutes(
           AND  np.is_active          = true
           AND  prov.enabled          = true
           AND  prov.auto_paused      = false
-          AND  po.provider_key       IN ('esimgo', 'esimaccess', 'zendit', 'mock')
+          AND  po.provider_key       IN ('esimgo', 'esimaccess', 'zendit', 'airalo', 'mock')
           AND  po.wholesale_price_usd > 0
         ORDER BY np.data_mb, np.validity_days, np.is_unlimited,
                  po.wholesale_price_usd ASC
