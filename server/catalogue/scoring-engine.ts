@@ -25,10 +25,12 @@ import { TARGET_BANDS } from "./pricing-engine";
  * in each duration bucket. Plans below this threshold receive a penalty.
  */
 export const MIN_TOURIST_DATA_GB: Record<DurationBucket, number> = {
-  [DurationBucket.DAY_1]: 1,
-  [DurationBucket.DAY_3]: 3,
-  [DurationBucket.DAY_5]: 5,
-  [DurationBucket.DAY_7]: 7,
+  [DurationBucket.DAY_1]:  1,
+  [DurationBucket.DAY_3]:  3,
+  [DurationBucket.DAY_5]:  5,
+  [DurationBucket.DAY_7]:  7,
+  [DurationBucket.DAY_14]: 10,
+  [DurationBucket.DAY_30]: 15,
 };
 
 // ─── Score weights ────────────────────────────────────────────────────────────

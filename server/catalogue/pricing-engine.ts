@@ -55,9 +55,13 @@ export const TARGET_BANDS: Record<DurationBucket, BucketBands> = {
     unlimited: { min: 14.99, max: 19.99 },
     fixed:     { min: 9.49,  max: 14.49 },
   },
+  [DurationBucket.DAY_14]: {
+    unlimited: { min: 22.99, max: 34.99 },
+    fixed:     { min: 14.99, max: 24.99 },
+  },
   [DurationBucket.DAY_30]: {
     unlimited: { min: 29.99, max: 49.99 },
-    fixed:     { min: 14.99, max: 34.99 },
+    fixed:     { min: 19.99, max: 39.99 },
   },
 };
 
@@ -167,6 +171,8 @@ export function validatePriceLadder(
     DurationBucket.DAY_3,
     DurationBucket.DAY_5,
     DurationBucket.DAY_7,
+    DurationBucket.DAY_14,
+    DurationBucket.DAY_30,
   ];
 
   const violations: string[] = [];

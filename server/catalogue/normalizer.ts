@@ -48,17 +48,19 @@ const INELIGIBLE_STATUSES = new Set<PlanStatus>([
  *   2–3 days     → DAY_3
  *   4–5 days     → DAY_5
  *   6–7 days     → DAY_7
- *   8–31 days    → DAY_30  (monthly / long-stay plans)
- *   > 31 days    → null    (annual / bulk plans — excluded)
+ *   8–14 days    → DAY_14 (two-week plans)
+ *   15–31 days   → DAY_30 (monthly / long-stay plans)
+ *   > 31 days    → null   (annual / bulk plans — excluded)
  */
 export function normalizeValidityToBucket(
   validityDays: number
 ): DurationBucket | null {
   if (validityDays === 1) return DurationBucket.DAY_1;
-  if (validityDays >= 2 && validityDays <= 3) return DurationBucket.DAY_3;
-  if (validityDays >= 4 && validityDays <= 5) return DurationBucket.DAY_5;
-  if (validityDays >= 6 && validityDays <= 7) return DurationBucket.DAY_7;
-  if (validityDays >= 8 && validityDays <= 31) return DurationBucket.DAY_30;
+  if (validityDays >= 2 && validityDays <= 3)  return DurationBucket.DAY_3;
+  if (validityDays >= 4 && validityDays <= 5)  return DurationBucket.DAY_5;
+  if (validityDays >= 6 && validityDays <= 7)  return DurationBucket.DAY_7;
+  if (validityDays >= 8 && validityDays <= 14) return DurationBucket.DAY_14;
+  if (validityDays >= 15 && validityDays <= 31) return DurationBucket.DAY_30;
   return null;
 }
 

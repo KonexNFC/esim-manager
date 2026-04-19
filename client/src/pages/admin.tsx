@@ -2089,6 +2089,234 @@ function RoutingTab() {
   );
 }
 
+// ─── Catalogue Tab ─────────────────────────────────────────────────────────
+
+interface CataloguePlan {
+  id: string;
+  region_code: string;
+  name: string;
+  data_mb: number;
+  validity_days: number;
+  is_unlimited: boolean;
+  plan_type: string;
+  retail_price_usd: number;
+  is_active: boolean;
+  offer_count: number;
+  min_wholesale: number | null;
+  providers: string | null;
+}
+
+function CatalogueTab() {
+  const { toast } = useToast();
+  const [country,  setCountry]  = useState("");
+  const [provider, setProvider] = useState("all");
+  const [validity, setValidity] = useState("all");
+  const [type,     setType]     = useState("all");
+  const [page,     setPage]     = useState(1);
+  const limit = 50;
+
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (country.trim())    params.set("country",  country.trim().toUpperCase());
+  if (provider !== "all") params.set("provider", provider);
+  if (validity !== "all") params.set("validity", validity);
+  if (type     !== "all") params.set("type",     type);
+
+  const { data, isLoading } = useQuery<{ plans: CataloguePlan[]; total: number; page: number; limit: number }>({
+    queryKey: ["/api/admin/catalogue", country, provider, validity, type, page],
+    queryFn: () => fetch(`/api/admin/catalogue?${params}`).then(r => r.json()),
+  });
+
+  const backfillMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/catalogue/backfill"),
+    onSuccess: async (res: any) => {
+      const json = await res.json();
+      toast({
+        title: "Backfill complete",
+        description: `Created ${json.result?.plansCreated ?? 0} new plans, ${json.result?.plansAlreadyExist ?? 0} already existed, ${json.result?.countriesSkipped ?? 0} countries skipped.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/catalogue"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Backfill failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const totalPages = data ? Math.ceil(data.total / limit) : 1;
+
+  function fmtData(mb: number, unlimited: boolean) {
+    if (unlimited) return "Unlimited";
+    if (mb >= 1024) return `${mb / 1024} GB`;
+    return `${mb} MB`;
+  }
+
+  function fmtPrice(usd: number | null) {
+    if (usd == null) return "—";
+    return `$${Number(usd).toFixed(2)}`;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Plan Catalogue</h2>
+        <Button
+          size="sm"
+          onClick={() => backfillMutation.mutate()}
+          disabled={backfillMutation.isPending}
+          data-testid="button-backfill-matrix"
+        >
+          {backfillMutation.isPending ? (
+            <RefreshCw className="w-4 h-4 mr-1.5 animate-spin" />
+          ) : (
+            <Zap className="w-4 h-4 mr-1.5" />
+          )}
+          Generate missing plans
+        </Button>
+      </div>
+
+      {/* Filters */}
+      <Card className="p-4">
+        <div className="flex flex-wrap gap-3">
+          <Input
+            placeholder="Country code (e.g. GB)"
+            value={country}
+            onChange={e => { setCountry(e.target.value); setPage(1); }}
+            className="w-40"
+            data-testid="input-catalogue-country"
+          />
+          <Select value={provider} onValueChange={v => { setProvider(v); setPage(1); }}>
+            <SelectTrigger className="w-40" data-testid="select-catalogue-provider">
+              <SelectValue placeholder="Provider" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All providers</SelectItem>
+              <SelectItem value="esimgo">eSIMGo</SelectItem>
+              <SelectItem value="esimaccess">eSIM Access</SelectItem>
+              <SelectItem value="zendit">Zendit</SelectItem>
+              <SelectItem value="airalo">Airalo</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={validity} onValueChange={v => { setValidity(v); setPage(1); }}>
+            <SelectTrigger className="w-36" data-testid="select-catalogue-validity">
+              <SelectValue placeholder="Validity" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All durations</SelectItem>
+              <SelectItem value="1">1 day</SelectItem>
+              <SelectItem value="3">3 days</SelectItem>
+              <SelectItem value="5">5 days</SelectItem>
+              <SelectItem value="7">7 days</SelectItem>
+              <SelectItem value="14">14 days</SelectItem>
+              <SelectItem value="30">30 days</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={type} onValueChange={v => { setType(v); setPage(1); }}>
+            <SelectTrigger className="w-36" data-testid="select-catalogue-type">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              <SelectItem value="fixed">Fixed data</SelectItem>
+              <SelectItem value="unlimited">Unlimited</SelectItem>
+            </SelectContent>
+          </Select>
+          {data && (
+            <span className="text-sm text-muted-foreground self-center">
+              {data.total.toLocaleString()} plans
+            </span>
+          )}
+        </div>
+      </Card>
+
+      {/* Table */}
+      <Card className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-muted-foreground">
+              <th className="text-left px-4 py-3 font-medium">Country</th>
+              <th className="text-left px-4 py-3 font-medium">Data</th>
+              <th className="text-left px-4 py-3 font-medium">Days</th>
+              <th className="text-left px-4 py-3 font-medium">Type</th>
+              <th className="text-right px-4 py-3 font-medium">Retail</th>
+              <th className="text-right px-4 py-3 font-medium">Wholesale</th>
+              <th className="text-left px-4 py-3 font-medium">Providers</th>
+              <th className="text-center px-4 py-3 font-medium">Offers</th>
+              <th className="text-center px-4 py-3 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              Array.from({ length: 10 }).map((_, i) => (
+                <tr key={i} className="border-b">
+                  {Array.from({ length: 9 }).map((_, j) => (
+                    <td key={j} className="px-4 py-3">
+                      <Skeleton className="h-4 w-full" />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : (data?.plans ?? []).length === 0 ? (
+              <tr>
+                <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
+                  No plans found
+                </td>
+              </tr>
+            ) : (
+              (data?.plans ?? []).map(plan => (
+                <tr key={plan.id} className="border-b hover:bg-muted/30" data-testid={`row-catalogue-${plan.id}`}>
+                  <td className="px-4 py-3 font-mono font-semibold">{plan.region_code}</td>
+                  <td className="px-4 py-3">{fmtData(plan.data_mb, plan.is_unlimited)}</td>
+                  <td className="px-4 py-3">{plan.validity_days}d</td>
+                  <td className="px-4 py-3 capitalize">{plan.plan_type}</td>
+                  <td className="px-4 py-3 text-right">{fmtPrice(plan.retail_price_usd)}</td>
+                  <td className="px-4 py-3 text-right text-muted-foreground">{fmtPrice(plan.min_wholesale)}</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground">{plan.providers ?? "—"}</td>
+                  <td className="px-4 py-3 text-center">
+                    <Badge variant={plan.offer_count > 0 ? "default" : "outline"}>
+                      {plan.offer_count}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <Badge variant={plan.is_active ? "default" : "secondary"}>
+                      {plan.is_active ? "Active" : "Shell"}
+                    </Badge>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t">
+            <span className="text-sm text-muted-foreground">
+              Page {page} of {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline" size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage(p => p - 1)}
+                data-testid="button-catalogue-prev"
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline" size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage(p => p + 1)}
+                data-testid="button-catalogue-next"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 export default function Admin() {
   const { user, isLoading: authLoading, logout } = useAuth();
   const { toast } = useToast();
@@ -2187,6 +2415,10 @@ export default function Admin() {
             <Network className="w-4 h-4 mr-1.5" />
             Routing
           </TabsTrigger>
+          <TabsTrigger value="catalogue" className="flex-1" data-testid="tab-catalogue">
+            <Globe className="w-4 h-4 mr-1.5" />
+            Catalogue
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard">
@@ -2206,6 +2438,9 @@ export default function Admin() {
         </TabsContent>
         <TabsContent value="routing">
           <RoutingTab />
+        </TabsContent>
+        <TabsContent value="catalogue">
+          <CatalogueTab />
         </TabsContent>
       </Tabs>
     </div>

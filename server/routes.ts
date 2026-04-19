@@ -2,8 +2,8 @@ import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./storage";
-import { sql, eq } from "drizzle-orm";
-import { insertOrderSchema, insertPlanSchema, settings } from "@shared/schema";
+import { sql, eq, and, inArray } from "drizzle-orm";
+import { insertOrderSchema, insertPlanSchema, settings, normalizedPlans, providerOffers } from "@shared/schema";
 import { fetchProviderPlans, getBestPlan } from "./providers";
 import { purchaseEsim as providerPurchase, getAvailableProviders } from "./providers/providerManager";
 import { z } from "zod";
@@ -1937,6 +1937,97 @@ export async function registerRoutes(
       } catch (err: any) {
         console.error("/api/plans/public error:", err.message);
         return res.status(500).json({ message: "Failed to build catalogue" });
+      }
+    });
+
+    // ── Admin Catalogue Endpoints ─────────────────────────────────────────────
+
+    // GET /api/admin/catalogue
+    // Filtered listing of normalized_plans + best offer per plan.
+    // Query params: country, provider, validity (days), type (fixed|unlimited), page, limit
+    app.get("/api/admin/catalogue", requireAdmin, async (req, res) => {
+      try {
+        const country   = (req.query.country  as string | undefined)?.toUpperCase() || null;
+        const provider  = (req.query.provider as string | undefined) || null;
+        const validity  = req.query.validity  ? Number(req.query.validity)  : null;
+        const type      = (req.query.type     as string | undefined) || null;
+        const page      = Math.max(1, Number(req.query.page  ?? 1));
+        const limit     = Math.min(200, Math.max(1, Number(req.query.limit ?? 50)));
+        const offset    = (page - 1) * limit;
+
+        // Main query with offer aggregation
+        const rows = await db.execute<{
+          id: string; region_code: string; name: string; data_mb: number;
+          validity_days: number; is_unlimited: boolean; plan_type: string;
+          retail_price_usd: number; is_active: boolean; offer_count: number;
+          min_wholesale: number | null; providers: string | null; created_at: string;
+        }>(sql`
+          SELECT
+            np.id,
+            np.region_code,
+            np.name,
+            np.data_mb,
+            np.validity_days,
+            np.is_unlimited,
+            np.plan_type,
+            np.retail_price_usd,
+            np.is_active,
+            COUNT(po.id)::int                            AS offer_count,
+            MIN(po.wholesale_price_usd)                  AS min_wholesale,
+            STRING_AGG(DISTINCT po.provider_key, ', ')   AS providers,
+            np.created_at
+          FROM normalized_plans np
+          LEFT JOIN provider_offers po ON po.normalized_plan_id = np.id AND po.is_active = true
+          WHERE 1=1
+            ${country  ? sql`AND np.region_code = ${country}`            : sql``}
+            ${validity ? sql`AND np.validity_days = ${validity}`          : sql``}
+            ${type === "unlimited" ? sql`AND np.is_unlimited = true`      : sql``}
+            ${type === "fixed"     ? sql`AND np.is_unlimited = false`     : sql``}
+            ${provider ? sql`AND EXISTS (
+                SELECT 1 FROM provider_offers po2
+                WHERE po2.normalized_plan_id = np.id AND po2.provider_key = ${provider}
+              )` : sql``}
+          GROUP BY np.id, np.region_code, np.name, np.data_mb, np.validity_days,
+                   np.is_unlimited, np.plan_type, np.retail_price_usd, np.is_active, np.created_at
+          ORDER BY np.region_code, np.validity_days, np.data_mb
+          LIMIT ${limit} OFFSET ${offset}
+        `);
+
+        const totalRow = await db.execute<{ total: number }>(sql`
+          SELECT COUNT(*)::int AS total FROM normalized_plans np
+          WHERE 1=1
+            ${country  ? sql`AND np.region_code = ${country}`            : sql``}
+            ${validity ? sql`AND np.validity_days = ${validity}`          : sql``}
+            ${type === "unlimited" ? sql`AND np.is_unlimited = true`      : sql``}
+            ${type === "fixed"     ? sql`AND np.is_unlimited = false`     : sql``}
+            ${provider ? sql`AND EXISTS (
+                SELECT 1 FROM provider_offers po2
+                WHERE po2.normalized_plan_id = np.id AND po2.provider_key = ${provider}
+              )` : sql``}
+        `);
+
+        return res.json({
+          plans: rows.rows,
+          total: totalRow.rows[0]?.total ?? 0,
+          page,
+          limit,
+        });
+      } catch (err: any) {
+        console.error("/api/admin/catalogue error:", err.message);
+        return res.status(500).json({ message: "Failed to load catalogue" });
+      }
+    });
+
+    // POST /api/admin/catalogue/backfill
+    // Trigger the idempotent plan matrix backfill.
+    app.post("/api/admin/catalogue/backfill", requireAdmin, async (_req, res) => {
+      try {
+        const { backfillPlanMatrix } = await import("./scripts/backfill-plan-matrix");
+        const result = await backfillPlanMatrix();
+        return res.json({ success: true, result });
+      } catch (err: any) {
+        console.error("/api/admin/catalogue/backfill error:", err.message);
+        return res.status(500).json({ message: `Backfill failed: ${err.message}` });
       }
     });
 

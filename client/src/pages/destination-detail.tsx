@@ -946,7 +946,12 @@ interface PublicPlansResponse {
 }
 
 const BUCKET_LABELS: Record<string, string> = {
-  DAY_1: "1 Day", DAY_3: "3 Days", DAY_5: "5 Days", DAY_7: "7 Days",
+  DAY_1: "1 Day", DAY_3: "3 Days", DAY_5: "5 Days",
+  DAY_7: "7 Days", DAY_14: "14 Days", DAY_30: "30 Days",
+};
+
+const BUCKET_DAYS: Record<string, number> = {
+  DAY_1: 1, DAY_3: 3, DAY_5: 5, DAY_7: 7, DAY_14: 14, DAY_30: 30,
 };
 
 const GBP_TO_USD = 1 / 0.79;
@@ -1346,6 +1351,7 @@ function TravelPlansFlow({
 
   const [selectedBucket, setSelectedBucket] = useState(resolvedInitial);
   const [showAll, setShowAll] = useState(false);
+  const [viewMode, setViewMode] = useState<"flow" | "matrix">("flow");
 
   const dur = data.durations[selectedBucket];
   const recommended = dur?.recommended ?? null;
@@ -1393,7 +1399,7 @@ function TravelPlansFlow({
   // ── Detect price inversion (e.g. 1-day more expensive than 3-day) ──────────
   // If the current bucket's recommended price is higher than a longer duration,
   // surface a nudge so customers pick the better-value option.
-  const BUCKET_ORDER = ["DAY_1", "DAY_3", "DAY_5", "DAY_7"];
+  const BUCKET_ORDER = ["DAY_1", "DAY_3", "DAY_5", "DAY_7", "DAY_14", "DAY_30"];
   const betterValueBucket: { bucket: string; price: number; label: string } | null = (() => {
     if (!recommended) return null;
     const currentPrice = recommended.sellPriceGbp;
@@ -1408,13 +1414,114 @@ function TravelPlansFlow({
     return null;
   })();
 
+  // ── Build plan matrix: dataKey × bucket → best plan ──────────────────────
+  const DATA_ROW_ORDER = [1, 2, 3, 5, 10, 0]; // 0 = unlimited sentinel
+  const matrixMap = new Map<string, PublicPlan>(); // key = `${gb}::${bucket}`
+  for (const bucket of availBuckets) {
+    const durData = data.durations[bucket];
+    if (!durData) continue;
+    const allInBucket = [
+      durData.recommended,
+      durData.cheaper,
+      durData.premium,
+      ...durData.browseAll,
+    ].filter((p): p is PublicPlan => p !== null && p !== undefined);
+    for (const plan of allInBucket) {
+      const gb = plan.isUnlimited ? 0 : Math.round((plan.dataGb ?? 0) * 10) / 10;
+      const key = `${gb}::${bucket}`;
+      const existing = matrixMap.get(key);
+      if (!existing || plan.sellPriceGbp < existing.sellPriceGbp) {
+        matrixMap.set(key, plan);
+      }
+    }
+  }
+  // Determine which GB rows actually have any data
+  const matrixRows = DATA_ROW_ORDER.filter(gb =>
+    availBuckets.some(b => matrixMap.has(`${gb}::${b}`))
+  );
+
   return (
     <div>
+      {/* View mode toggle + duration title header */}
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-bold" data-testid="text-duration-title">
+          {viewMode === "flow" ? "How long is your trip?" : "All available plans"}
+        </h2>
+        <div className="flex border rounded-lg overflow-hidden text-xs font-semibold">
+          <button
+            onClick={() => setViewMode("flow")}
+            className={`px-3 py-1.5 transition-colors ${viewMode === "flow" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+            data-testid="button-view-flow"
+          >
+            By duration
+          </button>
+          <button
+            onClick={() => setViewMode("matrix")}
+            className={`px-3 py-1.5 transition-colors border-l ${viewMode === "matrix" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+            data-testid="button-view-matrix"
+          >
+            Plan grid
+          </button>
+        </div>
+      </div>
+
+      {/* ── Matrix view ─────────────────────────────────────────────── */}
+      {viewMode === "matrix" && (
+        <div className="mb-6">
+          <p className="text-sm text-muted-foreground mb-4">
+            Tap any cell to select that plan. Greyed cells have no plan available.
+          </p>
+          <div className="overflow-x-auto rounded-xl border">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="bg-muted/50">
+                  <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground border-b border-r min-w-[80px]">
+                    Data \ Days
+                  </th>
+                  {availBuckets.map(b => (
+                    <th key={b} className="px-3 py-2.5 font-semibold text-center border-b border-r last:border-r-0 min-w-[80px]">
+                      {BUCKET_LABELS[b]}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {matrixRows.map((gb, ri) => (
+                  <tr key={gb} className={ri % 2 === 0 ? "bg-background" : "bg-muted/20"}>
+                    <td className="px-3 py-2.5 font-semibold border-r border-b last:border-b-0 whitespace-nowrap">
+                      {gb === 0 ? "Unlimited" : `${gb} GB`}
+                    </td>
+                    {availBuckets.map(b => {
+                      const plan = matrixMap.get(`${gb}::${b}`);
+                      return (
+                        <td key={b} className="px-2 py-2 text-center border-r border-b last:border-r-0 last:border-b-0">
+                          {plan ? (
+                            <button
+                              onClick={() => onSelectPublic(plan)}
+                              className="w-full rounded-lg px-2 py-1.5 font-semibold text-xs bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors"
+                              data-testid={`button-matrix-${gb}-${b}`}
+                            >
+                              {isApprox ? "≈" : ""}{fmt(plan.sellPriceGbp * GBP_TO_USD)}
+                            </button>
+                          ) : (
+                            <span className="text-muted-foreground/40 text-xs">—</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Flow view (duration tabs) ─────────────────────────────── */}
+      {viewMode === "flow" && (
+      <div>
       {/* Duration tabs */}
       <div className="mb-7">
-        <h2 className="text-lg font-bold mb-3" data-testid="text-duration-title">
-          How long is your trip?
-        </h2>
         <div className="flex gap-2 flex-wrap">
           {availBuckets.map(b => (
             <button
@@ -1561,6 +1668,8 @@ function TravelPlansFlow({
             />
           )}
         </div>
+      )}
+      </div>
       )}
     </div>
   );

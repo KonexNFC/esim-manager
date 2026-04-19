@@ -10,6 +10,7 @@ export enum DurationBucket {
   DAY_3  = "DAY_3",
   DAY_5  = "DAY_5",
   DAY_7  = "DAY_7",
+  DAY_14 = "DAY_14",
   DAY_30 = "DAY_30",
 }
 

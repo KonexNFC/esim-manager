@@ -23,10 +23,13 @@ const BUNDLE_MULTIPLIER: Record<DurationBucket, number> = {
   [DurationBucket.DAY_3]:  3,
   [DurationBucket.DAY_5]:  5,
   [DurationBucket.DAY_7]:  7,
+  [DurationBucket.DAY_14]: 14,
   [DurationBucket.DAY_30]: 30,
 };
 
-/** Which target buckets can be synthesised (DAY_1 cannot be synthetic) */
+/** Which target buckets can be synthesised (DAY_1 cannot be synthetic).
+ *  DAY_14 and DAY_30 are excluded: 14× or 30× DAY_1 cost inflates
+ *  pricing beyond acceptable retail bands for most destinations. */
 const SYNTHETIC_TARGETS: DurationBucket[] = [
   DurationBucket.DAY_3,
   DurationBucket.DAY_5,
@@ -146,6 +149,7 @@ export function getNativeCoverage(
     [DurationBucket.DAY_3]:  native.some((o) => o.bucket === DurationBucket.DAY_3),
     [DurationBucket.DAY_5]:  native.some((o) => o.bucket === DurationBucket.DAY_5),
     [DurationBucket.DAY_7]:  native.some((o) => o.bucket === DurationBucket.DAY_7),
+    [DurationBucket.DAY_14]: native.some((o) => o.bucket === DurationBucket.DAY_14),
     [DurationBucket.DAY_30]: native.some((o) => o.bucket === DurationBucket.DAY_30),
   };
 }
