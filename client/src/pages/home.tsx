@@ -30,6 +30,7 @@ import { CountryCombobox } from "@/components/country-combobox";
 import { useInView } from "@/hooks/use-in-view";
 import worldMapImg from "@assets/IMG_9153_1776332722553.jpeg";
 import wimbledonImg from "@assets/wimbledon_2026.png";
+import travelLandmarksImg from "@assets/Travel_Image__1776723002223.jpeg";
 
 // ─── Reveal wrapper ──────────────────────────────────────────────────────────
 function Reveal({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
@@ -1431,51 +1432,59 @@ function FAQSection() {
 function FinalCTA() {
   const { ref, inView } = useInView(0.15);
   return (
-    <section className="relative overflow-hidden border-t" ref={ref}>
-      {/* Travel background image */}
-      <img
-        src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=1600&q=80"
-        alt=""
-        loading="lazy"
-        className={`absolute inset-0 w-full h-full object-cover reveal-img ${inView ? "in-view" : ""}`}
-        style={{ filter: "brightness(0.28) saturate(1.3)" }}
-        aria-hidden
-      />
-      {/* Gradient overlays */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/60 pointer-events-none" />
-      <div className="absolute inset-0 bg-gradient-to-r from-blue-950/50 via-transparent to-transparent pointer-events-none" />
+    <section className="relative overflow-hidden border-t bg-[#060d1f]" ref={ref}>
       {/* Blue glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] opacity-15 pointer-events-none blob-drift"
+      <div className="absolute top-0 left-1/4 w-[600px] h-[400px] opacity-20 pointer-events-none blob-drift"
         style={{ background: "radial-gradient(ellipse, #2563eb 0%, transparent 70%)" }} />
 
-      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-20 sm:py-28 lg:py-36 text-center">
-        <div className={`reveal ${inView ? "in-view" : ""}`}>
-          <div className="inline-flex items-center gap-2 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-bold px-4 py-1.5 mb-6 uppercase tracking-widest">
-            <Zap className="w-3 h-3" />
-            Instant Activation
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24 lg:py-28">
+        <div className={`grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center reveal ${inView ? "in-view" : ""}`}>
+
+          {/* Left: text content */}
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-bold px-4 py-1.5 mb-6 uppercase tracking-widest">
+              <Zap className="w-3 h-3" />
+              Instant Activation
+            </div>
+            <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-[1.05] text-white" data-testid="text-final-cta-title">
+              Get travel data<br />before you land.
+            </h2>
+            <p className="text-white/60 text-base sm:text-lg mb-8 sm:mb-10 leading-relaxed max-w-lg" data-testid="text-final-cta-subtitle">
+              Choose your destination, activate in minutes, and stay connected in 190+ countries with KONEX eSIM.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 mb-8">
+              <Link href="/destinations">
+                <Button size="lg" className="h-13 px-8 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xl shadow-blue-500/30" data-testid="button-final-get-started">
+                  Get eSIM Now
+                  <ArrowRight className="ml-2 w-4 h-4" />
+                </Button>
+              </Link>
+              <Link href="/destinations">
+                <Button size="lg" variant="outline" className="h-13 px-8 text-base font-bold border-white/25 text-white bg-white/10 hover:bg-white/20" data-testid="button-final-browse-plans">
+                  View Plans
+                </Button>
+              </Link>
+            </div>
+            <p className="text-sm text-white/35" data-testid="text-final-microcopy">
+              Instant delivery &nbsp;·&nbsp; No roaming fees &nbsp;·&nbsp; No contracts
+            </p>
           </div>
-          <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-[1.0] text-white" data-testid="text-final-cta-title">
-            Get travel data<br />before you land.
-          </h2>
-          <p className="text-white/60 text-sm sm:text-lg max-w-xl mx-auto mb-8 sm:mb-10 leading-relaxed" data-testid="text-final-cta-subtitle">
-            Choose your destination, activate in minutes, and stay connected in 190+ countries with KONEX eSIM.
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
-            <Link href="/destinations">
-              <Button size="lg" className="h-13 px-8 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xl shadow-blue-500/30" data-testid="button-final-get-started">
-                Get eSIM Now
-                <ArrowRight className="ml-2 w-4 h-4" />
-              </Button>
-            </Link>
-            <Link href="/destinations">
-              <Button size="lg" variant="outline" className="h-13 px-8 text-base font-bold border-white/25 text-white bg-white/10 hover:bg-white/20" data-testid="button-final-browse-plans">
-                View Plans
-              </Button>
-            </Link>
+
+          {/* Right: travel image */}
+          <div className="flex items-center justify-center">
+            <div className="relative w-full max-w-lg">
+              {/* Glow ring behind image */}
+              <div className="absolute -inset-3 rounded-3xl bg-blue-500/20 blur-2xl pointer-events-none" />
+              <img
+                src={travelLandmarksImg}
+                alt="World landmarks — Eiffel Tower, Colosseum, Big Ben and more"
+                className="relative w-full rounded-2xl shadow-2xl object-cover"
+                style={{ aspectRatio: "4/3" }}
+                data-testid="img-final-cta-travel"
+              />
+            </div>
           </div>
-          <p className="text-sm text-white/35" data-testid="text-final-microcopy">
-            Instant delivery &nbsp;·&nbsp; No roaming fees &nbsp;·&nbsp; No contracts
-          </p>
+
         </div>
       </div>
     </section>
