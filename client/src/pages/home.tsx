@@ -29,6 +29,7 @@ import type { Destination, Plan } from "@shared/schema";
 import { CountryCombobox } from "@/components/country-combobox";
 import { useInView } from "@/hooks/use-in-view";
 import worldMapImg from "@assets/IMG_9153_1776332722553.jpeg";
+import wimbledonImg from "@assets/wimbledon_2026.png";
 
 // ─── Reveal wrapper ──────────────────────────────────────────────────────────
 function Reveal({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
@@ -202,7 +203,7 @@ const FESTIVAL_EVENTS: FestivalEvent[] = [
     bgFrom: "#0a1a0a",
     bgTo: "#1a4f1a",
     accent: "#86efac",
-    photo: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=700&q=80",
+    photo: wimbledonImg,
     cta: "Get UK eSIM",
   },
 ];
