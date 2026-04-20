@@ -30,7 +30,7 @@ const POPULAR_CODES = [
 ];
 
 function flagSrc(code: string) {
-  return `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
+  return `https://flagcdn.com/w320/${code.toLowerCase()}.png`;
 }
 
 /** Card for a single country */
@@ -40,27 +40,17 @@ function CountryCard({ country }: { country: AvailableCountry }) {
       href={`/destinations/${country.countryCode}`}
       data-testid={`card-destination-${country.countryCode}`}
     >
-      <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[4/5] bg-muted shadow-md hover:shadow-xl transition-shadow duration-300">
+      <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[3/2] bg-muted shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02]">
         <img
           src={flagSrc(country.countryCode)}
           alt={country.name}
-          className="w-full h-full object-cover scale-110 transition-transform duration-700 group-hover:scale-125"
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           onError={e => {
             (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/30 to-primary/60 -z-10" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-
-        <div className="absolute top-3 left-3">
-          <div className="w-8 h-5 rounded-sm overflow-hidden shadow-md border border-white/25">
-            <img
-              src={flagSrc(country.countryCode)}
-              alt={country.name}
-              className="w-full h-full object-cover"
-            />
-          </div>
-        </div>
+        {/* Subtle bottom gradient only — keeps flag colours vivid */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
 
         {country.planCount > 0 && (
           <div className="absolute top-3 right-3">
@@ -76,13 +66,13 @@ function CountryCard({ country }: { country: AvailableCountry }) {
 
         <div className="absolute bottom-0 left-0 right-0 p-3">
           <h3
-            className="font-bold text-white text-sm leading-tight"
+            className="font-bold text-white text-sm leading-tight drop-shadow"
             data-testid={`text-destination-name-${country.countryCode}`}
           >
             {country.name}
           </h3>
           <p
-            className="text-white/60 text-xs mt-0.5"
+            className="text-white/70 text-xs mt-0.5"
             data-testid={`text-destination-region-${country.countryCode}`}
           >
             {country.region}
