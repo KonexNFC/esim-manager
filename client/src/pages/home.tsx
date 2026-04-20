@@ -1088,11 +1088,6 @@ function WorldCoverageSection() {
         <div
           className={`relative rounded-2xl sm:rounded-3xl overflow-hidden border border-border/60 shadow-2xl reveal reveal-delay-1 ${inView ? "in-view" : ""}`}
         >
-          {/* Top gradient fade for a premium feel */}
-          <div className="absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none" />
-          {/* Bottom gradient fade */}
-          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-background/80 to-transparent z-10 pointer-events-none" />
-
           <img
             src={worldMapImg}
             alt="World map showing Konex eSIM coverage across 190+ countries"
