@@ -1432,59 +1432,46 @@ function FAQSection() {
 function FinalCTA() {
   const { ref, inView } = useInView(0.15);
   return (
-    <section className="relative overflow-hidden border-t bg-[#060d1f]" ref={ref}>
-      {/* Blue glow */}
-      <div className="absolute top-0 left-1/4 w-[600px] h-[400px] opacity-20 pointer-events-none blob-drift"
-        style={{ background: "radial-gradient(ellipse, #2563eb 0%, transparent 70%)" }} />
+    <section className="relative overflow-hidden border-t" ref={ref}>
+      {/* Full-bleed background image */}
+      <img
+        src={travelLandmarksImg}
+        alt=""
+        aria-hidden
+        loading="lazy"
+        className={`absolute inset-0 w-full h-full object-cover reveal-img ${inView ? "in-view" : ""}`}
+      />
+      {/* Dark overlay for text contrast */}
+      <div className="absolute inset-0 bg-black/55 pointer-events-none" />
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24 lg:py-28">
-        <div className={`grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center reveal ${inView ? "in-view" : ""}`}>
-
-          {/* Left: text content */}
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-bold px-4 py-1.5 mb-6 uppercase tracking-widest">
-              <Zap className="w-3 h-3" />
-              Instant Activation
-            </div>
-            <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-[1.05] text-white" data-testid="text-final-cta-title">
-              Get travel data<br />before you land.
-            </h2>
-            <p className="text-white/60 text-base sm:text-lg mb-8 sm:mb-10 leading-relaxed max-w-lg" data-testid="text-final-cta-subtitle">
-              Choose your destination, activate in minutes, and stay connected in 190+ countries with KONEX eSIM.
-            </p>
-            <div className="flex flex-wrap items-center gap-3 mb-8">
-              <Link href="/destinations">
-                <Button size="lg" className="h-13 px-8 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xl shadow-blue-500/30" data-testid="button-final-get-started">
-                  Get eSIM Now
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </Link>
-              <Link href="/destinations">
-                <Button size="lg" variant="outline" className="h-13 px-8 text-base font-bold border-white/25 text-white bg-white/10 hover:bg-white/20" data-testid="button-final-browse-plans">
-                  View Plans
-                </Button>
-              </Link>
-            </div>
-            <p className="text-sm text-white/35" data-testid="text-final-microcopy">
-              Instant delivery &nbsp;·&nbsp; No roaming fees &nbsp;·&nbsp; No contracts
-            </p>
+      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-20 sm:py-28 lg:py-36 text-center">
+        <div className={`reveal ${inView ? "in-view" : ""}`}>
+          <div className="inline-flex items-center gap-2 rounded-full bg-white/15 border border-white/30 text-white text-xs font-bold px-4 py-1.5 mb-6 uppercase tracking-widest">
+            <Zap className="w-3 h-3" />
+            Instant Activation
           </div>
-
-          {/* Right: travel image */}
-          <div className="flex items-center justify-center">
-            <div className="relative w-full max-w-lg">
-              {/* Glow ring behind image */}
-              <div className="absolute -inset-3 rounded-3xl bg-blue-500/20 blur-2xl pointer-events-none" />
-              <img
-                src={travelLandmarksImg}
-                alt="World landmarks — Eiffel Tower, Colosseum, Big Ben and more"
-                className="relative w-full rounded-2xl shadow-2xl object-cover"
-                style={{ aspectRatio: "4/3" }}
-                data-testid="img-final-cta-travel"
-              />
-            </div>
+          <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-[1.05] text-white drop-shadow-lg" data-testid="text-final-cta-title">
+            Get travel data<br />before you land.
+          </h2>
+          <p className="text-white/85 text-base sm:text-lg max-w-xl mx-auto mb-8 sm:mb-10 leading-relaxed drop-shadow" data-testid="text-final-cta-subtitle">
+            Choose your destination, activate in minutes, and stay connected in 190+ countries with KONEX eSIM.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
+            <Link href="/destinations">
+              <Button size="lg" className="h-13 px-8 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xl shadow-blue-900/50" data-testid="button-final-get-started">
+                Get eSIM Now
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+            </Link>
+            <Link href="/destinations">
+              <Button size="lg" variant="outline" className="h-13 px-8 text-base font-bold border-white/40 text-white bg-white/15 hover:bg-white/25" data-testid="button-final-browse-plans">
+                View Plans
+              </Button>
+            </Link>
           </div>
-
+          <p className="text-sm text-white/60 drop-shadow" data-testid="text-final-microcopy">
+            Instant delivery &nbsp;·&nbsp; No roaming fees &nbsp;·&nbsp; No contracts
+          </p>
         </div>
       </div>
     </section>
