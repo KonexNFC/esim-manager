@@ -453,6 +453,27 @@ export async function getRecentSyncRuns(limit = 10) {
 
 // ─── Scheduler ────────────────────────────────────────────────────────────────
 
+/**
+ * Ensure the unique indexes needed for bulk upserts exist in the database.
+ * Uses CREATE UNIQUE INDEX IF NOT EXISTS so it's safe to run on every startup
+ * in both dev and production.
+ */
+async function ensureSyncIndexes(): Promise<void> {
+  try {
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS normalized_plans_region_data_validity_uniq
+        ON normalized_plans (region_code, data_mb, validity_days)
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS provider_offers_plan_provider_code_uniq
+        ON provider_offers (normalized_plan_id, provider_key, provider_plan_code)
+    `);
+    console.log("[providerSync] Sync indexes verified");
+  } catch (err: any) {
+    console.error("[providerSync] Failed to ensure sync indexes:", err.message);
+  }
+}
+
 let _schedulerStarted = false;
 
 /**
@@ -465,6 +486,11 @@ export function startProviderSyncScheduler(): void {
 
   const ONE_HOUR     = 60 * 60 * 1000;
   const INITIAL_DELAY = 60 * 1000;
+
+  // Ensure indexes exist before first sync (idempotent, safe in prod too)
+  ensureSyncIndexes().catch(err =>
+    console.error("[providerSync] Index setup failed:", err.message),
+  );
 
   setTimeout(async () => {
     console.log("[providerSync] Running initial scheduled sync...");
