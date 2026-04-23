@@ -296,8 +296,9 @@ export class EsimAccessProvider implements EsimProvider {
     console.log(`[esimAccess] Order placed — orderNo: ${orderNo}, waiting for profile allocation...`);
 
     let esimData: EsimAccessQueryResponse["obj"]["esimList"][0] | undefined;
-    for (let attempt = 0; attempt < 10; attempt++) {
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+    // Poll up to 20× every 4 s (80 s total) — sandbox allocation can be slow
+    for (let attempt = 0; attempt < 20; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 4000));
 
       try {
         const queryResponse = await this.request<EsimAccessQueryResponse>("/esim/query", {
@@ -309,12 +310,20 @@ export class EsimAccessProvider implements EsimProvider {
           esimData = esims[0];
           break;
         }
+        console.log(`[esimAccess] Attempt ${attempt + 1}/20 — profile not yet allocated for ${orderNo}`);
       } catch {
       }
     }
 
     if (!esimData) {
-      throw new Error(`eSIM Access order ${orderNo} placed but profile not yet allocated. Check status later.`);
+      // Return the orderNo so callers know the order exists; ICCID can be
+      // retrieved later via getEsimStatus(orderNo) once the profile is ready.
+      console.warn(`[esimAccess] Profile for order ${orderNo} not allocated within 80 s — returning pending`);
+      return {
+        iccid:         orderNo,
+        qrCodeUrl:     "",
+        activationUrl: "",
+      };
     }
 
     const qrCodeData = `LPA:1$${esimData.smdpAddress}$${esimData.matchingId}`;
