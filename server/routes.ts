@@ -1701,53 +1701,78 @@ export async function registerRoutes(
       const { providerOffers, normalizedPlans } = await import("@shared/schema");
       const { eq, and } = await import("drizzle-orm");
 
+      // Normalise provider key: DB always stores lowercase (esimaccess, esimgo, zendit, airalo)
+      const providerKey = provider.toLowerCase().replace(/\s/g, "");
+
       // Find a suitable plan from the database
       let selectedProviderRef: string | undefined = packageId;
-      let selectedPlan: { dataAmountGb: number; validityDays: number } = { dataAmountGb: 1, validityDays: 7 };
+      let selectedPlan: { dataAmountGb: number; validityDays: number; regionCode: string } =
+        { dataAmountGb: 1, validityDays: 7, regionCode: countryCode.toUpperCase() };
 
       if (!selectedProviderRef) {
-        // Pick the cheapest available plan for this provider+country
-        const [offer] = await db
-          .select({
-            providerPlanCode: providerOffers.providerPlanCode,
-            dataMb:           normalizedPlans.dataMb,
-            validityDays:     normalizedPlans.validityDays,
-          })
+        const selectFields = {
+          providerPlanCode: providerOffers.providerPlanCode,
+          dataMb:           normalizedPlans.dataMb,
+          validityDays:     normalizedPlans.validityDays,
+          regionCode:       normalizedPlans.regionCode,
+        };
+
+        // First try the requested country, then fall back to any active plan for this provider
+        let offer = (await db
+          .select(selectFields)
           .from(providerOffers)
           .innerJoin(normalizedPlans, eq(providerOffers.normalizedPlanId, normalizedPlans.id))
-          .where(
-            and(
-              eq(providerOffers.providerKey, provider),
-              eq(normalizedPlans.regionCode, countryCode.toUpperCase()),
+          .where(and(
+            eq(providerOffers.providerKey, providerKey),
+            eq(normalizedPlans.regionCode, countryCode.toUpperCase()),
+            eq(providerOffers.isActive, true),
+          ))
+          .limit(1))[0];
+
+        if (!offer) {
+          // Fallback: pick any active plan for this provider
+          offer = (await db
+            .select(selectFields)
+            .from(providerOffers)
+            .innerJoin(normalizedPlans, eq(providerOffers.normalizedPlanId, normalizedPlans.id))
+            .where(and(
+              eq(providerOffers.providerKey, providerKey),
               eq(providerOffers.isActive, true),
-            )
-          )
-          .limit(1);
+            ))
+            .limit(1))[0];
+        }
 
         if (!offer) {
           return res.status(404).json({
-            message: `No active ${provider} plan found for country ${countryCode}`,
+            message: `No active ${providerKey} plans found in the database — run a sync first`,
           });
         }
         selectedProviderRef = offer.providerPlanCode;
-        selectedPlan = { dataAmountGb: offer.dataMb / 1024, validityDays: offer.validityDays };
+        selectedPlan = {
+          dataAmountGb: offer.dataMb / 1024,
+          validityDays: offer.validityDays,
+          regionCode:   offer.regionCode,
+        };
       }
 
       // Load provider registry and call purchaseEsim directly
       const { getAvailableProviders } = await import("./providers/providerManager");
       const available = getAvailableProviders();
-      if (!available.includes(provider)) {
+      // available uses camelCase keys (esimAccess) — normalise for comparison
+      const availableNorm = available.map(k => k.toLowerCase().replace(/\s/g, ""));
+      if (!availableNorm.includes(providerKey)) {
         return res.status(400).json({
-          message: `Provider "${provider}" not available. Available: ${available.join(', ')}`,
+          message: `Provider "${providerKey}" not available or not configured. Available: ${available.join(', ')}`,
         });
       }
 
       // Import the specific provider and call purchaseEsim
+      // Keys must match the normalised providerKey (all lowercase)
       const providerMap: Record<string, () => Promise<{ purchaseEsim: Function }>> = {
-        airalo:     () => import("./providers/airalo").then(m => m.airalo as any),
-        zendit:     () => import("./providers/zendit").then(m => m.zendit as any),
-        esimAccess: () => import("./providers/esimAccess").then(m => m.esimAccess as any),
-        esimgo:     () => import("./providers/esimgo").then(m => m.esimgo as any),
+        airalo:      () => import("./providers/airalo").then(m => m.airalo as any),
+        zendit:      () => import("./providers/zendit").then(m => m.zendit as any),
+        esimaccess:  () => import("./providers/esimAccess").then(m => m.esimAccess as any),
+        esimgo:      () => import("./providers/esimgo").then(m => m.esimgo as any),
       };
 
       const providerInstance = providerMap[provider]
@@ -1759,7 +1784,7 @@ export async function registerRoutes(
       }
 
       const result = await providerInstance.purchaseEsim({
-        countryCode:  countryCode.toUpperCase(),
+        countryCode:  selectedPlan.regionCode,
         dataAmountGb: selectedPlan.dataAmountGb,
         validityDays: selectedPlan.validityDays,
         providerRef:  selectedProviderRef,
@@ -1767,8 +1792,8 @@ export async function registerRoutes(
 
       res.json({
         ok:            true,
-        provider,
-        countryCode:   countryCode.toUpperCase(),
+        provider:      providerKey,
+        countryCode:   selectedPlan.regionCode,
         packageId:     selectedProviderRef,
         iccid:         result.iccid,
         qrCodeUrl:     result.qrCodeUrl,
