@@ -1699,7 +1699,7 @@ export async function registerRoutes(
 
       const { db } = await import("./storage");
       const { providerOffers, normalizedPlans } = await import("@shared/schema");
-      const { eq, and, isNotNull } = await import("drizzle-orm");
+      const { eq, and } = await import("drizzle-orm");
 
       // Find a suitable plan from the database
       let selectedProviderRef: string | undefined = packageId;
@@ -1709,18 +1709,17 @@ export async function registerRoutes(
         // Pick the cheapest available plan for this provider+country
         const [offer] = await db
           .select({
-            providerRef:  providerOffers.providerRef,
-            dataAmountGb: normalizedPlans.dataAmountGb,
-            validityDays: normalizedPlans.validityDays,
+            providerPlanCode: providerOffers.providerPlanCode,
+            dataMb:           normalizedPlans.dataMb,
+            validityDays:     normalizedPlans.validityDays,
           })
           .from(providerOffers)
           .innerJoin(normalizedPlans, eq(providerOffers.normalizedPlanId, normalizedPlans.id))
           .where(
             and(
               eq(providerOffers.providerKey, provider),
-              eq(normalizedPlans.countryCode, countryCode.toUpperCase()),
+              eq(normalizedPlans.regionCode, countryCode.toUpperCase()),
               eq(providerOffers.isActive, true),
-              isNotNull(providerOffers.providerRef),
             )
           )
           .limit(1);
@@ -1730,8 +1729,8 @@ export async function registerRoutes(
             message: `No active ${provider} plan found for country ${countryCode}`,
           });
         }
-        selectedProviderRef = offer.providerRef ?? undefined;
-        selectedPlan = { dataAmountGb: offer.dataAmountGb, validityDays: offer.validityDays };
+        selectedProviderRef = offer.providerPlanCode;
+        selectedPlan = { dataAmountGb: offer.dataMb / 1024, validityDays: offer.validityDays };
       }
 
       // Load provider registry and call purchaseEsim directly
