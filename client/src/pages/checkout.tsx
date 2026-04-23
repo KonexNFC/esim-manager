@@ -1,12 +1,12 @@
 import { useRoute, Link, useLocation } from "wouter";
-import { SiVisa, SiMastercard, SiApplepay, SiGooglepay, SiStripe } from "react-icons/si";
+import { SiVisa, SiMastercard, SiApplepay, SiGooglepay, SiPaypal } from "react-icons/si";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -14,13 +14,35 @@ import { Form, FormField, FormItem, FormLabel, FormMessage, FormControl } from "
 import {
   ArrowLeft, Wifi, Clock, Globe, Lock,
   QrCode, Smartphone, CheckCircle2, RotateCcw,
-  ArrowRight, Zap, Plus, TrendingUp, CreditCard, ShieldCheck, ExternalLink
+  ArrowRight, Zap, Plus, TrendingUp, CreditCard, ShieldCheck, AlertCircle
 } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
-import type { Plan, Destination } from "@shared/schema";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface PlanMeta {
+  id: string;
+  name: string;
+  destinationId: string;
+  countryCode: string;
+  dataLabel: string;
+  validityLabel: string;
+  dataAmountGb: number;
+  validityDays: number;
+  priceUsd: number;
+  currency: string;
+  coverage: string;
+  normalizedPlanId: string | null;
+}
+
+interface CheckoutConfig {
+  paypal: { enabled: boolean; clientId: string; sandbox: boolean };
+  paddle: { enabled: boolean; clientToken: string; sandbox: boolean };
+}
+
+// ─── Schema ───────────────────────────────────────────────────────────────────
 
 const checkoutSchema = z.object({
   name: z.string().optional(),
@@ -32,21 +54,43 @@ const checkoutSchema = z.object({
 });
 
 type CheckoutFormData = z.infer<typeof checkoutSchema>;
-type CheckoutStep = "details" | "upsell";
+type CheckoutStep = "details" | "upsell" | "pay";
+
+// ─── Upsell options ───────────────────────────────────────────────────────────
 
 const upsellOptions = [
-  { id: "1gb",       label: "+1 GB",        desc: "Light top-up",   price: 3,  tag: null },
+  { id: "1gb",       label: "+1 GB",        desc: "Light top-up",   price: 3  },
   { id: "3gb",       label: "+3 GB",        desc: "Extra buffer",   price: 7,  tag: "Popular" },
-  { id: "5gb",       label: "+5 GB",        desc: "Heavy use",      price: 11, tag: null },
+  { id: "5gb",       label: "+5 GB",        desc: "Heavy use",      price: 11 },
   { id: "unlimited", label: "Go Unlimited", desc: "No data limits", price: 15, tag: "Best value" },
 ];
 
+// ─── PayPal SDK loader ────────────────────────────────────────────────────────
+
+function loadPayPalScript(clientId: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if ((window as any).paypal) { resolve(); return; }
+    const existing = document.getElementById("paypal-sdk");
+    if (existing) { existing.addEventListener("load", () => resolve()); return; }
+    const script = document.createElement("script");
+    script.id = "paypal-sdk";
+    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&intent=capture&components=buttons`;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load PayPal SDK"));
+    document.head.appendChild(script);
+  });
+}
+
+// ─── What happens next ────────────────────────────────────────────────────────
+
 const nextSteps = [
-  { icon: CreditCard, title: "Secure payment",     description: "Handled by Stripe — card never leaves Stripe." },
-  { icon: QrCode,     title: "QR code delivered",  description: "Emailed to you within seconds of payment." },
-  { icon: Smartphone, title: "Scan & install",     description: "Settings → Mobile Data → Add eSIM." },
-  { icon: Wifi,       title: "You're online",      description: "Data activates on arrival." },
+  { icon: CreditCard,  title: "Secure payment",    description: "PayPal encrypted — card never leaves PayPal." },
+  { icon: QrCode,      title: "QR code delivered", description: "Emailed to you within seconds of payment." },
+  { icon: Smartphone,  title: "Scan & install",    description: "Settings → Mobile Data → Add eSIM." },
+  { icon: Wifi,        title: "You're online",     description: "Data activates on arrival." },
 ];
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Checkout() {
   useEffect(() => { document.title = "Checkout | Konex eSIM"; }, []);
@@ -56,36 +100,37 @@ export default function Checkout() {
   const { user } = useAuth();
   const planId = params?.planId;
 
-  const [step, setStep] = useState<CheckoutStep>("details");
-  const [formData, setFormData] = useState<CheckoutFormData | null>(null);
+  const [step, setStep]                   = useState<CheckoutStep>("details");
+  const [formData, setFormData]           = useState<CheckoutFormData | null>(null);
   const [selectedUpsell, setSelectedUpsell] = useState<string | null>(null);
+  const [paypalReady, setPaypalReady]     = useState(false);
+  const [paypalError, setPaypalError]     = useState("");
+  const [paddleLoading, setPaddleLoading] = useState(false);
+  const paypalContainerRef = useRef<HTMLDivElement>(null);
 
-  const { data: plan, isLoading: planLoading } = useQuery<Plan>({
-    queryKey: ["/api/plans/detail", planId],
+  // ── Data queries ──────────────────────────────────────────────────────────
+
+  const { data: plan, isLoading: planLoading } = useQuery<PlanMeta>({
+    queryKey: ["/api/checkout/plan-meta", planId],
     queryFn: async () => {
-      const res = await fetch(`/api/plans/${planId}`);
-      if (!res.ok) throw new Error("Not found");
+      const res = await fetch(`/api/checkout/plan-meta/${planId}`);
+      if (!res.ok) throw new Error("Plan not found");
       return res.json();
     },
     enabled: !!planId,
   });
 
-  const { data: destination } = useQuery<Destination>({
-    queryKey: ["/api/destinations", plan?.destinationId],
-    queryFn: async () => {
-      const res = await fetch(`/api/destinations/${plan!.destinationId}`);
-      if (!res.ok) throw new Error("Not found");
-      return res.json();
-    },
-    enabled: !!plan?.destinationId,
+  const { data: checkoutConfig } = useQuery<CheckoutConfig>({
+    queryKey: ["/api/checkout/config"],
   });
+
+  // ── Form ──────────────────────────────────────────────────────────────────
 
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: { name: "", email: "", confirmEmail: "" },
   });
 
-  // Pre-fill form with logged-in user's details
   useEffect(() => {
     if (user) {
       form.setValue("email", user.email ?? "");
@@ -94,46 +139,122 @@ export default function Checkout() {
     }
   }, [user, form]);
 
-  // Stripe checkout mutation — redirects to Stripe hosted page
-  const checkoutMutation = useMutation({
-    mutationFn: async (data: CheckoutFormData) => {
-      const res = await apiRequest("POST", "/api/checkout/plan", {
-        planId,
-        email: data.email,
-        name: data.name || undefined,
-        upsellOptionId: selectedUpsell || undefined,
-        // userId is resolved server-side from the session cookie — no need to send it
+  // ── Derived values ────────────────────────────────────────────────────────
+
+  const upsellPrice  = upsellOptions.find(u => u.id === selectedUpsell)?.price ?? 0;
+  const totalPriceUsd = plan ? parseFloat((plan.priceUsd + upsellPrice).toFixed(2)) : 0;
+  const resolvedEmail = formData?.email ?? "";
+
+  // ── PayPal button mounting ────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (step !== "pay" || !checkoutConfig?.paypal.enabled || !plan) return;
+    const { clientId } = checkoutConfig.paypal;
+
+    let cancelled = false;
+
+    loadPayPalScript(clientId)
+      .then(() => {
+        if (cancelled) return;
+        const paypal = (window as any).paypal;
+        if (!paypal || !paypalContainerRef.current) return;
+
+        paypalContainerRef.current.innerHTML = "";
+        setPaypalReady(false);
+        setPaypalError("");
+
+        paypal.Buttons({
+          style: { layout: "vertical", color: "blue", shape: "rect", label: "pay", height: 44 },
+          createOrder: async () => {
+            const res = await fetch("/api/checkout/paypal/create-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                normalizedPlanId: plan.normalizedPlanId ?? plan.id,
+                countryCode: plan.countryCode,
+                dataLabel: plan.dataLabel,
+                validityLabel: plan.validityLabel,
+                amountUsd: totalPriceUsd,
+                email: resolvedEmail,
+              }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Failed to create order");
+            return data.orderId;
+          },
+          onApprove: async (paypalData: any) => {
+            const res = await fetch("/api/checkout/paypal/capture-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                paypalOrderId: paypalData.orderID,
+                normalizedPlanId: plan.normalizedPlanId ?? plan.id,
+                countryCode: plan.countryCode,
+                dataLabel: plan.dataLabel,
+                validityLabel: plan.validityLabel,
+                amountUsd: totalPriceUsd,
+                email: resolvedEmail,
+              }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Capture failed");
+            window.location.href = `/checkout-success?orderId=${data.orderId}&provider=paypal`;
+          },
+          onError: (err: any) => {
+            console.error("[PayPal]", err);
+            setPaypalError("Payment failed. Please try again or use Paddle below.");
+          },
+        })
+          .render(paypalContainerRef.current)
+          .then(() => { if (!cancelled) setPaypalReady(true); });
+      })
+      .catch(() => {
+        if (!cancelled) setPaypalError("Could not load PayPal. Please use Paddle below.");
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || "Checkout failed");
-      return json as { url: string; sessionId: string };
-    },
-    onSuccess: ({ url }) => {
-      // Redirect to Stripe Checkout
-      window.location.href = url;
-    },
-    onError: (err: any) => {
-      toast({
-        title: "Checkout failed",
-        description: err.message || "Something went wrong. Please try again.",
-        variant: "destructive",
+
+    return () => { cancelled = true; };
+  }, [step, checkoutConfig?.paypal.enabled, checkoutConfig?.paypal.clientId, plan, totalPriceUsd, resolvedEmail]);
+
+  // ── Paddle handler ────────────────────────────────────────────────────────
+
+  const handlePaddle = async () => {
+    if (!plan) return;
+    setPaddleLoading(true);
+    try {
+      const res = await fetch("/api/checkout/paddle/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          normalizedPlanId: plan.normalizedPlanId ?? plan.id,
+          countryCode: plan.countryCode,
+          dataLabel: plan.dataLabel,
+          validityLabel: plan.validityLabel,
+          amountUsd: totalPriceUsd,
+          email: resolvedEmail,
+        }),
       });
-    },
-  });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Paddle checkout failed");
+      window.location.href = data.checkoutUrl;
+    } catch (err: any) {
+      toast({ title: "Checkout failed", description: err.message, variant: "destructive" });
+    } finally {
+      setPaddleLoading(false);
+    }
+  };
+
+  // ── Step handlers ─────────────────────────────────────────────────────────
 
   const onDetailsSubmit = (data: CheckoutFormData) => {
     setFormData(data);
     setStep("upsell");
   };
 
-  const completeOrder = () => {
-    if (formData) {
-      checkoutMutation.mutate(formData);
-    }
+  const proceedToPay = () => {
+    setStep("pay");
   };
 
-  const upsellPrice = upsellOptions.find(u => u.id === selectedUpsell)?.price ?? 0;
-  const totalPrice = plan ? plan.price + upsellPrice : 0;
+  // ── Early returns ─────────────────────────────────────────────────────────
 
   if (planLoading) {
     return (
@@ -157,6 +278,12 @@ export default function Checkout() {
     );
   }
 
+  const noProviders = checkoutConfig &&
+    !checkoutConfig.paypal.enabled &&
+    !checkoutConfig.paddle.enabled;
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
       <Link href={`/destinations/${plan.destinationId}`}>
@@ -167,20 +294,22 @@ export default function Checkout() {
 
       {/* Step indicator */}
       <div className="flex items-center gap-2 mb-7">
-        <div className={`flex items-center gap-1.5 text-sm font-medium ${step === "details" ? "text-foreground" : "text-muted-foreground"}`}>
-          <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${step === "details" ? "bg-primary text-primary-foreground" : "bg-primary/20 text-primary"}`}>1</div>
-          Your details
-        </div>
-        <div className="flex-1 h-px bg-border" />
-        <div className={`flex items-center gap-1.5 text-sm font-medium ${step === "upsell" ? "text-foreground" : "text-muted-foreground"}`}>
-          <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${step === "upsell" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>2</div>
-          Enhance your plan
-        </div>
-        <div className="flex-1 h-px bg-border" />
-        <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-          <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold bg-muted text-muted-foreground">3</div>
-          Pay securely
-        </div>
+        {(["details", "upsell", "pay"] as CheckoutStep[]).map((s, idx) => {
+          const labels = ["Your details", "Enhance plan", "Pay securely"];
+          const active = s === step;
+          const done = (step === "upsell" && idx === 0) || (step === "pay" && idx <= 1);
+          return (
+            <div key={s} className="flex items-center gap-2 flex-1">
+              <div className={`flex items-center gap-1.5 text-sm font-medium whitespace-nowrap ${active ? "text-foreground" : "text-muted-foreground"}`}>
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${done ? "bg-primary/30 text-primary" : active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                  {done ? "✓" : idx + 1}
+                </div>
+                {labels[idx]}
+              </div>
+              {idx < 2 && <div className="flex-1 h-px bg-border" />}
+            </div>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -195,7 +324,6 @@ export default function Checkout() {
                 Your Details
               </h2>
 
-              {/* Logged-in banner */}
               {user && (
                 <div className="flex items-center gap-3 rounded-lg bg-primary/5 border border-primary/20 px-4 py-3 mb-5">
                   <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
@@ -236,29 +364,26 @@ export default function Checkout() {
                   <div>
                     <h3 className="font-semibold text-sm mb-4 flex items-center gap-2">
                       <CreditCard className="w-4 h-4 text-primary" />
-                      Payment Method
+                      Payment
                     </h3>
                     <div className="rounded-lg border bg-muted/30 p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm text-muted-foreground">Powered by Stripe</span>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-muted-foreground">Accepted methods</span>
                         <div className="flex items-center gap-2.5">
                           <SiVisa       className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-visa" />
                           <SiMastercard className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-mc" />
                           <SiApplepay   className="h-5 w-auto text-muted-foreground" data-testid="checkout-payment-icon-apple-pay" />
                           <SiGooglepay  className="h-5 w-auto text-muted-foreground" data-testid="checkout-payment-icon-google-pay" />
-                          <SiStripe     className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-stripe" />
+                          <SiPaypal     className="h-4 w-auto text-muted-foreground" data-testid="checkout-payment-icon-paypal" />
                         </div>
                       </div>
-                      <div className="rounded-md border bg-background px-3 py-2.5 text-sm text-muted-foreground flex items-center gap-2">
-                        <ExternalLink className="w-4 h-4" />
-                        You'll enter card details securely on Stripe's page
-                      </div>
+                      <p className="text-xs text-muted-foreground">Pay securely via PayPal — card, Apple Pay, Google Pay all accepted</p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
                     <Lock className="w-3.5 h-3.5" />
-                    <span>SSL encrypted · Card details handled by Stripe</span>
+                    <span>SSL encrypted · Payments secured by PayPal</span>
                   </div>
 
                   <Button type="submit" className="w-full font-semibold" size="lg" data-testid="button-continue-to-upsell">
@@ -327,49 +452,107 @@ export default function Checkout() {
                 <Button
                   className="w-full font-semibold"
                   size="lg"
-                  onClick={completeOrder}
-                  disabled={checkoutMutation.isPending}
+                  onClick={proceedToPay}
                   data-testid="button-complete-purchase"
                 >
-                  {checkoutMutation.isPending ? (
-                    <span className="flex items-center gap-2">
-                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Redirecting to payment…
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <Lock className="w-4 h-4" />
-                      {selectedUpsell
-                        ? `Pay $${totalPrice.toFixed(2)} securely`
-                        : `Pay $${totalPrice.toFixed(2)} securely`
-                      }
-                    </span>
-                  )}
+                  <Lock className="w-4 h-4 mr-2" />
+                  Continue to Payment — ${totalPriceUsd.toFixed(2)}
                 </Button>
                 <button
-                  onClick={() => { setSelectedUpsell(null); completeOrder(); }}
+                  onClick={() => { setSelectedUpsell(null); proceedToPay(); }}
                   className="w-full text-center text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
-                  disabled={checkoutMutation.isPending}
                   data-testid="button-skip-upsell"
                 >
-                  No thanks, complete my order as is
+                  No thanks, pay ${plan.priceUsd.toFixed(2)} only
                 </button>
-                <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1.5">
-                  <SiStripe className="h-3 w-auto" />
-                  You'll be redirected to Stripe's secure payment page
-                </p>
-                <p className="text-xs text-center text-muted-foreground" data-testid="text-refund-policy-notice">
-                  By completing your purchase, you agree to our{" "}
-                  <Link href="/refund-policy" className="underline underline-offset-2 hover:text-foreground transition-colors">
-                    Refund & Return Policy
-                  </Link>
-                  .
-                </p>
               </div>
             </Card>
           )}
 
-          {/* Trust row */}
+          {/* Step 3: Pay */}
+          {step === "pay" && (
+            <Card className="p-6">
+              <h2 className="font-semibold text-lg mb-5 flex items-center gap-2">
+                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-bold">3</div>
+                Secure Payment
+              </h2>
+
+              {noProviders ? (
+                <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+                  <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-destructive">Payment unavailable</p>
+                    <p className="text-xs text-muted-foreground mt-1">No payment provider is configured. Please contact support.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* PayPal */}
+                  {checkoutConfig?.paypal.enabled && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Pay with PayPal</p>
+                      <div ref={paypalContainerRef} data-testid="paypal-buttons-container" />
+                      {!paypalReady && !paypalError && (
+                        <div className="h-11 rounded bg-muted animate-pulse" />
+                      )}
+                      {paypalError && (
+                        <p className="text-xs text-destructive mt-1" data-testid="paypal-error">{paypalError}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Paddle */}
+                  {checkoutConfig?.paddle.enabled && (
+                    <div>
+                      {checkoutConfig.paypal.enabled && (
+                        <div className="flex items-center gap-3 my-4">
+                          <div className="flex-1 h-px bg-border" />
+                          <span className="text-xs text-muted-foreground">or</span>
+                          <div className="flex-1 h-px bg-border" />
+                        </div>
+                      )}
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Pay with Paddle</p>
+                      <Button
+                        className="w-full"
+                        variant="outline"
+                        size="lg"
+                        onClick={handlePaddle}
+                        disabled={paddleLoading}
+                        data-testid="button-paddle-checkout"
+                      >
+                        {paddleLoading ? (
+                          <span className="flex items-center gap-2">
+                            <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            Redirecting…
+                          </span>
+                        ) : (
+                          <>
+                            <Lock className="w-4 h-4 mr-2" />
+                            Pay ${totalPriceUsd.toFixed(2)} via Paddle
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2">
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>SSL encrypted · Your card details are never stored by us</span>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => setStep("upsell")}
+                className="w-full text-center text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors mt-5"
+                data-testid="button-back-to-upsell"
+              >
+                ← Back
+              </button>
+            </Card>
+          )}
+
+          {/* Trust badges */}
           <div className="grid grid-cols-3 gap-3">
             <div className="flex flex-col items-center gap-1.5 p-3 rounded-md border bg-card text-center" data-testid="badge-secure-checkout">
               <Lock className="w-4 h-4 text-primary" />
@@ -394,21 +577,18 @@ export default function Checkout() {
               Order Summary
             </h3>
 
-            {destination && (
-              <div className="flex items-center gap-2 mb-4">
-                <Globe className="w-4 h-4 text-primary flex-shrink-0" />
-                <span className="text-sm font-semibold" data-testid="text-checkout-destination">{destination.name}</span>
-              </div>
-            )}
-
             <div className="space-y-3 mb-4">
               <div className="flex items-center gap-3">
+                <Globe className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <span className="text-sm font-semibold" data-testid="text-checkout-destination">{plan.countryCode}</span>
+              </div>
+              <div className="flex items-center gap-3">
                 <Wifi className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                <span className="text-sm">{plan.dataAmount}</span>
+                <span className="text-sm">{plan.dataLabel}</span>
               </div>
               <div className="flex items-center gap-3">
                 <Clock className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                <span className="text-sm">{plan.validity}</span>
+                <span className="text-sm">{plan.validityLabel}</span>
               </div>
               <div className="flex items-center gap-3">
                 <Globe className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -421,7 +601,7 @@ export default function Checkout() {
             <div className="space-y-2 mb-4">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Base plan</span>
-                <span>${plan.price.toFixed(2)}</span>
+                <span>${plan.priceUsd.toFixed(2)}</span>
               </div>
               {selectedUpsell && (
                 <div className="flex items-center justify-between text-sm" data-testid="text-upsell-line">
@@ -433,7 +613,7 @@ export default function Checkout() {
 
             <div className="flex items-center justify-between mb-5 pt-2 border-t">
               <span className="font-semibold">Total</span>
-              <span className="text-xl font-bold" data-testid="text-total-price">${totalPrice.toFixed(2)}</span>
+              <span className="text-xl font-bold" data-testid="text-total-price">${totalPriceUsd.toFixed(2)}</span>
             </div>
 
             <div>

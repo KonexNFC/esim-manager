@@ -400,6 +400,47 @@ export async function registerRoutes(
     }
   });
 
+  // GET /api/checkout/plan-meta/:planId
+  // Returns checkout metadata for a legacy plans-table plan, including normalizedPlanId lookup.
+  app.get("/api/checkout/plan-meta/:planId", async (req, res) => {
+    try {
+      const plan = await storage.getPlan(req.params.planId);
+      if (!plan) return res.status(404).json({ message: "Plan not found" });
+
+      const dataMb = Math.round((plan.dataAmountGb ?? 0) * 1024);
+      const [normalizedPlan] = await db
+        .select({ id: normalizedPlans.id })
+        .from(normalizedPlans)
+        .where(
+          and(
+            eq(normalizedPlans.regionCode, plan.countryCode),
+            eq(normalizedPlans.dataMb, dataMb),
+            eq(normalizedPlans.validityDays, plan.validityDays),
+            eq(normalizedPlans.isActive, true),
+          )
+        )
+        .limit(1);
+
+      return res.json({
+        id: plan.id,
+        name: plan.name,
+        destinationId: plan.destinationId,
+        countryCode: plan.countryCode,
+        dataLabel: plan.dataAmount,
+        validityLabel: plan.validity,
+        dataAmountGb: plan.dataAmountGb,
+        validityDays: plan.validityDays,
+        priceUsd: plan.price,
+        currency: plan.currency ?? "USD",
+        coverage: plan.coverage,
+        normalizedPlanId: normalizedPlan?.id ?? null,
+      });
+    } catch (err: any) {
+      console.error("[plan-meta]", err.message);
+      return res.status(500).json({ message: "Failed to load plan metadata" });
+    }
+  });
+
   // GET /api/checkout/order/:orderId — look up order by our DB id
   app.get("/api/checkout/order/:orderId", async (req, res) => {
     try {
