@@ -2047,7 +2047,8 @@ export async function registerRoutes(
     // Query params: country, provider, validity (days), type (fixed|unlimited), page, limit
     app.get("/api/admin/catalogue", requireAdmin, async (req, res) => {
       try {
-        const country   = (req.query.country  as string | undefined)?.toUpperCase() || null;
+        const rawCountry = (req.query.country as string | undefined)?.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2) || null;
+        const country   = rawCountry && rawCountry.length === 2 ? rawCountry : null;
         const provider  = (req.query.provider as string | undefined) || null;
         const validity  = req.query.validity  ? Number(req.query.validity)  : null;
         const type      = (req.query.type     as string | undefined) || null;

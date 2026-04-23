@@ -2268,8 +2268,9 @@ function CatalogueTab() {
           <Input
             placeholder="Country code (e.g. GB)"
             value={country}
-            onChange={e => { setCountry(e.target.value); setPage(1); }}
-            className="w-40"
+            onChange={e => { setCountry(e.target.value.toUpperCase().slice(0, 2)); setPage(1); }}
+            className="w-40 uppercase"
+            maxLength={2}
             data-testid="input-catalogue-country"
           />
           <Select value={provider} onValueChange={v => { setProvider(v); setPage(1); }}>
