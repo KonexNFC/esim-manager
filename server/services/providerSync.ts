@@ -437,13 +437,13 @@ let _schedulerStarted = false;
 
 /**
  * Start the background sync scheduler.
- * Initial sync after 60s, then every 6 hours.
+ * Initial sync after 60s, then every 1 hour (Airalo requires at minimum hourly syncs).
  */
 export function startProviderSyncScheduler(): void {
   if (_schedulerStarted) return;
   _schedulerStarted = true;
 
-  const SIX_HOURS = 6 * 60 * 60 * 1000;
+  const ONE_HOUR     = 60 * 60 * 1000;
   const INITIAL_DELAY = 60 * 1000;
 
   setTimeout(async () => {
@@ -452,12 +452,12 @@ export function startProviderSyncScheduler(): void {
       console.error("[providerSync] Initial sync failed:", err.message, err.stack),
     );
     setInterval(async () => {
-      console.log("[providerSync] Running 6-hour scheduled sync...");
+      console.log("[providerSync] Running hourly scheduled sync...");
       await syncAllProviders("auto").catch(err =>
         console.error("[providerSync] Scheduled sync failed:", err.message),
       );
-    }, SIX_HOURS);
+    }, ONE_HOUR);
   }, INITIAL_DELAY);
 
-  console.log("[providerSync] Scheduler registered (first run in 60s, then every 6h)");
+  console.log("[providerSync] Scheduler registered (first run in 60s, then every 1h)");
 }

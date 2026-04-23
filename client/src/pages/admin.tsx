@@ -1661,6 +1661,26 @@ function RoutingTab() {
     onError: () => toast({ title: "Provider sync failed", variant: "destructive" }),
   });
 
+  const [testProvider, setTestProvider]   = useState("airalo");
+  const [testCountry,  setTestCountry]    = useState("US");
+  const [testResult,   setTestResult]     = useState<any>(null);
+
+  const testOrderMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", "/api/admin/providers/test-order", {
+        provider:    testProvider,
+        countryCode: testCountry,
+      }).then((r: any) => r.json()),
+    onSuccess: (data: any) => {
+      setTestResult(data);
+      toast({ title: data.ok ? "Test order placed ✓" : "Test failed", description: data.iccid ?? data.message });
+    },
+    onError: (err: any) => {
+      setTestResult({ error: err.message });
+      toast({ title: "Test order failed", description: err.message, variant: "destructive" });
+    },
+  });
+
   const toggleProvider = useMutation({
     mutationFn: ({ key, enabled }: { key: string; enabled: boolean }) =>
       apiRequest("PATCH", `/api/admin/providers/${key}`, { enabled }),
@@ -1925,7 +1945,7 @@ function RoutingTab() {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground mb-4">
-          Fetches live plan catalogues from eSIMGo and eSIM Access, normalises offers into the routing engine, and auto-updates wholesale costs on matching internal plans. Runs automatically every 6 hours.
+          Fetches live plan catalogues from all providers (eSIMGo, eSIM Access, Zendit, Airalo), normalises offers into the routing engine, and auto-updates wholesale costs on matching internal plans. Runs automatically every hour.
         </p>
         {!syncRuns || syncRuns.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground">
@@ -1967,6 +1987,75 @@ function RoutingTab() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </Card>
+
+      {/* ── Sandbox Test Order ── */}
+      <Card className="p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Zap className="w-5 h-5 text-amber-500" />
+          <h3 className="font-semibold text-base">Provider Sandbox Test Order</h3>
+          <Badge variant="outline" className="text-xs">Airalo checklist item 4</Badge>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Places a real test purchase through a provider's sandbox to validate the full browse → order → install flow.
+          Use this to tick off item 4 on Airalo's production readiness checklist.
+        </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Select value={testProvider} onValueChange={setTestProvider}>
+            <SelectTrigger className="w-36" data-testid="select-test-provider">
+              <SelectValue placeholder="Provider" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="airalo">Airalo</SelectItem>
+              <SelectItem value="zendit">Zendit</SelectItem>
+              <SelectItem value="esimAccess">eSIM Access</SelectItem>
+              <SelectItem value="esimgo">eSIMGo</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            placeholder="Country code (e.g. US)"
+            value={testCountry}
+            onChange={e => setTestCountry(e.target.value.toUpperCase().slice(0, 2))}
+            className="w-44 uppercase"
+            maxLength={2}
+            data-testid="input-test-country"
+          />
+          <Button
+            size="sm"
+            onClick={() => testOrderMutation.mutate()}
+            disabled={testOrderMutation.isPending || !testProvider || testCountry.length !== 2}
+            data-testid="button-test-order"
+          >
+            {testOrderMutation.isPending
+              ? <><RefreshCw className="w-3 h-3 mr-1.5 animate-spin" />Placing…</>
+              : <><Play className="w-3 h-3 mr-1.5" />Place Test Order</>}
+          </Button>
+        </div>
+
+        {testResult && (
+          <div className={`mt-4 rounded-lg border p-4 text-sm font-mono break-all ${testResult.error || !testResult.ok ? "border-destructive/40 bg-destructive/5 text-destructive" : "border-green-500/40 bg-green-500/5"}`}
+            data-testid="test-order-result"
+          >
+            {testResult.error ? (
+              <p><span className="font-semibold">Error:</span> {testResult.error}</p>
+            ) : testResult.ok ? (
+              <div className="space-y-1">
+                <p><span className="font-semibold text-green-700 dark:text-green-400">✓ Order placed via {testResult.provider}</span></p>
+                <p><span className="text-muted-foreground">Package:</span> {testResult.packageId}</p>
+                <p><span className="text-muted-foreground">ICCID:</span> {testResult.iccid}</p>
+                <p><span className="text-muted-foreground">Activation:</span> {testResult.activationUrl || "—"}</p>
+                {testResult.qrCodeUrl && (
+                  <div className="pt-2">
+                    <p className="text-muted-foreground mb-1">QR Code:</p>
+                    <img src={testResult.qrCodeUrl} alt="QR Code" className="w-32 h-32 rounded border" />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <pre>{JSON.stringify(testResult, null, 2)}</pre>
+            )}
           </div>
         )}
       </Card>

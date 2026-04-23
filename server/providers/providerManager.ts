@@ -2,12 +2,14 @@ import { storage } from "../storage";
 import { esimgo } from "./esimgo";
 import { esimAccess } from "./esimAccess";
 import { zendit } from "./zendit";
+import { airalo } from "./airalo";
 import type { EsimProvider, ProviderOrderResult } from "./types";
 
 const providerRegistry: Record<string, EsimProvider> = {
   esimgo,
   esimAccess,
   zendit,
+  airalo,
 };
 
 export interface PurchaseResult {

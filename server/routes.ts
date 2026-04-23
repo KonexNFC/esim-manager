@@ -1681,6 +1681,106 @@ export async function registerRoutes(
     }
   });
 
+  // ── Provider Sandbox Test Order ──────────────────────────────────────────────
+  // POST /api/admin/providers/test-order
+  // Places a sandbox test purchase to validate end-to-end flow (checklist item 4).
+  // Body: { provider: string; countryCode: string; packageId?: string }
+  app.post("/api/admin/providers/test-order", requireAdmin, async (req, res) => {
+    try {
+      const { provider, countryCode, packageId } = req.body as {
+        provider:    string;
+        countryCode: string;
+        packageId?:  string;
+      };
+
+      if (!provider || !countryCode) {
+        return res.status(400).json({ message: "provider and countryCode are required" });
+      }
+
+      const { db } = await import("./storage");
+      const { providerOffers, normalizedPlans } = await import("@shared/schema");
+      const { eq, and, isNotNull } = await import("drizzle-orm");
+
+      // Find a suitable plan from the database
+      let selectedProviderRef: string | undefined = packageId;
+      let selectedPlan: { dataAmountGb: number; validityDays: number } = { dataAmountGb: 1, validityDays: 7 };
+
+      if (!selectedProviderRef) {
+        // Pick the cheapest available plan for this provider+country
+        const [offer] = await db
+          .select({
+            providerRef:  providerOffers.providerRef,
+            dataAmountGb: normalizedPlans.dataAmountGb,
+            validityDays: normalizedPlans.validityDays,
+          })
+          .from(providerOffers)
+          .innerJoin(normalizedPlans, eq(providerOffers.normalizedPlanId, normalizedPlans.id))
+          .where(
+            and(
+              eq(providerOffers.providerKey, provider),
+              eq(normalizedPlans.countryCode, countryCode.toUpperCase()),
+              eq(providerOffers.isActive, true),
+              isNotNull(providerOffers.providerRef),
+            )
+          )
+          .limit(1);
+
+        if (!offer) {
+          return res.status(404).json({
+            message: `No active ${provider} plan found for country ${countryCode}`,
+          });
+        }
+        selectedProviderRef = offer.providerRef ?? undefined;
+        selectedPlan = { dataAmountGb: offer.dataAmountGb, validityDays: offer.validityDays };
+      }
+
+      // Load provider registry and call purchaseEsim directly
+      const { getAvailableProviders } = await import("./providers/providerManager");
+      const available = getAvailableProviders();
+      if (!available.includes(provider)) {
+        return res.status(400).json({
+          message: `Provider "${provider}" not available. Available: ${available.join(', ')}`,
+        });
+      }
+
+      // Import the specific provider and call purchaseEsim
+      const providerMap: Record<string, () => Promise<{ purchaseEsim: Function }>> = {
+        airalo:     () => import("./providers/airalo").then(m => m.airalo as any),
+        zendit:     () => import("./providers/zendit").then(m => m.zendit as any),
+        esimAccess: () => import("./providers/esimAccess").then(m => m.esimAccess as any),
+        esimgo:     () => import("./providers/esimgo").then(m => m.esimgo as any),
+      };
+
+      const providerInstance = providerMap[provider]
+        ? await providerMap[provider]()
+        : null;
+
+      if (!providerInstance || typeof providerInstance.purchaseEsim !== 'function') {
+        return res.status(400).json({ message: `Provider "${provider}" does not support purchaseEsim` });
+      }
+
+      const result = await providerInstance.purchaseEsim({
+        countryCode:  countryCode.toUpperCase(),
+        dataAmountGb: selectedPlan.dataAmountGb,
+        validityDays: selectedPlan.validityDays,
+        providerRef:  selectedProviderRef,
+      });
+
+      res.json({
+        ok:            true,
+        provider,
+        countryCode:   countryCode.toUpperCase(),
+        packageId:     selectedProviderRef,
+        iccid:         result.iccid,
+        qrCodeUrl:     result.qrCodeUrl,
+        activationUrl: result.activationUrl,
+      });
+    } catch (err: any) {
+      console.error("/api/admin/providers/test-order error:", err.message);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // ── Provider Catalogue Sync ──────────────────────────────────────────────────
 
   app.post("/api/admin/providers/sync", requireAdmin, async (_req, res) => {
