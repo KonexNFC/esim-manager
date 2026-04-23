@@ -23,53 +23,55 @@ class AiraloProvider {
   }
 
   /**
-   * Fetch all Airalo plans across the given country codes.
-   * Uses getSupportedPlans() per country; 100-plan pages are sufficient
-   * because Airalo's catalogue is ~2–3 plans per country.
+   * Fetch all Airalo local plans in a single paginated call (no country filter),
+   * then expand each package across the countries it covers.
+   * This avoids making 194 per-country requests and stays well within the 40 req/min limit.
    */
-  async getAllPackages(countryCodes: string[]): Promise<ProviderPlan[]> {
+  async getAllPackages(_countryCodes: string[]): Promise<ProviderPlan[]> {
     const adapter = this.getAdapter();
     if (!adapter) throw new Error("Airalo not configured");
 
     const results: ProviderPlan[] = [];
+    let page = 1;
 
-    // Process in batches of 10 to avoid hammering the auth endpoint
-    const BATCH = 10;
-    for (let i = 0; i < countryCodes.length; i += BATCH) {
-      const batch = countryCodes.slice(i, i + BATCH);
-      const settled = await Promise.allSettled(
-        batch.map(code => adapter.getSupportedPlans(code)),
-      );
+    while (true) {
+      console.log(`[airalo] Fetching page ${page} of all local packages...`);
+      const pkgs = await adapter.getSupportedPlans(undefined, page);
+      if (!pkgs.length) break;
 
-      for (let j = 0; j < settled.length; j++) {
-        const res = settled[j];
-        const countryCode = batch[j].toUpperCase();
-        if (res.status === "rejected") {
-          console.warn(`[airalo] ${countryCode}: ${res.reason?.message}`);
-          continue;
-        }
-        for (const pkg of res.value) {
-          if (!pkg.providerPlanCode || !pkg.dataMb || !pkg.durationDays) continue;
-          const dataGb = pkg.dataMb / 1024;
-          results.push({
-            provider:       "airalo",
-            providerRef:    pkg.providerPlanCode,
-            countryCode,
-            dataAmountGb:   dataGb,
-            validityDays:   pkg.durationDays,
-            wholesaleCost:  pkg.priceMinor / 100,
-            currency:       pkg.currency || "USD",
-            name:           pkg.name,
-            dataAmount:     dataGb >= 999 ? "Unlimited" : `${dataGb % 1 === 0 ? dataGb : dataGb.toFixed(1)} GB`,
-            validity:       `${pkg.durationDays} day${pkg.durationDays === 1 ? "" : "s"}`,
-            coverage:       countryCode,
-            features:       [],
-            coverageType:   "country",
-          });
-        }
+      for (const pkg of pkgs) {
+        if (!pkg.providerPlanCode || !pkg.durationDays) continue;
+
+        const dataGb = pkg.dataMb >= 999_000
+          ? Infinity
+          : +(pkg.dataMb / 1024).toFixed(2);
+
+        const countryCode = (pkg.destination ?? pkg.region ?? '').toUpperCase();
+        if (!countryCode) continue;
+
+        results.push({
+          provider:      "airalo",
+          providerRef:   pkg.providerPlanCode,
+          countryCode,
+          dataAmountGb:  dataGb === Infinity ? 999 : dataGb,
+          validityDays:  pkg.durationDays,
+          wholesaleCost: pkg.priceMinor / 100,
+          currency:      pkg.currency || "USD",
+          name:          pkg.name,
+          dataAmount:    dataGb === Infinity ? "Unlimited" : `${Number.isInteger(dataGb) ? dataGb : dataGb.toFixed(1)} GB`,
+          validity:      `${pkg.durationDays} day${pkg.durationDays === 1 ? "" : "s"}`,
+          coverage:      countryCode,
+          features:      [],
+          coverageType:  "country",
+        });
       }
+
+      // Check if there are more pages (adapter returns [] when past last page)
+      if (pkgs.length < 1000) break;
+      page++;
     }
 
+    console.log(`[airalo] Fetched ${results.length} plan-country entries from ${page} page(s)`);
     return results;
   }
 }

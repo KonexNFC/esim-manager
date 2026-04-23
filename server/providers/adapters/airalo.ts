@@ -69,20 +69,31 @@ interface AiraloUsageResponse {
   };
 }
 
-interface AiraloPackage {
-  id:          string;
-  title:       string;
-  data:        string;   // e.g. "1 GB"
-  day:         number;
-  price:       number;   // USD cents? actually USD float
-  country?:    string;
-  net_price?:  number;
-  data_unit?:  string;
+// The /packages endpoint returns country-grouped data, not a flat list:
+//   data[] = [{ slug, country_code, operators: [{ packages: [{ id, price, net_price, amount, day, is_unlimited }] }] }]
+interface AiraloOperatorPackage {
+  id:           string;
+  title:        string;
+  price:        number;
+  net_price?:   number;
+  amount:       number;     // MB; 0 when is_unlimited=true
+  day:          number;
+  is_unlimited: boolean;
+}
+
+interface AiraloOperator {
+  packages: AiraloOperatorPackage[];
+}
+
+interface AiraloCountryEntry {
+  country_code: string;     // ISO 2-letter e.g. "US"
+  slug:         string;
+  operators:    AiraloOperator[];
 }
 
 interface AiraloPackagesResponse {
-  data: AiraloPackage[];
-  meta?: { total: number; per_page: number; last_page: number };
+  data: AiraloCountryEntry[];
+  meta?: { last_page: number; current_page: number };
 }
 
 // ─── Adapter ─────────────────────────────────────────────────────────────────
@@ -94,16 +105,18 @@ export class AiraloAdapter implements ProviderAdapter {
   private clientSecret: string;
   private baseUrl:      string;
 
-  // Token cache
-  private cachedToken:  string | null = null;
-  private tokenExpiry:  number        = 0;
+  // Token cache — deduplicated so 100+ parallel calls share one fetch
+  private cachedToken:     string | null        = null;
+  private tokenExpiry:     number               = 0;
+  private pendingTokenReq: Promise<string> | null = null;
 
   constructor(clientId: string, clientSecret: string, env: 'production' | 'sandbox' = 'production') {
     this.clientId     = clientId;
     this.clientSecret = clientSecret;
-    this.baseUrl      = env === 'sandbox'
-      ? 'https://sandbox.airalo.com/v2'
-      : 'https://partners.airalo.com/v2';
+    // Single base URL for both sandbox and production —
+    // mode is controlled by account settings in the Airalo Partners portal.
+    void env; // env flag unused; kept for API compatibility
+    this.baseUrl = 'https://partners-api.airalo.com/v2';
   }
 
   // ── Auth ───────────────────────────────────────────────────────────────────
@@ -112,29 +125,38 @@ export class AiraloAdapter implements ProviderAdapter {
     const now = Date.now();
     if (this.cachedToken && now < this.tokenExpiry) return this.cachedToken;
 
-    const body = new URLSearchParams({
-      client_id:     this.clientId,
-      client_secret: this.clientSecret,
-      grant_type:    'client_credentials',
+    // Deduplicate: if a token request is already in-flight, await it
+    if (this.pendingTokenReq) return this.pendingTokenReq;
+
+    this.pendingTokenReq = (async () => {
+      // Airalo Partners API requires multipart/form-data (not url-encoded)
+      const body = new FormData();
+      body.append('client_id',     this.clientId);
+      body.append('client_secret', this.clientSecret);
+      body.append('grant_type',    'client_credentials');
+
+      const res = await fetch(`${this.baseUrl}/token`, {
+        method:  'POST',
+        headers: { 'Accept': 'application/json' },
+        body,
+      });
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`Airalo auth failed ${res.status}: ${txt.slice(0, 200)}`);
+      }
+
+      const json = await res.json() as AiraloTokenResponse;
+      this.cachedToken = json.data.access_token;
+      // Expire 60 s before the real expiry so we never send a stale token
+      this.tokenExpiry = now + (json.data.expires_in - 60) * 1_000;
+
+      return this.cachedToken!;
+    })().finally(() => {
+      this.pendingTokenReq = null;
     });
 
-    const res = await fetch(`${this.baseUrl}/token`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body:    body.toString(),
-    });
-
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      throw new Error(`Airalo auth failed ${res.status}: ${txt.slice(0, 200)}`);
-    }
-
-    const json = await res.json() as AiraloTokenResponse;
-    this.cachedToken = json.data.access_token;
-    // Expire 60 s before the real expiry so we never send a stale token
-    this.tokenExpiry = now + (json.data.expires_in - 60) * 1_000;
-
-    return this.cachedToken;
+    return this.pendingTokenReq;
   }
 
   private async req<T>(
@@ -168,36 +190,51 @@ export class AiraloAdapter implements ProviderAdapter {
 
   // ── Plans ─────────────────────────────────────────────────────────────────
 
-  async getSupportedPlans(countryCode?: string): Promise<ProviderPlan[]> {
-    const params = new URLSearchParams({ type: 'local', limit: '100' });
-    if (countryCode) params.set('country_code', countryCode.toUpperCase());
+  async getSupportedPlans(countryCode?: string, page = 1): Promise<ProviderPlan[]> {
+    // Airalo uses Laravel-style filter[] params — build query string manually
+    // to avoid URLSearchParams percent-encoding the brackets (filter%5Btype%5D).
+    const parts = [
+      'filter[type]=local',
+      `limit=1000`,
+      `page=${page}`,
+    ];
+    if (countryCode) parts.push(`filter[country]=${encodeURIComponent(countryCode.toUpperCase())}`);
+    const qs = parts.join('&');
 
     try {
       const json = await this.req<AiraloPackagesResponse>(
-        'GET', `/packages?${params.toString()}`,
+        'GET', `/packages?${qs}`,
       );
-      return (json.data ?? []).map(pkg => ({
-        providerPlanCode: pkg.id,
-        name:             pkg.title,
-        destination:      countryCode ?? '',
-        region:           countryCode ?? '',
-        dataMb:           this.parseDataMb(pkg.data),
-        durationDays:     pkg.day,
-        priceMinor:       Math.round((pkg.net_price ?? pkg.price) * 100),
-        currency:         'USD',
-        isActive:         true,
-      }));
+      const countryEntries = json.data ?? [];
+      console.log(`[airalo] /packages?${qs.replace(/&/g, '&')} → ${countryEntries.length} country entries${json.meta ? ` (last_page=${json.meta.last_page})` : ''}`);
+
+      // Flatten: country → operator → package
+      const plans: ProviderPlan[] = [];
+      for (const entry of countryEntries) {
+        const cc = (entry.country_code ?? countryCode ?? '').toUpperCase();
+        if (!cc) continue;
+        for (const op of entry.operators ?? []) {
+          for (const pkg of op.packages ?? []) {
+            if (!pkg.id || !pkg.day) continue;
+            plans.push({
+              providerPlanCode: pkg.id,
+              name:             pkg.title,
+              destination:      cc,
+              region:           cc,
+              dataMb:           pkg.is_unlimited ? 999_999 : (pkg.amount ?? 0),
+              durationDays:     pkg.day,
+              priceMinor:       Math.round((pkg.net_price ?? pkg.price ?? 0) * 100),
+              currency:         'USD',
+              isActive:         true,
+            });
+          }
+        }
+      }
+      return plans;
     } catch (err: any) {
       console.warn(`[airalo] getSupportedPlans(${countryCode}): ${err.message}`);
       return [];
     }
-  }
-
-  private parseDataMb(dataStr: string): number {
-    const m = /^([\d.]+)\s*(GB|MB|gb|mb)/i.exec(dataStr ?? '');
-    if (!m) return 0;
-    const val = parseFloat(m[1]);
-    return m[2].toUpperCase() === 'GB' ? Math.round(val * 1024) : Math.round(val);
   }
 
   // ── Provisioning ──────────────────────────────────────────────────────────
