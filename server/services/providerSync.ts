@@ -25,6 +25,7 @@ import type { ProviderPlan } from "../providers/types";
 import { esimgo } from "../providers/esimgo";
 import { esimAccess } from "../providers/esimAccess";
 import { zendit } from "../providers/zendit";
+import { airalo } from "../providers/airalo";
 import { quantizeDataMb, formatPlanName } from "./planNormalizer";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -266,6 +267,7 @@ export async function syncAllProviders(
     { key: "esimgo",     name: "eSIMGo",      priority: 1 },
     { key: "esimaccess", name: "eSIM Access",  priority: 2 },
     { key: "zendit",     name: "Zendit",       priority: 3 },
+    { key: "airalo",     name: "Airalo",       priority: 4 },
   ];
   for (const p of CANONICAL_PROVIDERS) {
     await db.execute(sql`
@@ -361,6 +363,26 @@ export async function syncAllProviders(
     // Not configured yet — log at debug level, don't count as a failure
     console.log("[providerSync] Zendit: not configured (ZENDIT_API_KEY missing) — skipped");
     results.push({ providerKey: "zendit", success: false, plansFound: 0, offersUpserted: 0, error: "Not configured" });
+  }
+
+  // ── Airalo (per-country batch, same country list) ─────────────────────────
+  if (airalo.isConfigured()) {
+    try {
+      console.log(`[providerSync] Fetching Airalo plans for ${countryCodes.length} countries...`);
+      const fetched = await airalo.getAllPackages(countryCodes);
+      console.log(`[providerSync] Airalo: ${fetched.length} plans`);
+      const { offersUpserted, priceChanges } = await processProviderPlans(fetched, "airalo");
+      totalOffersUpserted += offersUpserted;
+      totalPriceChanges += priceChanges;
+      results.push({ providerKey: "airalo", success: true, plansFound: fetched.length, offersUpserted });
+    } catch (err: any) {
+      console.error("[providerSync] Airalo sync failed:", err.message);
+      failedProviders.push("airalo");
+      results.push({ providerKey: "airalo", success: false, plansFound: 0, offersUpserted: 0, error: err.message });
+    }
+  } else {
+    console.log("[providerSync] Airalo: not configured (AIRALO_CLIENT_ID/SECRET missing) — skipped");
+    results.push({ providerKey: "airalo", success: false, plansFound: 0, offersUpserted: 0, error: "Not configured" });
   }
 
   // ── Auto-update internal plan costs ───────────────────────────────────────

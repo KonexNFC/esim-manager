@@ -103,7 +103,7 @@ export class AiraloAdapter implements ProviderAdapter {
     this.clientSecret = clientSecret;
     this.baseUrl      = env === 'sandbox'
       ? 'https://sandbox.airalo.com/v2'
-      : 'https://www.airalo.com/v2';
+      : 'https://partners.airalo.com/v2';
   }
 
   // ── Auth ───────────────────────────────────────────────────────────────────
