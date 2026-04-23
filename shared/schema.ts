@@ -308,7 +308,9 @@ export const normalizedPlans = pgTable("normalized_plans", {
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (t) => ({
+  uniqPlan: uniqueIndex("normalized_plans_region_data_validity_uniq").on(t.regionCode, t.dataMb, t.validityDays),
+}));
 
 // ─── PROVIDER OFFERS ─────────────────────────────────
 // Maps each normalizedPlan to one or more provider-specific bundles.
@@ -325,7 +327,9 @@ export const providerOffers = pgTable("provider_offers", {
   lastSyncedAt: timestamp("last_synced_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (t) => ({
+  uniqOffer: uniqueIndex("provider_offers_plan_provider_code_uniq").on(t.normalizedPlanId, t.providerKey, t.providerPlanCode),
+}));
 
 // ─── DESTINATION PROVIDER STATS ──────────────────────
 // Rolling performance memory per (provider, destination) pair.

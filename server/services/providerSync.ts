@@ -59,123 +59,143 @@ function planToMb(plan: ProviderPlan): number {
   return quantizeDataMb(Math.round(plan.dataAmountGb * 1024));
 }
 
-/** Find a normalizedPlan row matching regionCode + dataMb + validityDays, or create one. */
-async function findOrCreateNormalizedPlan(
-  regionCode: string,
-  dataMb: number,
-  validityDays: number,
-  _providerPlanName: string, // ignored — we generate our own standardised name
-): Promise<string> {
-  // Always work with the canonical MB value
-  const canonicalMb = quantizeDataMb(dataMb);
-
-  const [existing] = await db
-    .select({ id: normalizedPlans.id })
-    .from(normalizedPlans)
-    .where(
-      and(
-        eq(normalizedPlans.regionCode, regionCode),
-        eq(normalizedPlans.dataMb, canonicalMb),
-        eq(normalizedPlans.validityDays, validityDays),
-      ),
-    )
-    .limit(1);
-
-  if (existing) return existing.id;
-
-  const isUnlimited = canonicalMb >= 999999;
-  const standardName = formatPlanName(regionCode, canonicalMb, validityDays);
-  const [created] = await db
-    .insert(normalizedPlans)
-    .values({
-      regionCode,
-      dataMb: canonicalMb,
-      validityDays,
-      name: standardName,
-      isUnlimited,
-      planType: "data",
-      retailPriceUsd: 0,
-      isActive: true,
-    })
-    .returning({ id: normalizedPlans.id });
-
-  return created.id;
-}
-
-/** Upsert a single providerOffer and return whether the price changed. */
-async function upsertOffer(
-  normalizedPlanId: string,
-  providerKey: string,
-  providerPlanCode: string,
-  wholesalePriceUsd: number,
-  coverageType: "country" | "regional" | "global" = "country",
-): Promise<boolean> {
-  const [existing] = await db
-    .select({ id: providerOffers.id, wholesalePriceUsd: providerOffers.wholesalePriceUsd })
-    .from(providerOffers)
-    .where(
-      and(
-        eq(providerOffers.normalizedPlanId, normalizedPlanId),
-        eq(providerOffers.providerKey, providerKey),
-        eq(providerOffers.providerPlanCode, providerPlanCode),
-      ),
-    )
-    .limit(1);
-
-  const priceChanged =
-    existing != null && Math.abs(existing.wholesalePriceUsd - wholesalePriceUsd) > 0.0001;
-
-  if (existing) {
-    await db
-      .update(providerOffers)
-      .set({ wholesalePriceUsd, coverageType, isActive: true, lastSyncedAt: new Date(), updatedAt: new Date() })
-      .where(eq(providerOffers.id, existing.id));
-  } else {
-    await db.insert(providerOffers).values({
-      normalizedPlanId,
-      providerKey,
-      providerPlanCode,
-      wholesalePriceUsd,
-      coverageType,
-      currency: "USD",
-      isActive: true,
-      lastSyncedAt: new Date(),
-    });
-  }
-
-  return priceChanged;
-}
-
-/** Process a batch of ProviderPlan records for one provider. */
+/** Process a batch of ProviderPlan records for one provider using bulk DB operations. */
 async function processProviderPlans(
   providerPlans: ProviderPlan[],
   providerKey: string,
 ): Promise<{ offersUpserted: number; priceChanges: number }> {
+  const validPlans = providerPlans.filter(p => p.providerRef);
+  if (validPlans.length === 0) return { offersUpserted: 0, priceChanges: 0 };
+
+  // ── Step 1: Resolve all unique (regionCode, dataMb, validityDays) combos ──
+  // Build a map of canonical key → plan spec
+  type PlanSpec = { regionCode: string; dataMb: number; validityDays: number };
+  const specMap = new Map<string, PlanSpec>();
+  for (const plan of validPlans) {
+    const regionCode = plan.countryCode.toUpperCase();
+    const dataMb = planToMb(plan);
+    const key = `${regionCode}|${dataMb}|${plan.validityDays}`;
+    specMap.set(key, { regionCode, dataMb, validityDays: plan.validityDays });
+  }
+  const specs = [...specMap.values()];
+
+  // ── Step 2: Bulk SELECT existing normalized plans ──
+  // Fetch all existing rows in one query using a VALUES list
+  const normalizedPlanCache = new Map<string, string>(); // key → id
+  const CHUNK = 500;
+  for (let i = 0; i < specs.length; i += CHUNK) {
+    const chunk = specs.slice(i, i + CHUNK);
+    const existing = await db
+      .select({ id: normalizedPlans.id, regionCode: normalizedPlans.regionCode, dataMb: normalizedPlans.dataMb, validityDays: normalizedPlans.validityDays })
+      .from(normalizedPlans)
+      .where(
+        sql`(${normalizedPlans.regionCode}, ${normalizedPlans.dataMb}, ${normalizedPlans.validityDays}) IN (${sql.join(
+          chunk.map(s => sql`(${s.regionCode}, ${s.dataMb}, ${s.validityDays})`),
+          sql`, `
+        )})`
+      );
+    for (const row of existing) {
+      normalizedPlanCache.set(`${row.regionCode}|${row.dataMb}|${row.validityDays}`, row.id);
+    }
+  }
+
+  // ── Step 3: Bulk INSERT missing normalized plans ──
+  const missing = specs.filter(s => !normalizedPlanCache.has(`${s.regionCode}|${s.dataMb}|${s.validityDays}`));
+  if (missing.length > 0) {
+    for (let i = 0; i < missing.length; i += CHUNK) {
+      const chunk = missing.slice(i, i + CHUNK);
+      const inserted = await db
+        .insert(normalizedPlans)
+        .values(chunk.map(s => ({
+          regionCode: s.regionCode,
+          dataMb: s.dataMb,
+          validityDays: s.validityDays,
+          name: formatPlanName(s.regionCode, s.dataMb, s.validityDays),
+          isUnlimited: s.dataMb >= 999999,
+          planType: "data" as const,
+          retailPriceUsd: 0,
+          isActive: true,
+        })))
+        .onConflictDoNothing()
+        .returning({ id: normalizedPlans.id, regionCode: normalizedPlans.regionCode, dataMb: normalizedPlans.dataMb, validityDays: normalizedPlans.validityDays });
+      for (const row of inserted) {
+        normalizedPlanCache.set(`${row.regionCode}|${row.dataMb}|${row.validityDays}`, row.id);
+      }
+    }
+    // Re-fetch any that didn't return (conflict on identical concurrent insert)
+    const stillMissing = specs.filter(s => !normalizedPlanCache.has(`${s.regionCode}|${s.dataMb}|${s.validityDays}`));
+    if (stillMissing.length > 0) {
+      for (let i = 0; i < stillMissing.length; i += CHUNK) {
+        const chunk = stillMissing.slice(i, i + CHUNK);
+        const refetched = await db
+          .select({ id: normalizedPlans.id, regionCode: normalizedPlans.regionCode, dataMb: normalizedPlans.dataMb, validityDays: normalizedPlans.validityDays })
+          .from(normalizedPlans)
+          .where(
+            sql`(${normalizedPlans.regionCode}, ${normalizedPlans.dataMb}, ${normalizedPlans.validityDays}) IN (${sql.join(
+              chunk.map(s => sql`(${s.regionCode}, ${s.dataMb}, ${s.validityDays})`),
+              sql`, `
+            )})`
+          );
+        for (const row of refetched) {
+          normalizedPlanCache.set(`${row.regionCode}|${row.dataMb}|${row.validityDays}`, row.id);
+        }
+      }
+    }
+  }
+
+  // ── Step 4: Bulk upsert all provider_offers in one statement ──
+  const offerValues = validPlans.map(plan => {
+    const regionCode = plan.countryCode.toUpperCase();
+    const dataMb = planToMb(plan);
+    const normalizedPlanId = normalizedPlanCache.get(`${regionCode}|${dataMb}|${plan.validityDays}`);
+    if (!normalizedPlanId) return null;
+    return {
+      normalizedPlanId,
+      providerKey,
+      providerPlanCode: plan.providerRef!,
+      wholesalePriceUsd: plan.wholesaleCost,
+      coverageType: (plan.coverageType ?? "country") as "country" | "regional" | "global",
+      currency: "USD",
+      isActive: true,
+      lastSyncedAt: new Date(),
+    };
+  }).filter((v): v is NonNullable<typeof v> => v !== null);
+
   let offersUpserted = 0;
   let priceChanges = 0;
 
-  for (const plan of providerPlans) {
-    if (!plan.providerRef) continue;
+  for (let i = 0; i < offerValues.length; i += CHUNK) {
+    const chunk = offerValues.slice(i, i + CHUNK);
+    // Fetch existing prices for this chunk to detect changes
+    const existing = await db
+      .select({ providerPlanCode: providerOffers.providerPlanCode, wholesalePriceUsd: providerOffers.wholesalePriceUsd })
+      .from(providerOffers)
+      .where(
+        and(
+          eq(providerOffers.providerKey, providerKey),
+          sql`${providerOffers.providerPlanCode} IN (${sql.join(chunk.map(c => sql`${c.providerPlanCode}`), sql`, `)})`
+        )
+      );
+    const existingMap = new Map(existing.map(e => [e.providerPlanCode, e.wholesalePriceUsd]));
+    priceChanges += chunk.filter(c => {
+      const prev = existingMap.get(c.providerPlanCode);
+      return prev != null && Math.abs(prev - c.wholesalePriceUsd) > 0.0001;
+    }).length;
 
-    const regionCode = plan.countryCode.toUpperCase();
-    const dataMb = planToMb(plan);
-    const normalizedPlanId = await findOrCreateNormalizedPlan(
-      regionCode,
-      dataMb,
-      plan.validityDays,
-      plan.name,
-    );
-
-    const changed = await upsertOffer(
-      normalizedPlanId,
-      providerKey,
-      plan.providerRef,
-      plan.wholesaleCost,
-      plan.coverageType ?? "country",
-    );
-
-    offersUpserted++;
-    if (changed) priceChanges++;
+    await db
+      .insert(providerOffers)
+      .values(chunk)
+      .onConflictDoUpdate({
+        target: [providerOffers.normalizedPlanId, providerOffers.providerKey, providerOffers.providerPlanCode],
+        set: {
+          wholesalePriceUsd: sql`EXCLUDED.wholesale_price_usd`,
+          coverageType: sql`EXCLUDED.coverage_type`,
+          isActive: true,
+          lastSyncedAt: sql`EXCLUDED.last_synced_at`,
+          updatedAt: new Date(),
+        },
+      });
+    offersUpserted += chunk.length;
   }
 
   return { offersUpserted, priceChanges };
