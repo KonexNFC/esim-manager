@@ -1775,12 +1775,12 @@ export async function registerRoutes(
         esimgo:      () => import("./providers/esimgo").then(m => m.esimgo as any),
       };
 
-      const providerInstance = providerMap[provider]
-        ? await providerMap[provider]()
+      const providerInstance = providerMap[providerKey]
+        ? await providerMap[providerKey]()
         : null;
 
       if (!providerInstance || typeof providerInstance.purchaseEsim !== 'function') {
-        return res.status(400).json({ message: `Provider "${provider}" does not support purchaseEsim` });
+        return res.status(400).json({ message: `Provider "${providerKey}" does not support purchaseEsim` });
       }
 
       const result = await providerInstance.purchaseEsim({
