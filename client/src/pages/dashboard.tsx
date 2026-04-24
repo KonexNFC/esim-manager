@@ -184,7 +184,7 @@ function QrModal({ order, open, onClose }: { order: EnrichedOrder; open: boolean
   );
 }
 
-// ─── TopUp Modal (Stripe-backed) ──────────────────────
+// ─── TopUp Modal ──────────────────────────────────────
 type TopupOption = {
   optionCode: string;
   name: string;
@@ -303,7 +303,7 @@ function TopupModal({ order, open, onClose }: { order: EnrichedOrder; open: bool
                 : "Select an option"}
           </Button>
           <p className="text-xs text-center text-muted-foreground">
-            Secure checkout via Stripe. You'll be redirected to complete payment.
+            Secure checkout via PayPal. You'll be redirected to complete payment.
           </p>
         </div>
       </DialogContent>

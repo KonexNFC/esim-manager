@@ -78,8 +78,8 @@ export default function PrivacyPolicy() {
         ]} />
         <p className="font-medium text-foreground mt-3 mb-1">Payment information</p>
         <Ul items={[
-          "Payment card details are processed and stored by Stripe, our payment processor — we do not store full card numbers on our servers",
-          "Stripe customer ID, payment intent ID, and transaction references for order records",
+          "Payment card details are processed by our payment providers (PayPal and Paddle) — we do not store full card numbers on our servers",
+          "Transaction references and order IDs from our payment providers for order records",
           "Order totals, currency, and purchase history",
         ]} />
         <p className="font-medium text-foreground mt-3 mb-1">eSIM delivery information</p>
@@ -103,7 +103,7 @@ export default function PrivacyPolicy() {
           "To process your eSIM order and deliver the QR code to your email address",
           "To create and manage your account, including authentication and security",
           "To send transactional emails (order confirmation, eSIM delivery, activation status)",
-          "To process payments securely via Stripe",
+          "To process payments securely via PayPal and Paddle",
           "To provide customer support and respond to enquiries",
           "To detect and prevent fraud, abuse, and security incidents",
           "To comply with legal and regulatory obligations",
@@ -131,7 +131,8 @@ export default function PrivacyPolicy() {
           as necessary to provide our services:
         </P>
         <Ul items={[
-          "Stripe — payment processing and fraud prevention (stripe.com/privacy)",
+          "PayPal — payment processing and fraud prevention (paypal.com/privacy)",
+          "Paddle — payment processing and tax compliance (paddle.com/privacy)",
           "eSIM network providers — to activate and provision your eSIM on the relevant mobile network (name, email, and order details only as required)",
           "Email delivery provider — to send transactional emails such as your eSIM QR code and order confirmation",
           "Cloud infrastructure and database providers — for secure hosting and data storage",
@@ -201,7 +202,7 @@ export default function PrivacyPolicy() {
         <Ul items={[
           "Encrypted data transmission (HTTPS/TLS) for all website traffic",
           "Passwords stored using secure one-way hashing",
-          "Payment data handled exclusively by Stripe's PCI-DSS compliant infrastructure",
+          "Payment data handled exclusively by PayPal and Paddle's PCI-DSS compliant infrastructure",
           "Access controls limiting who within our organisation can access personal data",
           "Regular security reviews of our platform and infrastructure",
         ]} />

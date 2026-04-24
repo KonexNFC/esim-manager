@@ -14,16 +14,6 @@ import { EsimQrDisplay } from "@/components/EsimQrDisplay";
 
 // ─── Types ────────────────────────────────────────────
 
-interface SessionData {
-  id: string;
-  status: string;
-  paymentStatus: string;
-  customerEmail: string | null;
-  metadata: Record<string, string>;
-  amountTotal: number | null;
-  currency: string | null;
-}
-
 interface OrderData {
   id: string;
   status: string;
@@ -52,60 +42,20 @@ export default function CheckoutSuccess() {
   const params = new URLSearchParams(
     typeof window !== "undefined" ? window.location.search : location.split("?")[1] || ""
   );
-  const sessionId = params.get("session_id");
-  const directOrderId = params.get("orderId"); // PayPal flow
+  const orderId = params.get("orderId");
 
   const pollAttempts = useRef(0);
   const [pollingEnabled, setPollingEnabled] = useState(true);
 
-  // ── Stripe: fetch session once ──────────────────────
-  const { data: session } = useQuery<SessionData>({
-    queryKey: ["/api/checkout/session", sessionId],
+  // ── Poll for order by ID ─────────────────────────────
+  const { data: order } = useQuery<OrderData>({
+    queryKey: ["/api/checkout/order", orderId],
     queryFn: async () => {
-      const res = await fetch(`/api/checkout/session/${sessionId}`);
-      if (!res.ok) throw new Error("Session not found");
-      return res.json();
-    },
-    enabled: !!sessionId,
-    staleTime: Infinity,
-    retry: 3,
-  });
-
-  // ── Stripe: poll for order by session ───────────────
-  const { data: orderBySession } = useQuery<OrderData>({
-    queryKey: ["/api/checkout/order-by-session", sessionId],
-    queryFn: async () => {
-      const res = await fetch(`/api/checkout/order-by-session/${sessionId}`);
+      const res = await fetch(`/api/checkout/order/${orderId}`);
       if (!res.ok) throw new Error("pending");
       return res.json();
     },
-    enabled: !!sessionId && pollingEnabled,
-    refetchInterval: (data) => {
-      // Keep polling if we have the order but it's still fulfilling
-      if (data) {
-        const o = data as OrderData;
-        if (o.status === "fulfilled" || o.status === "fulfillment_failed") {
-          setPollingEnabled(false);
-          return false;
-        }
-        return POLL_INTERVAL_MS;
-      }
-      pollAttempts.current += 1;
-      if (pollAttempts.current >= POLL_MAX_ATTEMPTS) { setPollingEnabled(false); return false; }
-      return POLL_INTERVAL_MS;
-    },
-    retry: false,
-  });
-
-  // ── PayPal: poll for order directly by ID ───────────
-  const { data: orderDirect } = useQuery<OrderData>({
-    queryKey: ["/api/checkout/order", directOrderId],
-    queryFn: async () => {
-      const res = await fetch(`/api/checkout/order/${directOrderId}`);
-      if (!res.ok) throw new Error("pending");
-      return res.json();
-    },
-    enabled: !!directOrderId && pollingEnabled,
+    enabled: !!orderId && pollingEnabled,
     refetchInterval: (data) => {
       if (data) {
         const o = data as OrderData;
@@ -121,18 +71,16 @@ export default function CheckoutSuccess() {
     },
     retry: false,
   });
-
-  const order = orderBySession ?? orderDirect;
 
   const isFulfilled = order?.status === "fulfilled";
   const isFulfilling = order?.status === "fulfilling" || order?.status === "paid";
   const isFailed = order?.status === "fulfillment_failed";
   const isTimedOut = !order && !pollingEnabled && pollAttempts.current >= POLL_MAX_ATTEMPTS;
 
-  const email = session?.customerEmail ?? order?.email;
+  const email = order?.email;
 
-  // Generic fallback: no session ID and no direct order ID
-  if (!sessionId && !directOrderId) {
+  // Generic fallback: no order ID in URL
+  if (!orderId) {
     return (
       <div className="max-w-xl mx-auto px-4 py-20 text-center">
         <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-4" />
@@ -229,7 +177,7 @@ export default function CheckoutSuccess() {
       )}
 
       {/* ── Email confirmation banner ── */}
-      {(session || order) && (
+      {order && (
         <Card className="mb-6 bg-muted/40 border-border/50">
           <div className="flex items-start gap-4 p-5">
             <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 flex-shrink-0">
@@ -251,7 +199,7 @@ export default function CheckoutSuccess() {
       )}
 
       {/* ── Payment summary ── */}
-      {(session || order) && (
+      {order && (
         <Card className="mb-6 p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-sm">Payment confirmed</h3>
@@ -259,15 +207,7 @@ export default function CheckoutSuccess() {
               Paid
             </Badge>
           </div>
-          {session?.amountTotal && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Amount charged</span>
-              <span className="font-semibold">
-                {(session.amountTotal / 100).toFixed(2)} {session.currency?.toUpperCase() ?? "USD"}
-              </span>
-            </div>
-          )}
-          {!session?.amountTotal && order?.totalPrice && (
+          {order?.totalPrice && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Amount charged</span>
               <span className="font-semibold">

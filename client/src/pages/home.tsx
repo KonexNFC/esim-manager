@@ -24,7 +24,7 @@ import {
   Package, Timer, ChevronRight,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { SiVisa, SiMastercard, SiApplepay, SiStripe, SiGooglepay, SiVodafone, SiTmobile, SiOrange } from "react-icons/si";
+import { SiVisa, SiMastercard, SiApplepay, SiPaypal, SiGooglepay, SiVodafone, SiTmobile, SiOrange } from "react-icons/si";
 import type { Destination, Plan } from "@shared/schema";
 import { CountryCombobox } from "@/components/country-combobox";
 import { useInView } from "@/hooks/use-in-view";
@@ -1606,7 +1606,7 @@ function Footer() {
               <SiMastercard className="h-4 w-auto" style={{ color: "#EB001B" }} data-testid="payment-icon-mc" />
               <SiApplepay   className="h-5 w-auto text-foreground" data-testid="payment-icon-apple-pay" />
               <SiGooglepay  className="h-5 w-auto" style={{ color: "#4285F4" }} data-testid="payment-icon-google-pay" />
-              <SiStripe     className="h-4 w-auto" style={{ color: "#635BFF" }} data-testid="payment-icon-stripe" />
+              <SiPaypal     className="h-4 w-auto" style={{ color: "#003087" }} data-testid="payment-icon-paypal" />
             </div>
           </div>
         </div>

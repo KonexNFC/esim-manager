@@ -116,9 +116,9 @@ export default function TermsOfService() {
           only — the actual charge processed at checkout will be in USD.
         </P>
         <P>
-          Payments are processed securely by Stripe. By placing an order, you authorise {COMPANY} to
-          charge the specified amount to your payment method via Stripe. All transactions are subject
-          to Stripe's terms of service.
+          Payments are processed securely by PayPal or Paddle. By placing an order, you authorise {COMPANY} to
+          charge the specified amount to your payment method via the selected provider. All transactions are subject
+          to the respective payment provider's terms of service.
         </P>
         <P>
           An order is confirmed when you receive a confirmation email. We reserve the right to refuse
@@ -229,7 +229,7 @@ export default function TermsOfService() {
       <Section title="13. Third-Party Services">
         <P>
           Our website and services may contain links to or integrations with third-party services
-          (including Stripe for payments). We are not responsible for the content, privacy practices,
+          (including PayPal and Paddle for payments). We are not responsible for the content, privacy practices,
           or reliability of any third-party service. Use of third-party services is at your own risk
           and subject to their own terms and policies.
         </P>
