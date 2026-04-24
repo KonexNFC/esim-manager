@@ -17,13 +17,20 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   LayoutDashboard, Package, ShoppingCart, Wifi, TrendingUp,
   DollarSign, Globe, BarChart3, Pause, Play, HelpCircle,
   Send, RotateCcw, Download, ChevronRight, ArrowLeft, Smartphone, LogOut,
   Zap, Wrench, Settings, Target, TrendingDown, RefreshCw,
-  Network, CheckCircle2, XCircle, AlertCircle, Clock, GitBranch, Server
+  Network, CheckCircle2, XCircle, AlertCircle, Clock, GitBranch, Server, ChevronDown
 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -1123,13 +1130,16 @@ function OrdersTab() {
   };
 
   const [refulfillPending, setRefulfillPending] = useState<Record<string, boolean>>({});
-  const refulfillOrder = async (orderId: string) => {
+  const refulfillOrder = async (orderId: string, providerKey?: string) => {
     setRefulfillPending(p => ({ ...p, [orderId]: true }));
     try {
-      const res = await apiRequest("POST", `/api/admin/orders/${orderId}/refulfill`, {});
+      const body: Record<string, string> = {};
+      if (providerKey) body.providerKey = providerKey;
+      const res = await apiRequest("POST", `/api/admin/orders/${orderId}/refulfill`, body);
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed");
-      toast({ title: "Re-fulfillment triggered", description: "The order will be provisioned again shortly." });
+      const via = providerKey ? ` via ${providerKey}` : "";
+      toast({ title: "Re-fulfillment triggered", description: `The order will be provisioned again shortly${via}.` });
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
         queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
@@ -1387,18 +1397,48 @@ function OrdersTab() {
               </Select>
               {/* Re-fulfill: show for failed/stuck orders */}
               {(order.status === "fulfillment_failed" || order.status === "paid" || order.status === "fulfilling") && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20"
-                  onClick={() => refulfillOrder(order.id)}
-                  disabled={refulfillPending[order.id]}
-                  data-testid={`button-refulfill-${order.id}`}
-                >
-                  {refulfillPending[order.id]
-                    ? <><RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" />Retrying…</>
-                    : <><RefreshCw className="w-3.5 h-3.5 mr-1" />Re-fulfill</>}
-                </Button>
+                <div className="flex items-center" data-testid={`refulfill-group-${order.id}`}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-r-none border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20 border-r-0"
+                    onClick={() => refulfillOrder(order.id)}
+                    disabled={refulfillPending[order.id]}
+                    data-testid={`button-refulfill-${order.id}`}
+                  >
+                    {refulfillPending[order.id]
+                      ? <><RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" />Retrying…</>
+                      : <><RefreshCw className="w-3.5 h-3.5 mr-1" />Re-fulfill</>}
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-l-none border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20 px-1.5"
+                        disabled={refulfillPending[order.id]}
+                        data-testid={`button-refulfill-dropdown-${order.id}`}
+                      >
+                        <ChevronDown className="w-3 h-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="text-xs">
+                      <DropdownMenuItem onClick={() => refulfillOrder(order.id)}>
+                        Auto (smart chain)
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => refulfillOrder(order.id, "esimgo")}>
+                        Force via eSIMGo
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => refulfillOrder(order.id, "esimaccess")}>
+                        Force via eSIM Access
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => refulfillOrder(order.id, "airalo")}>
+                        Force via Airalo
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               )}
               <Button
                 size="sm"

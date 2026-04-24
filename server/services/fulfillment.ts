@@ -13,7 +13,7 @@
 //     → getActiveProvider() (transparent failover adapter, unchanged)
 
 import { db } from '../storage';
-import { orders, esims, users, topups, plans, destinations, normalizedPlans, providerSyncLogs, providerAttempts } from '@shared/schema';
+import { orders, esims, users, topups, plans, destinations, normalizedPlans, providerSyncLogs, providerAttempts, providers } from '@shared/schema';
 import { eq, sql } from 'drizzle-orm';
 import { getActiveProvider, getProviderAdapterByKey } from '../providers/adapters';
 import type { ProviderAdapter, ProviderPurchaseParams, CustomerContext, EsimProvisionResult } from '../providers/adapters';
@@ -89,9 +89,34 @@ async function fulfillWithFallbackChain(
 ): Promise<{ result: EsimProvisionResult; providerName: string; providerKey: string }> {
   let lastError: Error | null = null;
 
-  for (let i = 0; i < fallbackChain.length; i++) {
-    const entry = fallbackChain[i];
+  // Deduplicate: only keep the first entry per provider key so a single-provider
+  // chain (e.g. esimaccess × 6) becomes one attempt, not six.
+  const seenKeys = new Set<string>();
+  const deduped = fallbackChain.filter(e => {
+    if (seenKeys.has(e.k)) return false;
+    seenKeys.add(e.k);
+    return true;
+  });
+
+  for (let i = 0; i < deduped.length; i++) {
+    const entry = deduped[i];
     const isPrimary = i === 0;
+
+    // ── Runtime pause check ────────────────────────────────────────────────
+    // The chain is built at order-capture time, before any attempts run.
+    // A provider may be auto-paused mid-chain after its first failure.
+    // Re-check the DB before each attempt to skip newly-paused providers.
+    try {
+      const [pRow] = await db.select({ autoPaused: providers.autoPaused })
+        .from(providers).where(eq(providers.key, entry.k)).limit(1);
+      if (pRow?.autoPaused) {
+        console.warn(`[Fulfillment] Provider "${entry.k}" is auto-paused — skipping attempt ${i + 1}`);
+        await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'skipped', 'Provider is auto-paused');
+        recordFulfillmentOutcome({ providerKey: entry.k, destination, outcome: 'skipped', isPrimary }).catch(() => {});
+        continue;
+      }
+    } catch { /* non-fatal: proceed if DB check fails */ }
+
     const provider = getProviderAdapterByKey(entry.k);
 
     if (!provider) {
@@ -138,7 +163,10 @@ async function fulfillWithFallbackChain(
 
 // ─── Initial Purchase Fulfillment ─────────────────────────────────────────────
 
-export async function fulfillInitialPurchase(orderId: string): Promise<void> {
+export async function fulfillInitialPurchase(
+  orderId: string,
+  opts?: { forceProviderKey?: string },
+): Promise<void> {
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
   if (!order) throw new Error(`Order ${orderId} not found`);
 
@@ -232,12 +260,18 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
         validity: validityLabel,
       };
 
+      // Admin forced provider override — bypass the dynamic chain entirely.
+      if (opts?.forceProviderKey) {
+        dynamicFallbackChain = [{ k: opts.forceProviderKey, c: '' }];
+        console.log(`[Fulfillment] Admin force-provider "${opts.forceProviderKey}" for order ${orderId}`);
+      }
+
       // Build dynamic fallback chain from all active providers for this plan.
       // IMPORTANT: Only include providers that have a registered purchase adapter.
       // Providers synced into the catalogue (e.g. Zendit) but without an adapter
       // implementation must be excluded — otherwise the entire chain silently skips
       // and the customer is left with no eSIM after a successful payment.
-      if (!order.selectedProviderKey) {
+      if (!opts?.forceProviderKey && !order.selectedProviderKey) {
         const allOffersRows = await db.execute<{ provider_key: string; provider_plan_code: string }>(sql`
           SELECT po2.provider_key, po2.provider_plan_code
           FROM provider_offers po2
@@ -266,6 +300,18 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
               k: r.provider_key,
               c: r.provider_plan_code,
             }));
+
+            // Safety-net: if eSIMGo is configured and not already in the chain,
+            // append a spec-based eSIMGo entry as last resort.  This ensures that
+            // even when the entire chain is from a single provider (e.g. esimaccess)
+            // there is still a funded alternative rather than a total failure.
+            const alreadyHasEsimGo = dynamicFallbackChain.some(e => e.k.toLowerCase().replace(/[_\-\s]/g, '') === 'esimgo');
+            const esimGoAdapter = getProviderAdapterByKey('esimgo');
+            if (!alreadyHasEsimGo && esimGoAdapter) {
+              dynamicFallbackChain.push({ k: 'esimgo', c: '' }); // empty code → spec-based lookup
+              console.log(`[Fulfillment] Appended eSIMGo safety-net to chain for ${orderId}`);
+            }
+
             console.log(`[Fulfillment] Dynamic chain for ${orderId}: ${dynamicFallbackChain.map(e => e.k).join(' → ')}`);
           } else {
             // All offers belong to providers without adapters — log and fall through
@@ -320,6 +366,13 @@ export async function fulfillInitialPurchase(orderId: string): Promise<void> {
     userId: order.userId ?? undefined,
     name: user?.name,
   };
+
+  // Admin force-provider: apply for legacy planId orders or when the
+  // normalizedPlanId branch didn't set a dynamic chain.
+  if (opts?.forceProviderKey && (dynamicFallbackChain === null || dynamicFallbackChain.length === 0)) {
+    dynamicFallbackChain = [{ k: opts.forceProviderKey, c: '' }];
+    console.log(`[Fulfillment] Admin force-provider "${opts.forceProviderKey}" (fallback) for order ${orderId}`);
+  }
 
   try {
     let result: EsimProvisionResult;

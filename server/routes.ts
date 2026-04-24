@@ -1692,6 +1692,7 @@ export async function registerRoutes(
 
   app.post("/api/admin/orders/:id/refulfill", requireAdmin, async (req, res) => {
     const orderId = req.params.id;
+    const forceProviderKey: string | undefined = req.body?.providerKey || undefined;
     try {
       const { db } = await import("./storage");
       const { orders } = await import("@shared/schema");
@@ -1711,11 +1712,11 @@ export async function registerRoutes(
 
       const { fulfillInitialPurchase } = await import("./services/fulfillment");
       // Fire async — don't block the HTTP response
-      fulfillInitialPurchase(orderId).catch(err =>
+      fulfillInitialPurchase(orderId, { forceProviderKey }).catch(err =>
         console.error(`[Admin] Manual re-fulfillment failed for ${orderId}:`, err.message)
       );
 
-      res.json({ message: "Re-fulfillment triggered", orderId });
+      res.json({ message: "Re-fulfillment triggered", orderId, providerKey: forceProviderKey ?? "auto" });
     } catch (err: any) {
       console.error("/api/admin/orders/:id/refulfill error:", err.message);
       res.status(500).json({ message: "Failed to trigger re-fulfillment" });
