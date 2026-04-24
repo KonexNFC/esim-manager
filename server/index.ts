@@ -158,6 +158,38 @@ app.use((req, res, next) => {
   const { startProviderSyncScheduler } = await import("./services/providerSync");
   startProviderSyncScheduler();
 
+  // ── Startup recovery: re-trigger orders stuck in "fulfilling" ─────────────
+  // These are orders where capture succeeded but the async fulfillment task
+  // was interrupted (e.g. deploy / process restart). Give the server 5 s to
+  // finish booting before re-triggering to avoid DB race conditions.
+  setTimeout(async () => {
+    try {
+      const { db } = await import("./storage");
+      const { orders: ordersTable } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const { fulfillInitialPurchase } = await import("./services/fulfillment");
+
+      const stuckOrders = await db
+        .select({ id: ordersTable.id })
+        .from(ordersTable)
+        .where(eq(ordersTable.status, "fulfilling"));
+
+      if (stuckOrders.length > 0) {
+        console.log(`[Startup] Found ${stuckOrders.length} order(s) stuck in "fulfilling" — resetting and re-triggering...`);
+        for (const { id } of stuckOrders) {
+          // Reset to "paid" so fulfillInitialPurchase doesn't skip it
+          await db.update(ordersTable).set({ status: "paid" }).where(eq(ordersTable.id, id));
+          console.log(`[Startup] Re-triggering fulfillment for order ${id}`);
+          fulfillInitialPurchase(id).catch((err: any) =>
+            console.error(`[Startup] Re-fulfillment error for order ${id}:`, err.message)
+          );
+        }
+      }
+    } catch (err: any) {
+      console.error("[Startup] Recovery check failed:", err.message);
+    }
+  }, 5_000);
+
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";

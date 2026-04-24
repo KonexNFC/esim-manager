@@ -133,14 +133,54 @@ const orderSelectFields = (_db: any) => ({
   wholesaleCostUsd: orders.wholesaleCostUsd,
   profit: orders.profit,
   marginPercent: orders.marginPercent,
-  // Joined plan/destination fields
-  planName: plans.name,
+  // Joined plan/destination fields.
+  // For legacy planId orders: pulled from the plans/destinations join above.
+  // For routing-engine orders (normalizedPlanId, no planId): fall back via
+  // correlated subquery through provider_offers → normalized_plans → destinations.
+  planName: sql<string>`COALESCE(
+    ${plans.name},
+    (SELECT np.name
+       FROM provider_offers po
+       JOIN normalized_plans np ON np.id = po.normalized_plan_id
+      WHERE po.id = ${orders.normalizedPlanId}
+      LIMIT 1)
+  )`,
   dataAmount: plans.dataAmount,
-  dataAmountGb: plans.dataAmountGb,
+  dataAmountGb: sql<number>`COALESCE(
+    ${plans.dataAmountGb},
+    (SELECT ROUND((np.data_mb / 1024.0)::numeric, 2)
+       FROM provider_offers po
+       JOIN normalized_plans np ON np.id = po.normalized_plan_id
+      WHERE po.id = ${orders.normalizedPlanId}
+      LIMIT 1)
+  )`,
   validity: plans.validity,
-  validityDays: plans.validityDays,
-  destinationName: destinations.name,
-  flagEmoji: destinations.flagEmoji,
+  validityDays: sql<number>`COALESCE(
+    ${plans.validityDays},
+    (SELECT np.validity_days
+       FROM provider_offers po
+       JOIN normalized_plans np ON np.id = po.normalized_plan_id
+      WHERE po.id = ${orders.normalizedPlanId}
+      LIMIT 1)
+  )`,
+  destinationName: sql<string>`COALESCE(
+    ${destinations.name},
+    (SELECT d.name
+       FROM provider_offers po
+       JOIN normalized_plans np ON np.id = po.normalized_plan_id
+       JOIN destinations d      ON d.id  = np.destination_id
+      WHERE po.id = ${orders.normalizedPlanId}
+      LIMIT 1)
+  )`,
+  flagEmoji: sql<string>`COALESCE(
+    ${destinations.flagEmoji},
+    (SELECT d.flag_emoji
+       FROM provider_offers po
+       JOIN normalized_plans np ON np.id = po.normalized_plan_id
+       JOIN destinations d      ON d.id  = np.destination_id
+      WHERE po.id = ${orders.normalizedPlanId}
+      LIMIT 1)
+  )`,
 });
 
 function mapOrderRow(r: any) {
