@@ -1952,8 +1952,9 @@ function PublicCheckoutModal({
     !checkoutConfig.paddle.enabled;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <Card className="w-full max-w-sm p-6">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm">
+      <div className="flex min-h-full items-end sm:items-center justify-center p-0 sm:p-4">
+      <Card className="w-full sm:max-w-sm rounded-b-none sm:rounded-xl p-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-4">
           <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10">
@@ -2100,6 +2101,7 @@ function PublicCheckoutModal({
           </div>
         )}
       </Card>
+      </div>
     </div>
   );
 }
