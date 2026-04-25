@@ -1420,9 +1420,10 @@ export async function registerRoutes(
     try {
       const { upsertProvider } = await import('./services/providerRegistry');
       const seed = [
-        { key: 'esimgo', name: 'eSIMGo', enabled: true, priority: 1, healthStatus: 'unknown' as const },
-        { key: 'esimaccess', name: 'eSIM Access', enabled: true, priority: 2, healthStatus: 'unknown' as const },
-        { key: 'mock', name: 'Mock Provider', enabled: true, priority: 3, healthStatus: 'healthy' as const },
+        { key: 'airalo',     name: 'Airalo',        enabled: true, priority: 1, healthStatus: 'unknown' as const },
+        { key: 'esimaccess', name: 'eSIM Access',   enabled: true, priority: 2, healthStatus: 'unknown' as const },
+        { key: 'esimgo',     name: 'eSIMGo',        enabled: true, priority: 3, healthStatus: 'unknown' as const },
+        { key: 'zendit',     name: 'Zendit',        enabled: true, priority: 4, healthStatus: 'unknown' as const },
       ];
       const results = await Promise.all(seed.map(p => upsertProvider(p)));
       res.json({ success: true, providers: results });

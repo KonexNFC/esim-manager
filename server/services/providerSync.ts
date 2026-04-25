@@ -283,11 +283,16 @@ export async function syncAllProviders(
   // This seeds the providers table on first run so plans can always be filtered
   // by provider status. Uses ON CONFLICT DO NOTHING to preserve any existing
   // enabled/priority settings that an admin may have configured.
+  // Priority order (1 = highest routing score, each step down = −20 pts in blended score):
+  //   1. Airalo     — widest coverage (212 destinations), cheapest wholesale, 23 exclusive destinations
+  //   2. eSIM Access — enterprise carrier depth (30+ tier-1 MNOs), reliable API, 181 destinations
+  //   3. eSIMGo     — fast safety-net, best unit price ($5.25 avg), 58 destinations in catalogue
+  //   4. Zendit     — last-resort fallback; 12 exclusive destinations but 3× more expensive
   const CANONICAL_PROVIDERS = [
-    { key: "esimgo",     name: "eSIMGo",      priority: 1 },
+    { key: "airalo",     name: "Airalo",       priority: 1 },
     { key: "esimaccess", name: "eSIM Access",  priority: 2 },
-    { key: "zendit",     name: "Zendit",       priority: 3 },
-    { key: "airalo",     name: "Airalo",       priority: 4 },
+    { key: "esimgo",     name: "eSIMGo",       priority: 3 },
+    { key: "zendit",     name: "Zendit",       priority: 4 },
   ];
   for (const p of CANONICAL_PROVIDERS) {
     await db.execute(sql`
