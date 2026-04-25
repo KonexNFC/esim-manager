@@ -280,8 +280,7 @@ export async function fulfillInitialPurchase(
             AND po2.is_active = true
             AND p.enabled = true
             AND p.auto_paused = false
-          ORDER BY CASE WHEN po2.id = ${order.normalizedPlanId} THEN 0 ELSE 1 END,
-                   po2.wholesale_price_usd ASC
+          ORDER BY p.priority ASC, po2.wholesale_price_usd ASC
         `);
 
         if (allOffersRows.rows.length > 0) {
@@ -530,7 +529,7 @@ export async function fulfillInitialPurchase(
 async function markFulfillmentFailed(orderId: string, reason: string) {
   console.error(`[Fulfillment] Failed for ${orderId}: ${reason}`);
   await db.update(orders)
-    .set({ status: 'fulfillment_failed', esimStatus: null })
+    .set({ status: 'fulfillment_failed', esimStatus: 'not_issued' })
     .where(eq(orders.id, orderId));
 
   try {

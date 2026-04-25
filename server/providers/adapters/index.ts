@@ -60,9 +60,11 @@ export function getProviderAdapterByKey(key: string): ProviderAdapter | null {
 }
 
 export function getActiveProvider(): ProviderAdapter {
-  const esimgoKey = process.env.ESIMGO_API_KEY;
-  const eaAccessCode = process.env.ESIM_ACCESS_API_KEY;
-  const eaSecret = process.env.ESIM_ACCESS_SECRET_KEY;
+  const esimgoKey      = process.env.ESIMGO_API_KEY;
+  const eaAccessCode   = process.env.ESIM_ACCESS_API_KEY;
+  const eaSecret       = process.env.ESIM_ACCESS_SECRET_KEY;
+  const airaloId       = process.env.AIRALO_CLIENT_ID;
+  const airaloSecret   = process.env.AIRALO_CLIENT_SECRET;
 
   // Explicit override
   if (PROVIDER_NAME === 'mock') return new MockProviderAdapter();
@@ -77,30 +79,40 @@ export function getActiveProvider(): ProviderAdapter {
     return new EsimAccessAdapter(eaAccessCode, eaSecret);
   }
 
-  // Auto-select: prefer failover when both providers are configured
-  const hasEsimGo = !!esimgoKey;
+  if (PROVIDER_NAME === 'airalo') {
+    if (!airaloId || !airaloSecret) { console.warn('[Provider] Airalo keys missing — falling back to mock'); return new MockProviderAdapter(); }
+    return new AiraloAdapter(airaloId, airaloSecret, 'production');
+  }
+
+  // Auto-select: priority order is Airalo → eSIMGo → eSIM Access
+  const hasAiralo    = !!(airaloId && airaloSecret);
+  const hasEsimGo    = !!esimgoKey;
   const hasEsimAccess = !!(eaAccessCode && eaSecret);
 
-  if (hasEsimGo && hasEsimAccess) {
-    console.log('[Provider] Auto: eSIMGo (primary) + eSIM Access (failover)');
-    return new FailoverProviderAdapter(
-      new EsimGoAdapter(esimgoKey!),
-      new EsimAccessAdapter(eaAccessCode!, eaSecret!),
-    );
+  // Build ordered chain of available providers (Airalo first per priority)
+  const chain: ProviderAdapter[] = [];
+  if (hasAiralo)     chain.push(new AiraloAdapter(airaloId!, airaloSecret!, 'production'));
+  if (hasEsimGo)     chain.push(new EsimGoAdapter(esimgoKey!));
+  if (hasEsimAccess) chain.push(new EsimAccessAdapter(eaAccessCode!, eaSecret!));
+
+  if (chain.length === 0) {
+    console.warn('[Provider] No real provider keys found — using mock');
+    return new MockProviderAdapter();
   }
 
-  if (hasEsimGo) {
-    console.log('[Provider] Auto: eSIMGo only');
-    return new EsimGoAdapter(esimgoKey!);
+  if (chain.length === 1) {
+    console.log(`[Provider] Auto: ${chain[0].name} only`);
+    return chain[0];
   }
 
-  if (hasEsimAccess) {
-    console.log('[Provider] Auto: eSIM Access only');
-    return new EsimAccessAdapter(eaAccessCode!, eaSecret!);
+  // Use failover adapter: primary = first in chain, secondary = second
+  // For 3-provider scenario, wrap nested failovers: Airalo → (eSIMGo → eSIM Access)
+  const names = chain.map(p => p.name).join(' → ');
+  console.log(`[Provider] Auto: ${names}`);
+  if (chain.length === 2) {
+    return new FailoverProviderAdapter(chain[0], chain[1]);
   }
-
-  console.warn('[Provider] No real provider keys found — using mock');
-  return new MockProviderAdapter();
+  return new FailoverProviderAdapter(chain[0], new FailoverProviderAdapter(chain[1], chain[2]));
 }
 
 export type {
