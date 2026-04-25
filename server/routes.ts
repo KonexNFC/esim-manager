@@ -297,7 +297,10 @@ export async function registerRoutes(
   // Body: { normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email }
   app.post("/api/checkout/paypal/create-order", async (req, res) => {
     try {
-      const { normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email } = req.body;
+      const {
+        normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email,
+        payerName, billingAddress,
+      } = req.body;
       if (!normalizedPlanId || !amountUsd || !email) {
         return res.status(400).json({ message: "Missing required fields" });
       }
@@ -310,6 +313,9 @@ export async function registerRoutes(
         amountUsd: Number(amountUsd),
         description,
         customId: `np:${normalizedPlanId}|cc:${countryCode}|em:${email}`,
+        payerName: payerName || undefined,
+        payerEmail: email,
+        billingAddress: billingAddress || undefined,
       });
 
       res.json({ orderId });

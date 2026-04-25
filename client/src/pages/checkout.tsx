@@ -48,6 +48,12 @@ const checkoutSchema = z.object({
   name: z.string().optional(),
   email: z.string().email("Please enter a valid email address"),
   confirmEmail: z.string().email("Please enter a valid email address"),
+  addressLine1: z.string().min(1, "Street address is required"),
+  addressLine2: z.string().optional(),
+  city: z.string().min(1, "City is required"),
+  state: z.string().min(1, "State / Province is required"),
+  zip: z.string().min(1, "ZIP / Postal code is required"),
+  country: z.string().min(2, "Country is required"),
 }).refine((data) => data.email === data.confirmEmail, {
   message: "Email addresses must match",
   path: ["confirmEmail"],
@@ -128,7 +134,10 @@ export default function Checkout() {
 
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
-    defaultValues: { name: "", email: "", confirmEmail: "" },
+    defaultValues: {
+      name: "", email: "", confirmEmail: "",
+      addressLine1: "", addressLine2: "", city: "", state: "", zip: "", country: "US",
+    },
   });
 
   useEffect(() => {
@@ -166,6 +175,7 @@ export default function Checkout() {
         paypal.Buttons({
           style: { layout: "vertical", color: "blue", shape: "rect", label: "pay", height: 44 },
           createOrder: async () => {
+            const fd = form.getValues();
             const res = await fetch("/api/checkout/paypal/create-order", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -176,6 +186,15 @@ export default function Checkout() {
                 validityLabel: plan.validityLabel,
                 amountUsd: totalPriceUsd,
                 email: resolvedEmail,
+                payerName: fd.name || undefined,
+                billingAddress: fd.addressLine1 ? {
+                  addressLine1: fd.addressLine1,
+                  addressLine2: fd.addressLine2 || undefined,
+                  city: fd.city,
+                  state: fd.state,
+                  zip: fd.zip,
+                  countryCode: fd.country || "US",
+                } : undefined,
               }),
             });
             const data = await res.json();
@@ -358,6 +377,63 @@ export default function Checkout() {
                       <FormMessage />
                     </FormItem>
                   )} />
+
+                  <Separator className="my-5" />
+
+                  <div>
+                    <h3 className="font-semibold text-sm mb-4 flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-primary" />
+                      Billing Address
+                    </h3>
+                    <div className="space-y-3">
+                      <FormField control={form.control} name="addressLine1" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Street Address</FormLabel>
+                          <FormControl><Input placeholder="123 Main Street" data-testid="input-address-line1" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="addressLine2" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Apt / Suite / Floor <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                          <FormControl><Input placeholder="Apt 4B" data-testid="input-address-line2" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <div className="grid grid-cols-2 gap-3">
+                        <FormField control={form.control} name="city" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>City</FormLabel>
+                            <FormControl><Input placeholder="New York" data-testid="input-city" {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <FormField control={form.control} name="state" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>State / Province</FormLabel>
+                            <FormControl><Input placeholder="NY" data-testid="input-state" {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <FormField control={form.control} name="zip" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>ZIP / Postal Code</FormLabel>
+                            <FormControl><Input placeholder="10001" data-testid="input-zip" {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <FormField control={form.control} name="country" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Country</FormLabel>
+                            <FormControl><Input placeholder="US" data-testid="input-country" {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      </div>
+                    </div>
+                  </div>
 
                   <Separator className="my-5" />
 

@@ -30,12 +30,43 @@ async function getAccessToken(): Promise<string> {
   return data.access_token as string;
 }
 
+export interface PayPalBillingAddress {
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  zip: string;
+  countryCode: string;
+}
+
 export async function createPayPalOrder(params: {
   amountUsd: number;
   description: string;
   customId?: string;
+  payerName?: string;
+  payerEmail?: string;
+  billingAddress?: PayPalBillingAddress;
 }): Promise<{ orderId: string }> {
   const token = await getAccessToken();
+
+  const payer: Record<string, any> = {};
+  if (params.payerName) {
+    const parts = params.payerName.trim().split(' ');
+    payer.name = { given_name: parts[0], surname: parts.slice(1).join(' ') || parts[0] };
+  }
+  if (params.payerEmail) payer.email_address = params.payerEmail;
+  if (params.billingAddress) {
+    const a = params.billingAddress;
+    payer.address = {
+      address_line_1: a.addressLine1,
+      ...(a.addressLine2 ? { address_line_2: a.addressLine2 } : {}),
+      admin_area_2: a.city,
+      admin_area_1: a.state,
+      postal_code: a.zip,
+      country_code: a.countryCode,
+    };
+  }
+
   const res = await fetch(`${PAYPAL_BASE}/v2/checkout/orders`, {
     method: "POST",
     headers: {
@@ -45,6 +76,7 @@ export async function createPayPalOrder(params: {
     },
     body: JSON.stringify({
       intent: "CAPTURE",
+      ...(Object.keys(payer).length > 0 ? { payer } : {}),
       purchase_units: [
         {
           amount: {
