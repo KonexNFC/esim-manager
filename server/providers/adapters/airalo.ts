@@ -82,12 +82,13 @@ interface AiraloOperatorPackage {
 }
 
 interface AiraloOperator {
+  type?:    string;         // "local" | "global"
   packages: AiraloOperatorPackage[];
 }
 
 interface AiraloCountryEntry {
-  country_code: string;     // ISO 2-letter e.g. "US"
-  slug:         string;
+  country_code: string;     // ISO 2-letter e.g. "US" — empty for global/regional
+  slug:         string;     // e.g. "united-states", "europe", "world"
   operators:    AiraloOperator[];
 }
 
@@ -190,49 +191,71 @@ export class AiraloAdapter implements ProviderAdapter {
 
   // ── Plans ─────────────────────────────────────────────────────────────────
 
-  async getSupportedPlans(countryCode?: string, page = 1): Promise<ProviderPlan[]> {
+  /**
+   * Fetch packages from Airalo.
+   * @param countryCode - ISO-2 country code filter (local only). Omit for full catalogue.
+   * @param page        - Page number for pagination.
+   * @param type        - "local" | "global" | undefined (undefined = all types).
+   */
+  async getSupportedPlans(
+    countryCode?: string,
+    page = 1,
+    type?: 'local' | 'global',
+  ): Promise<(ProviderPlan & { coverageType: 'country' | 'regional' | 'global' })[]> {
     // Airalo uses Laravel-style filter[] params — build query string manually
-    // to avoid URLSearchParams percent-encoding the brackets (filter%5Btype%5D).
-    const parts = [
-      'filter[type]=local',
-      `limit=1000`,
-      `page=${page}`,
-    ];
+    // to avoid URLSearchParams percent-encoding the brackets.
+    const parts: string[] = [`limit=1000`, `page=${page}`];
+    if (type)        parts.push(`filter[type]=${type}`);
     if (countryCode) parts.push(`filter[country]=${encodeURIComponent(countryCode.toUpperCase())}`);
     const qs = parts.join('&');
 
     try {
-      const json = await this.req<AiraloPackagesResponse>(
-        'GET', `/packages?${qs}`,
-      );
+      const json = await this.req<AiraloPackagesResponse>('GET', `/packages?${qs}`);
       const countryEntries = json.data ?? [];
-      console.log(`[airalo] /packages?${qs.replace(/&/g, '&')} → ${countryEntries.length} country entries${json.meta ? ` (last_page=${json.meta.last_page})` : ''}`);
+      console.log(`[airalo] /packages?${qs} → ${countryEntries.length} entries${json.meta ? ` (last_page=${json.meta.last_page})` : ''}`);
 
-      // Flatten: country → operator → package
-      const plans: ProviderPlan[] = [];
+      // Flatten: entry → operator → package
+      const plans: (ProviderPlan & { coverageType: 'country' | 'regional' | 'global' })[] = [];
       for (const entry of countryEntries) {
-        const cc = (entry.country_code ?? countryCode ?? '').toUpperCase();
-        if (!cc) continue;
+        // For local packages: use country_code. For global/regional: use slug.
+        const cc = (entry.country_code ?? '').toUpperCase();
+        const slug = (entry.slug ?? '').toLowerCase();
+
         for (const op of entry.operators ?? []) {
+          const opType = (op.type ?? 'local').toLowerCase();
+
+          // Determine coverage type from operator type and slug
+          let coverageType: 'country' | 'regional' | 'global';
+          if (opType === 'global') {
+            coverageType = slug === 'world' ? 'global' : 'regional';
+          } else {
+            coverageType = 'country';
+          }
+
+          // Destination key: ISO-2 for local, slug for regional/global
+          const destination = cc || slug;
+          if (!destination) continue;
+
           for (const pkg of op.packages ?? []) {
             if (!pkg.id || !pkg.day) continue;
             plans.push({
               providerPlanCode: pkg.id,
               name:             pkg.title,
-              destination:      cc,
-              region:           cc,
+              destination,
+              region:           destination,
               dataMb:           pkg.is_unlimited ? 999_999 : (pkg.amount ?? 0),
               durationDays:     pkg.day,
               priceMinor:       Math.round((pkg.net_price ?? pkg.price ?? 0) * 100),
               currency:         'USD',
               isActive:         true,
+              coverageType,
             });
           }
         }
       }
       return plans;
     } catch (err: any) {
-      console.warn(`[airalo] getSupportedPlans(${countryCode}): ${err.message}`);
+      console.warn(`[airalo] getSupportedPlans(${countryCode ?? 'all'}, page=${page}, type=${type ?? 'all'}): ${err.message}`);
       return [];
     }
   }

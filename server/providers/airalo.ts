@@ -24,9 +24,9 @@ class AiraloProvider {
   }
 
   /**
-   * Fetch all Airalo local plans in a single paginated call (no country filter),
-   * then expand each package across the countries it covers.
-   * This avoids making 194 per-country requests and stays well within the 40 req/min limit.
+   * Fetch the full Airalo catalogue — local, regional, and global packages —
+   * in a single paginated call with no type filter.
+   * Omitting filter[type] returns all ~3,200 packages (local + regional + global).
    */
   async getAllPackages(_countryCodes: string[]): Promise<ProviderPlan[]> {
     const adapter = this.getAdapter();
@@ -36,8 +36,9 @@ class AiraloProvider {
     let page = 1;
 
     while (true) {
-      console.log(`[airalo] Fetching page ${page} of all local packages...`);
-      const pkgs = await adapter.getSupportedPlans(undefined, page);
+      console.log(`[airalo] Fetching page ${page} of all packages (local + regional + global)...`);
+      // No type filter → API returns all types in one response
+      const pkgs = await adapter.getSupportedPlans(undefined, page, undefined);
       if (!pkgs.length) break;
 
       for (const pkg of pkgs) {
@@ -47,8 +48,14 @@ class AiraloProvider {
           ? Infinity
           : +(pkg.dataMb / 1024).toFixed(2);
 
-        const countryCode = (pkg.destination ?? pkg.region ?? '').toUpperCase();
-        if (!countryCode) continue;
+        const destination = (pkg.destination ?? pkg.region ?? '');
+        if (!destination) continue;
+
+        // For local plans: countryCode = ISO-2 upper (e.g. "GB").
+        // For regional/global: countryCode = slug (e.g. "europe", "world").
+        const countryCode = pkg.coverageType === 'country'
+          ? destination.toUpperCase()
+          : destination.toLowerCase();
 
         results.push({
           provider:      "airalo",
@@ -63,16 +70,19 @@ class AiraloProvider {
           validity:      `${pkg.durationDays} day${pkg.durationDays === 1 ? "" : "s"}`,
           coverage:      countryCode,
           features:      [],
-          coverageType:  "country",
+          coverageType:  pkg.coverageType ?? "country",
         });
       }
 
-      // Check if there are more pages (adapter returns [] when past last page)
+      // Adapter returns fewer than 1000 entries when on the last page
       if (pkgs.length < 1000) break;
       page++;
     }
 
-    console.log(`[airalo] Fetched ${results.length} plan-country entries from ${page} page(s)`);
+    const localCount    = results.filter(r => r.coverageType === 'country').length;
+    const regionalCount = results.filter(r => r.coverageType === 'regional').length;
+    const globalCount   = results.filter(r => r.coverageType === 'global').length;
+    console.log(`[airalo] Fetched ${results.length} packages from ${page} page(s): ${localCount} local, ${regionalCount} regional, ${globalCount} global`);
     return results;
   }
 
@@ -83,7 +93,8 @@ class AiraloProvider {
   async getPlans(countryCode: string): Promise<ProviderPlan[]> {
     const adapter = this.getAdapter();
     if (!adapter) return [];
-    const plans = await adapter.getSupportedPlans(countryCode);
+    // For single-country lookup, restrict to local packages only
+    const plans = await adapter.getSupportedPlans(countryCode, 1, 'local');
     return plans.map(p => ({
       provider:      'airalo',
       providerRef:   p.providerPlanCode,
@@ -97,7 +108,7 @@ class AiraloProvider {
       validity:      `${p.durationDays} day${p.durationDays === 1 ? '' : 's'}`,
       coverage:      (p.destination ?? p.region ?? countryCode).toUpperCase(),
       features:      [],
-      coverageType:  'country',
+      coverageType:  p.coverageType ?? 'country',
     }));
   }
 
