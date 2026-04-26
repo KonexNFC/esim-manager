@@ -162,26 +162,57 @@ app.use((req, res, next) => {
   // These are orders where capture succeeded but the async fulfillment task
   // was interrupted (e.g. deploy / process restart). Give the server 5 s to
   // finish booting before re-triggering to avoid DB race conditions.
+  //
+  // SAFETY: Only retry orders that started fulfilling in the last 10 minutes.
+  // Older stuck orders are from previous crashes and have likely already been
+  // purchased from the provider — retrying them would cause duplicate charges.
+  // Those are marked fulfillment_failed instead so they can be handled manually.
   setTimeout(async () => {
     try {
       const { db } = await import("./storage");
       const { orders: ordersTable } = await import("@shared/schema");
-      const { eq } = await import("drizzle-orm");
+      const { eq, and, gt, lte, sql: drizzleSql } = await import("drizzle-orm");
       const { fulfillInitialPurchase } = await import("./services/fulfillment");
 
+      const RETRY_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+      const cutoff = new Date(Date.now() - RETRY_WINDOW_MS);
+
       const stuckOrders = await db
-        .select({ id: ordersTable.id })
+        .select({ id: ordersTable.id, updatedAt: ordersTable.updatedAt, iccid: ordersTable.iccid })
         .from(ordersTable)
         .where(eq(ordersTable.status, "fulfilling"));
 
       if (stuckOrders.length > 0) {
-        console.log(`[Startup] Found ${stuckOrders.length} order(s) stuck in "fulfilling" — resetting and re-triggering...`);
-        for (const { id } of stuckOrders) {
-          // Reset to "paid" so fulfillInitialPurchase doesn't skip it
-          await db.update(ordersTable).set({ status: "paid" }).where(eq(ordersTable.id, id));
-          console.log(`[Startup] Re-triggering fulfillment for order ${id}`);
-          fulfillInitialPurchase(id).catch((err: any) =>
-            console.error(`[Startup] Re-fulfillment error for order ${id}:`, err.message)
+        console.log(`[Startup] Found ${stuckOrders.length} order(s) stuck in "fulfilling"`);
+      }
+
+      for (const order of stuckOrders) {
+        const ageMs = Date.now() - new Date(order.updatedAt).getTime();
+        const ageMin = Math.round(ageMs / 60_000);
+
+        // If the order already has an ICCID, a provider purchased it successfully —
+        // don't buy again. Just mark as fulfilled so the customer gets their eSIM.
+        if (order.iccid) {
+          console.log(`[Startup] Order ${order.id} has ICCID ${order.iccid} — marking fulfilled without re-purchase`);
+          await db.update(ordersTable)
+            .set({ status: "fulfilled", esimStatus: "issued" })
+            .where(eq(ordersTable.id, order.id));
+          continue;
+        }
+
+        if (ageMs > RETRY_WINDOW_MS) {
+          // Too old — almost certainly a crash from a prior server run.
+          // Marking as failed rather than re-purchasing to avoid duplicate charges.
+          console.warn(`[Startup] Order ${order.id} stuck for ${ageMin}min — marking fulfillment_failed (no retry to prevent duplicate charges)`);
+          await db.update(ordersTable)
+            .set({ status: "fulfillment_failed", esimStatus: "not_issued" })
+            .where(eq(ordersTable.id, order.id));
+        } else {
+          // Recent — safe to retry (server likely restarted mid-flight)
+          console.log(`[Startup] Order ${order.id} stuck for ${ageMin}min — resetting to paid and retrying`);
+          await db.update(ordersTable).set({ status: "paid" }).where(eq(ordersTable.id, order.id));
+          fulfillInitialPurchase(order.id).catch((err: any) =>
+            console.error(`[Startup] Re-fulfillment error for order ${order.id}:`, err.message)
           );
         }
       }
