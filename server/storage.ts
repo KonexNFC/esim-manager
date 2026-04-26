@@ -145,7 +145,18 @@ const orderSelectFields = (_db: any) => ({
       WHERE po.id = ${orders.normalizedPlanId}
       LIMIT 1)
   )`,
-  dataAmount: plans.dataAmount,
+  dataAmount: sql<string>`COALESCE(
+    ${plans.dataAmount},
+    (SELECT CASE
+              WHEN np.data_mb >= 999999 THEN 'Unlimited'
+              WHEN np.data_mb >= 1024   THEN ROUND((np.data_mb / 1024.0)::numeric, 0)::text || ' GB'
+              ELSE np.data_mb::text || ' MB'
+            END
+       FROM provider_offers po
+       JOIN normalized_plans np ON np.id = po.normalized_plan_id
+      WHERE po.id = ${orders.normalizedPlanId}
+      LIMIT 1)
+  )`,
   dataAmountGb: sql<number>`COALESCE(
     ${plans.dataAmountGb},
     (SELECT ROUND((np.data_mb / 1024.0)::numeric, 2)
@@ -154,7 +165,14 @@ const orderSelectFields = (_db: any) => ({
       WHERE po.id = ${orders.normalizedPlanId}
       LIMIT 1)
   )`,
-  validity: plans.validity,
+  validity: sql<string>`COALESCE(
+    ${plans.validity},
+    (SELECT np.validity_days::text || ' Day' || CASE WHEN np.validity_days = 1 THEN '' ELSE 's' END
+       FROM provider_offers po
+       JOIN normalized_plans np ON np.id = po.normalized_plan_id
+      WHERE po.id = ${orders.normalizedPlanId}
+      LIMIT 1)
+  )`,
   validityDays: sql<number>`COALESCE(
     ${plans.validityDays},
     (SELECT np.validity_days
@@ -360,8 +378,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOrder(id: string): Promise<Order | undefined> {
-    const [order] = await db.select().from(orders).where(eq(orders.id, id));
-    return order;
+    const [order] = await db
+      .select(orderSelectFields(db))
+      .from(orders)
+      .leftJoin(plans, eq(orders.planId, plans.id))
+      .leftJoin(destinations, eq(plans.destinationId, destinations.id))
+      .where(eq(orders.id, id));
+    return order ? mapOrderRow(order) as unknown as Order : undefined;
   }
 
   async createOrder(order: InsertOrder, providerIccid?: string, providerQrCode?: string): Promise<Order> {

@@ -9,10 +9,23 @@ import { Package, ChevronRight, Wifi, Search, Globe } from "lucide-react";
 import { useState, useEffect } from "react";
 import type { Order } from "@shared/schema";
 
+function statusBadge(status: string): { label: string; className: string } {
+  switch (status) {
+    case "fulfilled":
+    case "completed":
+      return { label: "Ready", className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" };
+    case "fulfilling":
+    case "paid":
+      return { label: "Processing", className: "bg-amber-500/10 text-amber-600 dark:text-amber-400" };
+    case "fulfillment_failed":
+      return { label: "Issue", className: "bg-red-500/10 text-red-600 dark:text-red-400" };
+    default:
+      return { label: "Pending", className: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400" };
+  }
+}
+
 function OrderCard({ order }: { order: Order & { planName?: string; destinationName?: string; flagEmoji?: string; dataAmount?: string; validity?: string } }) {
-  const statusColor = order.status === "completed"
-    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-    : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400";
+  const badge = statusBadge(order.status);
 
   return (
     <Link href={`/orders/${order.id}`}>
@@ -24,13 +37,14 @@ function OrderCard({ order }: { order: Order & { planName?: string; destinationN
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
+                {order.flagEmoji && <span className="text-lg leading-none">{order.flagEmoji}</span>}
                 <h3 className="font-semibold text-sm truncate" data-testid={`text-order-destination-${order.id}`}>
-                  {order.destinationName || "eSIM Plan"}
+                  {order.destinationName || order.planName || "eSIM Plan"}
                 </h3>
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
                 {order.dataAmount && <span>{order.dataAmount}</span>}
-                {order.dataAmount && order.validity && <span>|</span>}
+                {order.dataAmount && order.validity && <span>·</span>}
                 {order.validity && <span>{order.validity}</span>}
               </div>
             </div>
@@ -40,8 +54,8 @@ function OrderCard({ order }: { order: Order & { planName?: string; destinationN
               <p className="font-semibold text-sm" data-testid={`text-order-price-${order.id}`}>
                 ${order.totalPrice.toFixed(2)}
               </p>
-              <Badge variant="outline" className={`text-xs ${statusColor}`}>
-                {order.status === "completed" ? "Active" : "Pending"}
+              <Badge variant="outline" className={`text-xs ${badge.className}`}>
+                {badge.label}
               </Badge>
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
