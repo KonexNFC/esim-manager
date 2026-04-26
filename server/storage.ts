@@ -1,4 +1,4 @@
-import { eq, and, or, isNull, isNotNull, sql } from "drizzle-orm";
+import { eq, and, or, isNull, isNotNull, sql, ilike } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import {
@@ -358,12 +358,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOrdersByEmail(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
     const result = await db
       .select(orderSelectFields(db))
       .from(orders)
       .leftJoin(plans, eq(orders.planId, plans.id))
       .leftJoin(destinations, eq(plans.destinationId, destinations.id))
-      .where(eq(orders.email, email));
+      .where(ilike(orders.email, normalizedEmail));
     return result.map(mapOrderRow);
   }
 
