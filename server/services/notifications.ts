@@ -10,6 +10,7 @@
 const RESEND_API = 'https://api.resend.com/emails';
 
 const FROM = process.env.EMAIL_FROM_ADDRESS || 'Konex <noreply@konexesim.com>';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'info@konexesim.com';
 
 const BASE_URL =
   process.env.APP_BASE_URL ||
@@ -326,37 +327,68 @@ export async function sendPurchaseConfirmation(data: PurchaseConfirmationData): 
 // ─── Fulfillment Failed ───────────────────────────────────────────────────────
 
 export async function sendFulfillmentFailedEmail(data: FulfillmentFailedData): Promise<void> {
-  const displayName = data.name ? ` ${esc(data.name.split(' ')[0])}` : '';
+  const displayName = data.name ? esc(data.name.split(' ')[0]) : 'there';
+  const shortId = data.orderId.slice(0, 8).toUpperCase();
 
-  const content = `
-    ${heading('Action required — eSIM activation issue')}
-    ${subheading(`Hi${displayName}, we received your payment successfully, but we encountered a temporary issue activating your eSIM.`)}
+  // ── Customer-facing email (no technical details) ───────────────────────────
+  const customerContent = `
+    ${heading('We\'re on it — your eSIM is coming')}
+    ${subheading(`Hi ${displayName}, your payment went through successfully. We\'re just finishing setting up your eSIM.`)}
 
-    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-bottom:24px;">
-      <p style="margin:0;font-size:14px;color:#991b1b;font-weight:600;">What happened?</p>
-      <p style="margin:8px 0 0;font-size:13px;color:#7f1d1d;">${data.reason ? esc(data.reason) : 'A provider network error prevented your eSIM from being provisioned.'}</p>
+    <div style="background:#fef9ec;border:1px solid #fde68a;border-radius:8px;padding:20px;margin-bottom:24px;">
+      <p style="margin:0;font-size:15px;font-weight:700;color:#92400e;">⏱ Estimated delivery: within 2 hours</p>
+      <p style="margin:10px 0 0;font-size:14px;color:#78350f;line-height:1.6;">
+        Our team has been automatically notified and is resolving this right now.
+        You will receive your QR code by email as soon as your eSIM is ready — no action needed from you.
+      </p>
     </div>
 
     <p style="font-size:14px;color:#444;line-height:1.7;">
-      <strong>What we'll do:</strong> Our team has been alerted and will resolve this manually within 2 hours. We will send you your QR code as soon as your eSIM is ready.
+      Your <strong>Order ID</strong> is:
+      <code style="background:#f5f5f5;padding:2px 8px;border-radius:4px;font-family:monospace;font-size:13px;">#${shortId}</code>
     </p>
 
     <p style="font-size:14px;color:#444;line-height:1.7;">
-      Your <strong>Order ID</strong> is: <code style="background:#f5f5f5;padding:2px 6px;border-radius:4px;font-family:monospace;">#${data.orderId.slice(0, 8).toUpperCase()}</code>
-    </p>
-
-    <p style="font-size:14px;color:#444;">
-      If you don't hear back within 2 hours, please reply to this email and we'll sort it out immediately.
+      If you haven't received your QR code within 2 hours, simply reply to this email and we'll resolve it immediately.
     </p>
 
     ${callToAction(`${BASE_URL}/dashboard`, 'Check Order Status →')}
+
+    <p style="font-size:12px;color:#999;margin-top:24px;text-align:center;">
+      Your payment is safe — you have not been charged twice and a full refund is available if we cannot deliver your eSIM.
+    </p>
   `;
 
   await sendEmail(
     data.email,
-    `Action required — your Konex eSIM could not be activated`,
-    layout(content, 'eSIM Activation Issue'),
+    `Your Konex eSIM is being set up — we'll send the QR code shortly`,
+    layout(customerContent, 'eSIM Setup In Progress'),
   );
+
+  // ── Internal admin alert (full technical details) ──────────────────────────
+  const adminContent = `
+    ${heading('⚠️ Fulfillment failure — action required')}
+    ${subheading(`Order <strong>#${shortId}</strong> (${data.orderId}) failed to fulfil automatically.`)}
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      ${infoRow('Order ID', data.orderId)}
+      ${infoRow('Customer email', esc(data.email))}
+      ${infoRow('Customer name', data.name ? esc(data.name) : '—')}
+    </table>
+
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-bottom:24px;">
+      <p style="margin:0;font-size:14px;font-weight:700;color:#991b1b;">Error details</p>
+      <pre style="margin:10px 0 0;font-size:12px;color:#7f1d1d;white-space:pre-wrap;word-break:break-all;font-family:monospace;">${data.reason ? esc(data.reason) : 'No reason provided'}</pre>
+    </div>
+
+    ${callToAction(`${BASE_URL}/admin`, 'Open Admin Panel →')}
+  `;
+
+  await sendEmail(
+    ADMIN_EMAIL,
+    `[KONEX ALERT] Fulfillment failed — order #${shortId} needs manual action`,
+    layout(adminContent, 'Fulfillment Alert'),
+  ).catch(() => { /* non-fatal if admin email fails */ });
 }
 
 // ─── Top-up Confirmation ─────────────────────────────────────────────────────
