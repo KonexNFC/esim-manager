@@ -63,6 +63,8 @@ type TopPlanEntry = {
 type AdminStats = {
   totalRevenue: number;
   totalOrders: number;
+  totalOrdersAll: number;
+  pendingOrders: number;
   livePlans: number;
   totalDestinations: number;
   avgMargin: number;
@@ -71,6 +73,8 @@ type AdminStats = {
   totalCost: number;
   avgProfitPerOrder: number;
   activeEsims: number;
+  esimsReady: number;
+  esimsActive: number;
   providerBreakdown: ProviderBreakdownEntry[];
   topPerformingPlans: TopPlanEntry[];
 };
@@ -165,7 +169,7 @@ const PROFIT_MODES = [
   },
 ] as const;
 
-function StatCard({ title, value, icon: Icon, suffix }: { title: string; value: string | number; icon: any; suffix?: string }) {
+function StatCard({ title, value, icon: Icon, suffix, subtitle }: { title: string; value: string | number; icon: any; suffix?: string; subtitle?: string }) {
   return (
     <Card className="p-4">
       <div className="flex items-center justify-between gap-4 mb-2">
@@ -177,6 +181,7 @@ function StatCard({ title, value, icon: Icon, suffix }: { title: string; value: 
       <p className="text-2xl font-bold" data-testid={`text-stat-${title.toLowerCase().replace(/\s/g, '-')}`}>
         {value}{suffix || ""}
       </p>
+      {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
     </Card>
   );
 }
@@ -405,17 +410,27 @@ function DashboardTab() {
     <div className="space-y-6">
       {/* ── Primary profit metrics ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Revenue" value={`$${(stats?.totalRevenue || 0).toFixed(2)}`} icon={DollarSign} />
-        <StatCard title="Net Profit" value={`$${(stats?.totalProfit || 0).toFixed(2)}`} icon={TrendingUp} />
-        <StatCard title="Margin %" value={`${(stats?.weightedMargin || 0).toFixed(1)}`} icon={BarChart3} suffix="%" />
-        <StatCard title="Total Cost" value={`$${(stats?.totalCost || 0).toFixed(2)}`} icon={TrendingDown} />
+        <StatCard title="Revenue" value={`$${(stats?.totalRevenue || 0).toFixed(2)}`} icon={DollarSign} subtitle="Fulfilled orders only" />
+        <StatCard title="Net Profit" value={`$${(stats?.totalProfit || 0).toFixed(2)}`} icon={TrendingUp} subtitle="After wholesale costs" />
+        <StatCard title="Margin %" value={`${(stats?.weightedMargin || 0).toFixed(1)}`} icon={BarChart3} suffix="%" subtitle="Weighted across all orders" />
+        <StatCard title="Total Cost" value={`$${(stats?.totalCost || 0).toFixed(2)}`} icon={TrendingDown} subtitle="Wholesale cost of goods" />
       </div>
       {/* ── Operational metrics ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Orders" value={stats?.totalOrders || 0} icon={ShoppingCart} />
-        <StatCard title="Avg Profit / Order" value={`$${(stats?.avgProfitPerOrder || 0).toFixed(2)}`} icon={Target} />
+        <StatCard
+          title="Completed Orders"
+          value={stats?.totalOrders || 0}
+          icon={ShoppingCart}
+          subtitle={stats?.pendingOrders ? `${stats.pendingOrders} pending · ${stats.totalOrdersAll} total` : `${stats?.totalOrdersAll || 0} total`}
+        />
+        <StatCard title="Avg Profit / Order" value={`$${(stats?.avgProfitPerOrder || 0).toFixed(2)}`} icon={Target} subtitle="Across fulfilled orders" />
         <StatCard title="Live Plans" value={stats?.livePlans || 0} icon={Package} />
-        <StatCard title="Active eSIMs" value={stats?.activeEsims || 0} icon={Wifi} />
+        <StatCard
+          title="eSIMs Issued"
+          value={(stats?.esimsReady || 0) + (stats?.esimsActive || 0)}
+          icon={Wifi}
+          subtitle={stats?.esimsActive ? `${stats.esimsActive} active · ${stats.esimsReady || 0} ready` : "Provisioned to customers"}
+        />
       </div>
 
       {/* ── Live Catalog Engine ── */}

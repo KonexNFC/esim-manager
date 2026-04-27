@@ -1141,19 +1141,24 @@ export async function registerRoutes(
         storage.getDestinations(),
       ]);
 
-      const totalRevenue = allOrders.reduce((sum, o) => sum + o.totalPrice, 0);
-      const totalOrders = allOrders.length;
       const livePlans = allPlans.filter(p => p.planStatus === "live").length;
       const totalDestinations = allDestinations.length;
 
-      // ── Profit & weighted margin (routing-aware orders only) ────────────────
+      // ── Profit & weighted margin ────────────────────────────────────────────
       // For orders without wholesaleCostUsd, fall back to the plan's wholesaleCost
       const planCostMap = Object.fromEntries(allPlans.map(p => [p.id, p.wholesaleCost ?? 0]));
 
-      // Only fulfilled / completed orders contribute to profit stats
+      // Only fulfilled / completed orders contribute to revenue & profit stats.
+      // Excluding 'paid' here — payment received but eSIM not yet delivered is not revenue.
       const revenueOrders = allOrders.filter(o =>
-        o.status === 'fulfilled' || o.status === 'completed' || o.status === 'paid'
+        o.status === 'fulfilled' || o.status === 'completed'
       );
+
+      // All orders including pending/failed — for the total order counter
+      const totalOrdersAll = allOrders.length;
+      const pendingOrders = allOrders.filter(o =>
+        o.status === 'pending' || o.status === 'paid' || o.status === 'fulfilling'
+      ).length;
 
       // Build per-order profit entries (include planId/planName for plan-level aggregation)
       interface OrderProfit {
@@ -1181,11 +1186,16 @@ export async function registerRoutes(
         };
       });
 
+      // Revenue and orders stats — all derived from the same profitEntries set
+      // so Revenue, Orders, Provider Performance, and Top Plans are always consistent.
+      const totalRevenue = Math.round(profitEntries.reduce((s, e) => s + e.revenue, 0) * 100) / 100;
+      const totalOrders = profitEntries.length;
+
       const totalProfit = profitEntries.reduce((s, e) => s + e.profit, 0);
-      const revenueWithCost = profitEntries.filter(e => e.cost > 0);
-      const totalRevenueWithCost = revenueWithCost.reduce((s, e) => s + e.revenue, 0);
-      const weightedMargin = totalRevenueWithCost > 0
-        ? (revenueWithCost.reduce((s, e) => s + e.profit, 0) / totalRevenueWithCost) * 100
+      // Weighted margin: use all revenue orders (not just those with cost > 0)
+      const totalRevenueForMargin = profitEntries.reduce((s, e) => s + e.revenue, 0);
+      const weightedMargin = totalRevenueForMargin > 0
+        ? (totalProfit / totalRevenueForMargin) * 100
         : 0;
       const avgProfitPerOrder = profitEntries.length > 0
         ? totalProfit / profitEntries.length
@@ -1246,9 +1256,17 @@ export async function registerRoutes(
         .sort((a, b) => b.profit - a.profit)
         .slice(0, 10);
 
+      // eSIM counts
+      const esimsReady = allOrders.filter(o =>
+        o.esimStatus === "issued" || o.esimStatus === "installed"
+      ).length;
+      const esimsActive = allOrders.filter(o => o.esimStatus === "active").length;
+
       res.json({
-        totalRevenue: Math.round(totalRevenue * 100) / 100,
+        totalRevenue,
         totalOrders,
+        totalOrdersAll,
+        pendingOrders,
         livePlans,
         totalDestinations,
         avgMargin: Math.round(avgMargin),
@@ -1256,9 +1274,12 @@ export async function registerRoutes(
         totalProfit: Math.round(totalProfit * 100) / 100,
         totalCost,
         avgProfitPerOrder: Math.round(avgProfitPerOrder * 100) / 100,
-        activeEsims: allOrders.filter(o =>
-          o.esimStatus === "active" || o.esimStatus === "installed" || o.esimStatus === "issued"
-        ).length,
+        // esimsReady: provisioned eSIMs waiting for customer activation (issued + installed)
+        // esimsActive: eSIMs currently in active use
+        esimsReady,
+        esimsActive,
+        // Keep for backward compat
+        activeEsims: esimsReady + esimsActive,
         providerBreakdown,
         topPerformingPlans,
       });
