@@ -106,6 +106,8 @@ export const orders = pgTable("orders", {
   paypalCaptureId: text("paypal_capture_id"),
   // Paddle fields
   paddleTransactionId: text("paddle_transaction_id"),
+  // eSIM connectivity
+  apn: text("apn"),
 });
 
 // ─── PROVIDER SYNC RUNS ───────────────────────────────

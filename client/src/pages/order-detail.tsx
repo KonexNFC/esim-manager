@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRoute, Link } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft, ArrowRight, CheckCircle2, QrCode, Wifi, Clock,
   Globe, Smartphone, LayoutGrid, ShieldCheck, AlertCircle, Loader2,
+  ChevronDown, ChevronUp, Copy, Check, Settings, WifiOff,
 } from "lucide-react";
 import { EsimQrDisplay } from "@/components/EsimQrDisplay";
 
@@ -34,6 +35,7 @@ type EnrichedOrder = {
   dataRemainingMb?: number | null;
   daysRemaining?: number | null;
   expiresAt?: string | null;
+  apn?: string | null;
 };
 
 function OrderDetailSkeleton() {
@@ -65,6 +67,251 @@ function StatBox({ icon: Icon, label, value, highlight }: { icon: any; label: st
       <p className={`text-sm font-semibold ${highlight ? "text-emerald-500" : ""}`} data-testid={`text-plan-${label.toLowerCase()}`}>
         {value}
       </p>
+    </div>
+  );
+}
+
+function CopyField({ label, value, testId }: { label: string; value: string; testId?: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <div className="flex items-center justify-between text-xs mt-1">
+      <span className="text-muted-foreground">{label}</span>
+      <div className="flex items-center gap-1.5">
+        <span className="font-mono text-muted-foreground text-[11px]" data-testid={testId}>{value}</span>
+        <button
+          onClick={copy}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+          title={`Copy ${label}`}
+          data-testid={`button-copy-${label.toLowerCase().replace(/\s/g, "-")}`}
+        >
+          {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function InstallGuide({ apn }: { apn?: string | null }) {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"iphone" | "android">("iphone");
+
+  return (
+    <div className="rounded-2xl border overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-muted/30 transition-colors"
+        onClick={() => setOpen(v => !v)}
+        data-testid="button-toggle-install-guide"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <Smartphone className="w-4.5 h-4.5 text-primary" />
+          </div>
+          <div>
+            <p className="font-semibold text-sm">How to install your eSIM</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Step-by-step guide for iPhone & Android</p>
+          </div>
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="border-t px-5 pb-5">
+          {/* Tab switcher */}
+          <div className="flex gap-2 mt-4 mb-4">
+            <button
+              onClick={() => setTab("iphone")}
+              data-testid="button-tab-iphone"
+              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                tab === "iphone"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-muted/30 text-muted-foreground border-border hover:bg-muted/50"
+              }`}
+            >
+              iPhone / iOS
+            </button>
+            <button
+              onClick={() => setTab("android")}
+              data-testid="button-tab-android"
+              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                tab === "android"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-muted/30 text-muted-foreground border-border hover:bg-muted/50"
+              }`}
+            >
+              Android
+            </button>
+          </div>
+
+          {tab === "iphone" && (
+            <ol className="space-y-3 text-sm">
+              <Step n={1} text="Go to Settings → Cellular → Add eSIM" />
+              <Step n={2} text="Tap Use QR Code and scan the QR code on this page, OR tap Enter Details Manually and enter the details from your QR code." />
+              <Step n={3} text='Label your eSIM (e.g. "Konex Travel") and set it as your data line when abroad.' />
+              <Step n={4} text="Turn on Data Roaming for the eSIM when you arrive at your destination." />
+              {apn && (
+                <Step n={5} highlight text={`If you have no data, set the APN manually: Settings → Cellular → eSIM → Cellular Data Network → APN → enter "${apn}"`} />
+              )}
+              {!apn && (
+                <Step n={5} text="If you have no data after arriving, try setting a manual APN (see the APN troubleshooting section below)." />
+              )}
+            </ol>
+          )}
+
+          {tab === "android" && (
+            <ol className="space-y-3 text-sm">
+              <Step n={1} text="Go to Settings → Connections (or Network & Internet) → SIM Manager → Add eSIM." />
+              <Step n={2} text="Tap Scan QR code and scan the QR code on this page, OR tap Enter activation code manually." />
+              <Step n={3} text="Follow the on-screen prompts to complete installation and activate the eSIM." />
+              <Step n={4} text="Set the Konex eSIM as your mobile data SIM when travelling." />
+              {apn && (
+                <Step n={5} highlight text={`If you have no data, set the APN: Settings → Connections → Mobile Networks → Access Point Names → New APN → Name: "Konex", APN: "${apn}" → Save.`} />
+              )}
+              {!apn && (
+                <Step n={5} text="If you have no data after arriving, try setting a manual APN (see the APN troubleshooting section below)." />
+              )}
+            </ol>
+          )}
+
+          {/* APN box */}
+          {apn && (
+            <div className="mt-4 rounded-xl border bg-amber-500/5 border-amber-500/20 p-3.5" data-testid="card-apn-info">
+              <div className="flex items-center gap-2 mb-2">
+                <Settings className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">APN Setting</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Enter this if your eSIM has no data</span>
+                <CopyApn apn={apn} />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CopyApn({ apn }: { apn: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(apn).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <button
+      onClick={copy}
+      data-testid="button-copy-apn"
+      className="flex items-center gap-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 px-2.5 py-1 transition-colors"
+    >
+      <span className="font-mono text-sm font-semibold text-amber-700 dark:text-amber-300">{apn}</span>
+      {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />}
+    </button>
+  );
+}
+
+function Step({ n, text, highlight }: { n: number; text: string; highlight?: boolean }) {
+  return (
+    <li className="flex gap-3">
+      <span className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold mt-0.5 ${
+        highlight ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-primary/10 text-primary"
+      }`}>
+        {n}
+      </span>
+      <span className={`text-muted-foreground leading-relaxed ${highlight ? "text-amber-700 dark:text-amber-300" : ""}`}>{text}</span>
+    </li>
+  );
+}
+
+function TroubleshootingGuide({ apn }: { apn?: string | null }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded-2xl border overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-muted/30 transition-colors"
+        onClick={() => setOpen(v => !v)}
+        data-testid="button-toggle-troubleshoot"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+            <WifiOff className="w-4.5 h-4.5 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="font-semibold text-sm">eSIM not connecting?</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Common fixes for data and connectivity issues</p>
+          </div>
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+      </button>
+
+      {open && (
+        <div className="border-t px-5 py-4 space-y-3 text-sm">
+          <TroubleshootItem
+            title="No data after activation"
+            steps={[
+              "Make sure the Konex eSIM is set as your mobile data line.",
+              "Enable Data Roaming for the eSIM in your settings.",
+              apn ? `Set the APN manually to: ${apn}` : "Try setting a manual APN — check the installation guide above or contact support for the correct APN.",
+              "Restart your device.",
+            ]}
+          />
+          <TroubleshootItem
+            title="APN setting is greyed out"
+            steps={[
+              "This happens on some devices when roaming is disabled. Enable Data Roaming first.",
+              "On iPhone, go to Settings → Cellular → eSIM → Cellular Data Network.",
+              "If still greyed out, contact us at support@konexesim.com and we'll unlock it.",
+            ]}
+          />
+          <TroubleshootItem
+            title="QR code won't scan"
+            steps={[
+              "Ensure good lighting and hold the camera steady.",
+              "Try zooming in slightly on the QR code before scanning.",
+              "Alternatively, use the ICCID shown in this page to activate manually.",
+            ]}
+          />
+          <TroubleshootItem
+            title="eSIM not showing after installation"
+            steps={[
+              "Restart your device — the eSIM profile may need a reboot to appear.",
+              "Check Settings → Cellular / SIM Manager to confirm it was added.",
+              "If missing, re-scan the QR code or contact support with your Order ID.",
+            ]}
+          />
+          <div className="pt-2 border-t text-xs text-muted-foreground">
+            Still having trouble?{" "}
+            <a href="mailto:support@konexesim.com" className="text-primary underline underline-offset-2" data-testid="link-support-email">
+              Email support@konexesim.com
+            </a>{" "}
+            with your Order ID and we'll get you sorted.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TroubleshootItem({ title, steps }: { title: string; steps: string[] }) {
+  return (
+    <div>
+      <p className="font-medium mb-1.5">{title}</p>
+      <ol className="space-y-1 pl-1">
+        {steps.map((s, i) => (
+          <li key={i} className="text-muted-foreground flex gap-2">
+            <span className="text-primary font-bold flex-shrink-0">{i + 1}.</span>
+            <span>{s}</span>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
@@ -243,7 +490,7 @@ export default function OrderDetail() {
           </div>
         </div>
 
-        {/* Price & order ID */}
+        {/* Price, order ID, ICCID, APN */}
         <div className="px-6 py-4 bg-muted/10">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Order total</span>
@@ -254,13 +501,19 @@ export default function OrderDetail() {
             <span className="font-mono text-muted-foreground" data-testid="text-order-id">#{order.id.slice(0, 8).toUpperCase()}</span>
           </div>
           {order.iccid && (
-            <div className="flex items-center justify-between text-xs mt-1">
-              <span className="text-muted-foreground">ICCID</span>
-              <span className="font-mono text-muted-foreground text-[11px]">{order.iccid}</span>
-            </div>
+            <CopyField label="ICCID" value={order.iccid} testId="text-order-iccid" />
+          )}
+          {order.apn && (
+            <CopyField label="APN" value={order.apn} testId="text-order-apn" />
           )}
         </div>
       </div>
+
+      {/* ── Installation guide ── */}
+      {isReady && <InstallGuide apn={order.apn} />}
+
+      {/* ── Troubleshooting ── */}
+      {isReady && <TroubleshootingGuide apn={order.apn} />}
 
       {/* ── Dashboard CTA ── */}
       {!isFailed && (

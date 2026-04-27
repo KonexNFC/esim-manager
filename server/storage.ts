@@ -124,6 +124,8 @@ const orderSelectFields = (_db: any) => ({
   daysRemaining: orders.daysRemaining,
   expiresAt: orders.expiresAt,
   lastSyncedAt: orders.lastSyncedAt,
+  // eSIM connectivity
+  apn: orders.apn,
   // Routing & pricing fields (populated at checkout by routing engine)
   normalizedPlanId: orders.normalizedPlanId,
   routingDecisionId: orders.routingDecisionId,

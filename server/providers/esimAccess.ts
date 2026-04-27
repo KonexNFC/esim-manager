@@ -50,6 +50,7 @@ interface EsimAccessQueryResponse {
       esimStatus: string;
       orderNo: string;
       packageCode: string;
+      apn?: string;
     }>;
   };
 }
@@ -335,6 +336,7 @@ export class EsimAccessProvider implements EsimProvider {
       iccid: esimData.iccid,
       qrCodeUrl,
       activationUrl: qrCodeData,
+      apn: esimData.apn ?? undefined,
     };
   }
 

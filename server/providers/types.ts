@@ -22,6 +22,7 @@ export interface ProviderOrderResult {
   iccid: string;
   qrCodeUrl: string;
   activationUrl?: string;
+  apn?: string;
 }
 
 export interface EsimProvider {

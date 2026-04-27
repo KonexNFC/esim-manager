@@ -449,6 +449,7 @@ export async function fulfillInitialPurchase(
       daysRemaining: planData.validityDays,
       expiresAt,
       lastSyncedAt: new Date(),
+      ...(result.apn ? { apn: result.apn } : {}),
     }).where(eq(orders.id, orderId));
 
     // ── Create eSIM entity ─────────────────────────────────────────────────
