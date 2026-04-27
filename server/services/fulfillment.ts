@@ -407,11 +407,18 @@ export async function fulfillInitialPurchase(
       // No routing data — use the active provider (failover adapter handles transparently).
       console.log(`[Fulfillment] No routing chain for order ${orderId} — using active provider`);
       const provider = getActiveProvider();
+      // For routing-engine orders (normalizedPlanId set), the providerRef stored in baseParams
+      // belongs to whichever provider was selected at checkout (e.g. eSIM Access plan code).
+      // Passing that code to a different provider (e.g. Airalo) causes a hard 422/400 error.
+      // Clear it here so each provider in the failover chain does a spec-based lookup instead.
+      const legacyParams: typeof baseParams = order.normalizedPlanId
+        ? { ...baseParams, providerRef: undefined }
+        : baseParams;
       const startMs = Date.now();
       try {
-        result = await provider.purchaseEsim(baseParams, ctx);
+        result = await provider.purchaseEsim(legacyParams, ctx);
         const durationMs = Date.now() - startMs;
-        await logProviderAttempt(orderId, provider.name, baseParams.providerRef ?? null, 1, 'ok', undefined, durationMs);
+        await logProviderAttempt(orderId, provider.name, legacyParams.providerRef ?? null, 1, 'ok', undefined, durationMs);
         recordFulfillmentOutcome({
           providerKey: provider.name, destination: countryCode,
           outcome: 'success', isPrimary: true, latencyMs: durationMs,
@@ -419,7 +426,7 @@ export async function fulfillInitialPurchase(
         }).catch(() => {});
       } catch (err: any) {
         const durationMs = Date.now() - startMs;
-        await logProviderAttempt(orderId, provider.name, baseParams.providerRef ?? null, 1, 'error', err.message, durationMs);
+        await logProviderAttempt(orderId, provider.name, legacyParams.providerRef ?? null, 1, 'error', err.message, durationMs);
         recordFulfillmentOutcome({
           providerKey: provider.name, destination: countryCode,
           outcome: 'failure', isPrimary: true, latencyMs: durationMs,

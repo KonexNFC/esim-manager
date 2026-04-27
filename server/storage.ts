@@ -201,9 +201,28 @@ const orderSelectFields = (_db: any) => ({
       WHERE po.id = ${orders.normalizedPlanId}
       LIMIT 1)
   )`,
+  // Region code for JS-side country name/flag lookup when destinations table has no entry
+  regionCode: sql<string>`COALESCE(
+    (SELECT np.region_code
+       FROM provider_offers po
+       JOIN normalized_plans np ON np.id = po.normalized_plan_id
+      WHERE po.id = ${orders.normalizedPlanId}
+      LIMIT 1)
+  )`,
 });
 
 function mapOrderRow(r: any) {
+  // If the destinations table has no entry (normalized-plan orders have no destination_id),
+  // fall back to a JS-side lookup using the region_code stored in normalized_plans.
+  let destinationName: string | undefined = r.destinationName ?? undefined;
+  let flagEmoji: string | undefined = r.flagEmoji ?? undefined;
+  if ((!destinationName || !flagEmoji) && r.regionCode) {
+    const info = getLocationInfo(normaliseCode(r.regionCode));
+    if (info) {
+      destinationName = destinationName ?? info.name;
+      flagEmoji = flagEmoji ?? info.flagEmoji;
+    }
+  }
   return {
     ...r,
     planName: r.planName ?? undefined,
@@ -211,8 +230,9 @@ function mapOrderRow(r: any) {
     dataAmountGb: r.dataAmountGb ?? undefined,
     validity: r.validity ?? undefined,
     validityDays: r.validityDays ?? undefined,
-    destinationName: r.destinationName ?? undefined,
-    flagEmoji: r.flagEmoji ?? undefined,
+    destinationName,
+    flagEmoji,
+    regionCode: r.regionCode ?? undefined,
   };
 }
 
