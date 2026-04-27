@@ -332,6 +332,20 @@ export async function registerRoutes(
       const { paypalOrderId, normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email } = req.body;
       if (!paypalOrderId || !email) return res.status(400).json({ message: "Missing paypalOrderId or email" });
 
+      const { db } = await import("./storage");
+      const { orders } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      // ── Idempotency guard ──────────────────────────────────────────────────
+      // If we already have an order for this PayPal order ID, return it without
+      // capturing again. Prevents duplicate orders from browser retries / double-clicks.
+      const [existing] = await db.select({ id: orders.id, status: orders.status })
+        .from(orders).where(eq(orders.paypalOrderId, paypalOrderId));
+      if (existing) {
+        console.log(`[PayPal] Duplicate capture attempt for ${paypalOrderId} — returning existing order ${existing.id}`);
+        return res.json({ success: true, orderId: existing.id });
+      }
+
       const captured = await capturePayPalOrder(paypalOrderId);
 
       // Create order record
@@ -343,8 +357,6 @@ export async function registerRoutes(
         if (payload) resolvedUserId = payload.userId;
       }
 
-      const { db } = await import("./storage");
-      const { orders } = await import("@shared/schema");
       const [order] = await (db as any).insert(orders).values({
         planId: null,
         normalizedPlanId: normalizedPlanId || null,

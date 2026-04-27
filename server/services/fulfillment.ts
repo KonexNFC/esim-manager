@@ -14,7 +14,7 @@
 
 import { db } from '../storage';
 import { orders, esims, users, topups, plans, destinations, normalizedPlans, providerSyncLogs, providerAttempts, providers } from '@shared/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and, inArray } from 'drizzle-orm';
 import { getActiveProvider, getProviderAdapterByKey } from '../providers/adapters';
 import type { ProviderAdapter, ProviderPurchaseParams, CustomerContext, EsimProvisionResult } from '../providers/adapters';
 import {
@@ -174,12 +174,21 @@ export async function fulfillInitialPurchase(
     console.log(`[Fulfillment] Order ${orderId} already fulfilled — skipping`);
     return;
   }
-  if (order.status === 'fulfilling') {
-    console.log(`[Fulfillment] Order ${orderId} already being fulfilled — skipping`);
+
+  // ── Atomic status transition ──────────────────────────────────────────────
+  // Use a single UPDATE ... WHERE status IN ('paid','fulfillment_failed') so only
+  // one concurrent caller can ever transition to 'fulfilling'.  If the UPDATE
+  // affects 0 rows the order is already in 'fulfilling' or 'fulfilled' — abort.
+  const [locked] = await db
+    .update(orders)
+    .set({ status: 'fulfilling' })
+    .where(and(eq(orders.id, orderId), inArray(orders.status, ['paid', 'fulfillment_failed'])))
+    .returning({ id: orders.id });
+
+  if (!locked) {
+    console.log(`[Fulfillment] Order ${orderId} is already being processed (status=${order.status}) — skipping to prevent double-fulfillment`);
     return;
   }
-
-  await db.update(orders).set({ status: 'fulfilling' }).where(eq(orders.id, orderId));
 
   const user = order.userId
     ? (await db.select().from(users).where(eq(users.id, order.userId)))[0]
