@@ -482,15 +482,39 @@ async function ensureSyncIndexes(): Promise<void> {
 let _schedulerStarted = false;
 
 /**
+ * Mark any sync runs that were left in "running" state (e.g. from a server
+ * crash or restart) as "failed" so they don't linger in the dashboard.
+ */
+async function cleanupOrphanedSyncRuns(): Promise<void> {
+  try {
+    const result = await db
+      .update(providerSyncRuns)
+      .set({ status: "failed", errorMessage: "Interrupted by server restart", completedAt: new Date() })
+      .where(eq(providerSyncRuns.status, "running"))
+      .returning({ id: providerSyncRuns.id });
+    if (result.length > 0) {
+      console.log(`[providerSync] Cleaned up ${result.length} orphaned sync run(s) left in "running" state`);
+    }
+  } catch (err: any) {
+    console.warn("[providerSync] Orphan cleanup failed (non-fatal):", err.message);
+  }
+}
+
+/**
  * Start the background sync scheduler.
- * Initial sync after 60s, then every 1 hour (Airalo requires at minimum hourly syncs).
+ * Initial sync after 60s, then every 30 minutes.
+ * Airalo requires syncing at least every 60 minutes; each sync takes ~15 minutes,
+ * so a 30-minute interval guarantees completions are always within ~45 minutes of each other.
  */
 export function startProviderSyncScheduler(): void {
   if (_schedulerStarted) return;
   _schedulerStarted = true;
 
-  const ONE_HOUR     = 60 * 60 * 1000;
-  const INITIAL_DELAY = 60 * 1000;
+  const INTERVAL_MS   = 30 * 60 * 1000; // 30 minutes
+  const INITIAL_DELAY = 60 * 1000;       // 60 seconds after startup
+
+  // Clean up any orphaned "running" records from a previous server instance
+  cleanupOrphanedSyncRuns().catch(() => {});
 
   // Ensure indexes exist before first sync (idempotent, safe in prod too)
   ensureSyncIndexes().catch(err =>
@@ -503,12 +527,12 @@ export function startProviderSyncScheduler(): void {
       console.error("[providerSync] Initial sync failed:", err.message, err.stack),
     );
     setInterval(async () => {
-      console.log("[providerSync] Running hourly scheduled sync...");
+      console.log("[providerSync] Running scheduled sync (every 30 min)...");
       await syncAllProviders("auto").catch(err =>
         console.error("[providerSync] Scheduled sync failed:", err.message),
       );
-    }, ONE_HOUR);
+    }, INTERVAL_MS);
   }, INITIAL_DELAY);
 
-  console.log("[providerSync] Scheduler registered (first run in 60s, then every 1h)");
+  console.log("[providerSync] Scheduler registered (first run in 60s, then every 30min)");
 }
