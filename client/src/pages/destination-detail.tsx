@@ -85,6 +85,7 @@ const usageProfiles = [
 ];
 
 function DataCalculatorLegacy({ plans, onHighlight }: { plans: Plan[]; onHighlight: (id: number | null) => void }) {
+  const { fmt, isApprox } = useCurrency();
   const [usage, setUsage] = useState("moderate");
   const [days, setDays] = useState(7);
   const profile = usageProfiles.find(p => p.id === usage)!;
@@ -157,7 +158,7 @@ function DataCalculatorLegacy({ plans, onHighlight }: { plans: Plan[]; onHighlig
             <p className="text-sm font-semibold">{recommended.name} — {recommended.dataAmount}</p>
           </div>
           <div className="text-right">
-            <p className="font-bold">${recommended.price.toFixed(2)}</p>
+            <p className="font-bold">{isApprox ? "≈ " : ""}{fmt(recommended.price)}</p>
             <p className="text-xs text-muted-foreground">{recommended.validity}</p>
           </div>
         </div>
@@ -171,6 +172,7 @@ function DataCalculatorLegacy({ plans, onHighlight }: { plans: Plan[]; onHighlig
 }
 
 function DataCalculatorNew({ plans, onHighlight }: { plans: CountryPlan[]; onHighlight: (id: string | null) => void }) {
+  const { fmt, isApprox } = useCurrency();
   const [usage, setUsage] = useState("moderate");
   const [days, setDays] = useState(7);
   const profile = usageProfiles.find(p => p.id === usage)!;
@@ -240,7 +242,7 @@ function DataCalculatorNew({ plans, onHighlight }: { plans: CountryPlan[]; onHig
             <p className="text-sm font-semibold">{recommended.dataLabel} · {recommended.validityLabel}</p>
           </div>
           <div className="text-right">
-            <p className="font-bold">${recommended.estimatedPriceUsd.toFixed(2)}</p>
+            <p className="font-bold">{isApprox ? "≈ " : ""}{fmt(recommended.estimatedPriceUsd)}</p>
             <p className="text-xs text-muted-foreground">{recommended.validityLabel}</p>
           </div>
         </div>
@@ -1094,6 +1096,7 @@ function AllPlansTable({
 // ─── Legacy mode (UUID-based destinations) ────────────────────────────────────
 
 function LegacyDetail({ destId }: { destId: string }) {
+  const { fmt, isApprox } = useCurrency();
   const [, navigate] = useLocation();
   const [highlightedPlanId, setHighlightedPlanId] = useState<number | null>(null);
 
@@ -1165,10 +1168,10 @@ function LegacyDetail({ destId }: { destId: string }) {
                 )}
                 <h3 className="font-semibold text-base mb-2" data-testid={`text-plan-name-${plan.id}`}>{plan.name}</h3>
                 <div className="flex items-baseline gap-2 mb-4">
-                  <span className="text-3xl font-bold" data-testid={`text-plan-price-${plan.id}`}>${plan.price.toFixed(2)}</span>
-                  <span className="text-sm text-muted-foreground">{plan.currency}</span>
+                  <span className="text-3xl font-bold" data-testid={`text-plan-price-${plan.id}`}>{isApprox ? "≈ " : ""}{fmt(plan.price)}</span>
+                  {isApprox && <span className="text-sm text-muted-foreground">${plan.price.toFixed(2)} USD</span>}
                   {dataGb && dataGb !== Infinity && (
-                    <span className="text-xs text-muted-foreground">${(plan.price / dataGb).toFixed(2)}/GB</span>
+                    <span className="text-xs text-muted-foreground">{fmt(plan.price / dataGb)}/GB</span>
                   )}
                 </div>
                 <div className="space-y-2 flex-1 mb-5">
