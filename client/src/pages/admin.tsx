@@ -1930,7 +1930,7 @@ function RoutingTab() {
                     onClick={() => toggleProvider.mutate({ key: p.key, enabled: !p.enabled })}
                     data-testid={`button-toggle-provider-${p.key}`}
                   >
-                    {p.enabled ? <><Pause className="w-3 h-3 mr-1" />Enabled</> : <><Play className="w-3 h-3 mr-1" />Disabled</>}
+                    {p.enabled ? <><Pause className="w-3 h-3 mr-1" />Disable</> : <><Play className="w-3 h-3 mr-1" />Enable</>}
                   </Button>
                 </div>
               </div>
