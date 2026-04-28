@@ -67,7 +67,7 @@ export default function RefundPolicy() {
         <p className="text-sm text-muted-foreground leading-relaxed">
           <span className="font-semibold text-foreground">{COMPANY}</span> provides digital, prepaid
           eSIM data plans for international travel, delivered electronically upon successful purchase.
-          Our eSIMs give you instant connectivity in 190+ countries — no physical SIM required.
+          Our eSIMs give you instant connectivity in 205+ countries — no physical SIM required.
           Because our products are digital services fulfilled instantly, refund eligibility is limited.
           Please read this policy carefully before purchasing.
         </p>

@@ -209,7 +209,7 @@ function GiftEsimSection() {
 function VoiceCallingSection() {
   const features = [
     { icon: PhoneCall,   title: "Local number included",     desc: "Get a dedicated number for your destination — calls look local." },
-    { icon: Globe,       title: "Call 190+ countries",       desc: "Same eSIM, voice and data. No separate plan needed." },
+    { icon: Globe,       title: "Call 205+ countries",       desc: "Same eSIM, voice and data. No separate plan needed." },
     { icon: Wifi,        title: "Works over VoIP & carrier", desc: "Uses your data or the host network — whichever is stronger." },
     { icon: ShieldCheck, title: "Encrypted & private",       desc: "End-to-end encrypted calls with no call logs stored." },
   ];

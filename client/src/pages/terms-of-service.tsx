@@ -60,7 +60,7 @@ export default function TermsOfService() {
       <Section title="1. About Konex">
         <P>
           {COMPANY} operates the website {DOMAIN} and provides international eSIM data plans for use
-          by travellers across 190+ countries. References to "we", "us", "our", or "{COMPANY}" refer
+          by travellers across 205+ countries. References to "we", "us", "our", or "{COMPANY}" refer
           to the operator of {DOMAIN}. References to "you" or "customer" refer to the person accessing
           our website or purchasing our services.
         </P>
@@ -86,7 +86,7 @@ export default function TermsOfService() {
         </P>
         <Ul items={[
           "Instant delivery of your eSIM QR code to your registered email address after payment",
-          "Data plans covering 190+ countries and regions, sourced from multiple eSIM network providers",
+          "Data plans covering 205+ countries and regions, sourced from multiple eSIM network providers",
           "Plans valid for a specified data allowance and validity period as stated at checkout",
           "Coverage on local partner networks — specific network availability varies by destination",
         ]} />

@@ -253,7 +253,7 @@ const QUICK_COUNTRIES = [
 // STATS STRIP
 // ─────────────────────────────────────────────
 const STATS = [
-  { value: "190+",   label: "Countries covered",   accent: "text-blue-500 dark:text-blue-400" },
+  { value: "205+",   label: "Countries covered",   accent: "text-blue-500 dark:text-blue-400" },
   { value: "5,000+", label: "Happy travellers",     accent: "text-emerald-500 dark:text-emerald-400" },
   { value: "4.9/5",  label: "Customer rating",      accent: "text-amber-500 dark:text-amber-400" },
   { value: "<60s",   label: "Average setup time",   accent: "text-sky-500 dark:text-sky-400" },
@@ -442,7 +442,7 @@ function EventsCarousel() {
 // 1. HERO
 // ─────────────────────────────────────────────
 function HeroSection() {
-  useEffect(() => { document.title = "Konex eSIM – Instant Data Plans for 190+ Countries"; }, []);
+  useEffect(() => { document.title = "Konex eSIM – Instant Data Plans for 205+ Countries"; }, []);
   const [, navigate] = useLocation();
   const [heroCode, setHeroCode] = useState<string>("");
   const [heroDays, setHeroDays] = useState<number | null>(null);
@@ -735,7 +735,7 @@ function HowItWorks() {
       num: "02",
       icon: Globe,
       title: "Choose your plan",
-      description: "Pick your destination and data size. Available for 190+ countries with instant pricing.",
+      description: "Pick your destination and data size. Available for 205+ countries with instant pricing.",
       phone: (
         <div className="flex flex-col gap-2 w-full px-2.5">
           {/* Flag row */}
@@ -744,7 +744,7 @@ function HowItWorks() {
               <span key={f} className="text-[11px]">{f}</span>
             ))}
           </div>
-          <p className="text-[7px] text-center text-white/30 font-bold uppercase tracking-widest">190+ Countries</p>
+          <p className="text-[7px] text-center text-white/30 font-bold uppercase tracking-widest">205+ Countries</p>
           {/* Plan cards */}
           {[
             { label: "5 GB · 7 days", price: "$9.99", highlight: true },
@@ -1053,9 +1053,9 @@ const bundles = [
     label: "Premium",
     highlighted: false,
     title: "Global Traveller Pack",
-    subtitle: "190+ countries · No limits",
+    subtitle: "205+ countries · No limits",
     description: "One eSIM that works everywhere. Ideal for frequent travellers, business trips, or multi-stop tours.",
-    features: ["190+ countries covered", "Unlimited data option", "Multi-trip ready"],
+    features: ["205+ countries covered", "Unlimited data option", "Multi-trip ready"],
     price: "From $29",
   },
 ];
@@ -1079,7 +1079,7 @@ function WorldCoverageSection() {
             Worldwide Coverage
           </div>
           <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-3">
-            Stay connected in <span className="text-blue-500">190+ countries</span>
+            Stay connected in <span className="text-blue-500">205+ countries</span>
           </h2>
           <p className="text-muted-foreground text-base sm:text-lg max-w-xl mx-auto">
             From downtown Tokyo to a Moroccan riad — if you're travelling there, we've got you covered.
@@ -1092,7 +1092,7 @@ function WorldCoverageSection() {
         >
           <img
             src={worldMapImg}
-            alt="World map showing Konex eSIM coverage across 190+ countries"
+            alt="World map showing Konex eSIM coverage across 205+ countries"
             className="w-full object-cover block"
             style={{ maxHeight: "520px", objectPosition: "center 30%" }}
             data-testid="img-world-coverage-map"
@@ -1102,7 +1102,7 @@ function WorldCoverageSection() {
         {/* Stats row under map */}
         <div className={`mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4 reveal reveal-delay-2 ${inView ? "in-view" : ""}`}>
           {[
-            { label: "Countries", value: "190+", icon: <MapPin className="w-4 h-4" /> },
+            { label: "Countries", value: "205+", icon: <MapPin className="w-4 h-4" /> },
             { label: "Networks", value: "800+", icon: <Signal className="w-4 h-4" /> },
             { label: "Activates instantly", value: "< 60s", icon: <Zap className="w-4 h-4" /> },
             { label: "No roaming fees", value: "Ever", icon: <ShieldCheck className="w-4 h-4" /> },
@@ -1381,7 +1381,7 @@ function FAQSection() {
     },
     {
       question: "Can I use Konex in multiple countries?",
-      answer: "Yes. Our regional plans cover multiple countries in one purchase — ideal for European trips, Middle East travel, or multi-stop tours. Global plans cover 190+ countries with a single eSIM.",
+      answer: "Yes. Our regional plans cover multiple countries in one purchase — ideal for European trips, Middle East travel, or multi-stop tours. Global plans cover 205+ countries with a single eSIM.",
     },
   ];
 
@@ -1454,7 +1454,7 @@ function FinalCTA() {
             Get travel data<br />before you land.
           </h2>
           <p className="text-white/85 text-base sm:text-lg max-w-xl mx-auto mb-8 sm:mb-10 leading-relaxed drop-shadow" data-testid="text-final-cta-subtitle">
-            Choose your destination, activate in minutes, and stay connected in 190+ countries with KONEX eSIM.
+            Choose your destination, activate in minutes, and stay connected in 205+ countries with KONEX eSIM.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
             <Link href="/destinations">

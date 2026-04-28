@@ -159,11 +159,11 @@ export default function Signup() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-white/60 mb-3">Join 5,000+ travellers</p>
             <h2 className="text-3xl font-bold leading-tight">Global data.<br />Zero hassle.</h2>
-            <p className="text-white/70 mt-3 leading-relaxed">Create your free account and get instant access to eSIM plans for 190+ countries.</p>
+            <p className="text-white/70 mt-3 leading-relaxed">Create your free account and get instant access to eSIM plans for 205+ countries.</p>
           </div>
           <div className="space-y-4">
             {[
-              { icon: Globe,       title: "190+ countries",        sub: "One account for all your destinations" },
+              { icon: Globe,       title: "205+ countries",        sub: "One account for all your destinations" },
               { icon: Zap,         title: "Instant eSIM delivery", sub: "QR code in your inbox in seconds"      },
               { icon: ShieldCheck, title: "Manage everything",     sub: "Top up, track usage, view history"     },
             ].map(f => (

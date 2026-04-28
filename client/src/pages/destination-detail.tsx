@@ -1119,7 +1119,7 @@ function LegacyDetail({ destId }: { destId: string }) {
     if (destination?.name) {
       document.title = `${destination.name} eSIM Plans | Konex eSIM`;
     } else {
-      document.title = "Konex eSIM | Instant Data Plans for 190+ Countries";
+      document.title = "Konex eSIM | Instant Data Plans for 205+ Countries";
     }
   }, [destination?.name]);
 
@@ -1707,7 +1707,7 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
     if (meta?.name) {
       document.title = `${meta.name} eSIM Plans | Konex eSIM`;
     } else {
-      document.title = "Konex eSIM | Instant Data Plans for 190+ Countries";
+      document.title = "Konex eSIM | Instant Data Plans for 205+ Countries";
     }
   }, [meta?.name]);
 

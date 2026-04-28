@@ -123,7 +123,7 @@ export default function Login() {
           {/* Trust badges */}
           <div className="mt-8 pt-6 border-t flex items-center justify-center gap-5 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> SSL secured</span>
-            <span className="flex items-center gap-1.5"><Globe className="w-3.5 h-3.5 text-primary" /> 190+ countries</span>
+            <span className="flex items-center gap-1.5"><Globe className="w-3.5 h-3.5 text-primary" /> 205+ countries</span>
             <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 text-amber-500" /> Instant delivery</span>
           </div>
         </div>
@@ -140,7 +140,7 @@ export default function Login() {
           <div className="space-y-4">
             {[
               { icon: Zap,         title: "Instant activation",    sub: "QR code delivered the moment you pay" },
-              { icon: Globe,       title: "190+ countries",        sub: "One account, global coverage"         },
+              { icon: Globe,       title: "205+ countries",        sub: "One account, global coverage"         },
               { icon: ShieldCheck, title: "Secure & private",      sub: "Your data is always encrypted"        },
             ].map(f => (
               <div key={f.title} className="flex items-start gap-3">
