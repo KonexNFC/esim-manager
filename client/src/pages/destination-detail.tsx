@@ -1825,6 +1825,7 @@ function PublicCheckoutModal({
   const [emailError, setEmailError] = useState("");
   const [step, setStep] = useState<"email" | "pay">("email");
   const [paddleLoading, setPaddleLoading] = useState(false);
+  const [stripeLoading, setStripeLoading] = useState(false);
   const [paypalReady, setPaypalReady] = useState(false);
   const [paypalError, setPaypalError] = useState("");
   const paypalContainerRef = useRef<HTMLDivElement>(null);
@@ -1838,6 +1839,7 @@ function PublicCheckoutModal({
   const { data: checkoutConfig } = useQuery<{
     paypal: { enabled: boolean; clientId: string; sandbox: boolean };
     paddle: { enabled: boolean; clientToken: string; sandbox: boolean };
+    stripe: { enabled: boolean; publishableKey: string };
   }>({ queryKey: ["/api/checkout/config"] });
 
   const bucketDays = parseInt(plan.bucket.replace("DAY_", ""), 10);
@@ -1874,6 +1876,7 @@ function PublicCheckoutModal({
         setPaypalReady(false);
 
         paypal.Buttons({
+          fundingSource: paypal.FUNDING?.PAYPAL ?? "paypal",
           style: { layout: "vertical", color: "blue", shape: "rect", label: "pay", height: 44 },
           createOrder: async () => {
             const res = await fetch("/api/checkout/paypal/create-order", {
@@ -1950,9 +1953,40 @@ function PublicCheckoutModal({
     }
   };
 
+  const handleStripe = async () => {
+    setStripeLoading(true);
+    try {
+      const res = await fetch("/api/checkout/stripe/create-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          normalizedPlanId: plan.id,
+          countryCode,
+          countryName: plan.region || countryCode,
+          region: plan.region || countryCode,
+          dataLabel,
+          validityLabel,
+          dataAmountGb: plan.dataGb ?? 0,
+          validityDays: bucketDays,
+          email: resolvedEmail,
+          userId: me?.id,
+          userName: me?.name,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Stripe checkout failed");
+      window.location.href = data.sessionUrl;
+    } catch (err: any) {
+      toast({ title: "Checkout failed", description: err.message, variant: "destructive" });
+    } finally {
+      setStripeLoading(false);
+    }
+  };
+
   const noProviders = checkoutConfig &&
     !checkoutConfig.paypal.enabled &&
-    !checkoutConfig.paddle.enabled;
+    !checkoutConfig.paddle.enabled &&
+    !checkoutConfig.stripe?.enabled;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm">
@@ -2042,11 +2076,44 @@ function PublicCheckoutModal({
               <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-center">
                 <p className="text-sm font-medium text-destructive mb-1">Payment not yet configured</p>
                 <p className="text-xs text-muted-foreground">
-                  The store owner needs to connect PayPal or Paddle. Please check back shortly.
+                  Please check back shortly.
                 </p>
               </div>
             ) : (
               <>
+                {/* Stripe — Card / Apple Pay / Google Pay (primary) */}
+                {checkoutConfig?.stripe?.enabled && (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                      Card · Apple Pay · Google Pay
+                    </p>
+                    <Button
+                      className="w-full h-11"
+                      onClick={handleStripe}
+                      disabled={stripeLoading}
+                      data-testid="button-stripe-checkout"
+                    >
+                      {stripeLoading ? (
+                        <span className="flex items-center gap-2">
+                          <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                          Redirecting…
+                        </span>
+                      ) : (
+                        <>Pay {isApprox ? "≈ " : ""}{fmt(priceUsd)}</>
+                      )}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Divider */}
+                {checkoutConfig?.stripe?.enabled && checkoutConfig?.paypal.enabled && (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="text-[11px] text-muted-foreground uppercase tracking-wider">or</span>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
+                )}
+
                 {/* PayPal section */}
                 {checkoutConfig?.paypal.enabled && (
                   <div>
@@ -2068,7 +2135,7 @@ function PublicCheckoutModal({
                 )}
 
                 {/* Divider */}
-                {checkoutConfig?.paypal.enabled && checkoutConfig?.paddle.enabled && (
+                {(checkoutConfig?.stripe?.enabled || checkoutConfig?.paypal.enabled) && checkoutConfig?.paddle.enabled && (
                   <div className="flex items-center gap-2">
                     <div className="flex-1 h-px bg-border" />
                     <span className="text-[11px] text-muted-foreground uppercase tracking-wider">or</span>
@@ -2090,9 +2157,6 @@ function PublicCheckoutModal({
                     >
                       {paddleLoading ? "Opening checkout…" : "Pay with Paddle →"}
                     </Button>
-                    <p className="text-[11px] text-muted-foreground text-center mt-1.5">
-                      Cards, PayPal, Apple Pay & more
-                    </p>
                   </div>
                 )}
               </>
