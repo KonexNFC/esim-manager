@@ -599,30 +599,9 @@ export default function Checkout() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* PayPal */}
-                  {checkoutConfig?.paypal.enabled && (
-                    <div>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Pay with PayPal</p>
-                      <div ref={paypalContainerRef} data-testid="paypal-buttons-container" />
-                      {!paypalReady && !paypalError && (
-                        <div className="h-11 rounded bg-muted animate-pulse" />
-                      )}
-                      {paypalError && (
-                        <p className="text-xs text-destructive mt-1" data-testid="paypal-error">{paypalError}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Stripe — Card / Apple Pay / Google Pay */}
+                  {/* Stripe — Card / Apple Pay / Google Pay (primary) */}
                   {checkoutConfig?.stripe?.enabled && (
                     <div>
-                      {checkoutConfig.paypal.enabled && (
-                        <div className="flex items-center gap-3 my-4">
-                          <div className="flex-1 h-px bg-border" />
-                          <span className="text-xs text-muted-foreground">or</span>
-                          <div className="flex-1 h-px bg-border" />
-                        </div>
-                      )}
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Pay with Card · Apple Pay · Google Pay</p>
                       <Button
                         className="w-full"
@@ -648,6 +627,27 @@ export default function Checkout() {
                           </>
                         )}
                       </Button>
+                    </div>
+                  )}
+
+                  {/* PayPal */}
+                  {checkoutConfig?.paypal.enabled && (
+                    <div>
+                      {checkoutConfig.stripe?.enabled && (
+                        <div className="flex items-center gap-3 my-4">
+                          <div className="flex-1 h-px bg-border" />
+                          <span className="text-xs text-muted-foreground">or</span>
+                          <div className="flex-1 h-px bg-border" />
+                        </div>
+                      )}
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Pay with PayPal</p>
+                      <div ref={paypalContainerRef} data-testid="paypal-buttons-container" />
+                      {!paypalReady && !paypalError && (
+                        <div className="h-11 rounded bg-muted animate-pulse" />
+                      )}
+                      {paypalError && (
+                        <p className="text-xs text-destructive mt-1" data-testid="paypal-error">{paypalError}</p>
+                      )}
                     </div>
                   )}
 
