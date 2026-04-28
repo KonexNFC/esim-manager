@@ -42,13 +42,14 @@ export default function CheckoutSuccess() {
   const params = new URLSearchParams(
     typeof window !== "undefined" ? window.location.search : location.split("?")[1] || ""
   );
-  const orderId = params.get("orderId");
+  const orderId   = params.get("orderId");
+  const sessionId = params.get("session_id");
 
   const pollAttempts = useRef(0);
   const [pollingEnabled, setPollingEnabled] = useState(true);
 
-  // ── Poll for order by ID ─────────────────────────────
-  const { data: order } = useQuery<OrderData>({
+  // ── Poll for order by orderId (PayPal / Paddle) ──────
+  const { data: orderById } = useQuery<OrderData>({
     queryKey: ["/api/checkout/order", orderId],
     queryFn: async () => {
       const res = await fetch(`/api/checkout/order/${orderId}`);
@@ -72,6 +73,33 @@ export default function CheckoutSuccess() {
     retry: false,
   });
 
+  // ── Poll for order by Stripe session_id ─────────────
+  const { data: orderBySession } = useQuery<OrderData>({
+    queryKey: ["/api/checkout/order-by-session", sessionId],
+    queryFn: async () => {
+      const res = await fetch(`/api/checkout/order-by-session/${sessionId}`);
+      if (!res.ok) throw new Error("pending");
+      return res.json();
+    },
+    enabled: !!sessionId && !orderId && pollingEnabled,
+    refetchInterval: (data) => {
+      if (data) {
+        const o = data as OrderData;
+        if (o.status === "fulfilled" || o.status === "fulfillment_failed") {
+          setPollingEnabled(false);
+          return false;
+        }
+        return POLL_INTERVAL_MS;
+      }
+      pollAttempts.current += 1;
+      if (pollAttempts.current >= POLL_MAX_ATTEMPTS) { setPollingEnabled(false); return false; }
+      return POLL_INTERVAL_MS;
+    },
+    retry: false,
+  });
+
+  const order = orderById ?? orderBySession;
+
   const isFulfilled = order?.status === "fulfilled";
   const isFulfilling = order?.status === "fulfilling" || order?.status === "paid";
   const isFailed = order?.status === "fulfillment_failed";
@@ -79,8 +107,8 @@ export default function CheckoutSuccess() {
 
   const email = order?.email;
 
-  // Generic fallback: no order ID in URL
-  if (!orderId) {
+  // Generic fallback: no order ID or session ID in URL
+  if (!orderId && !sessionId) {
     return (
       <div className="max-w-xl mx-auto px-4 py-20 text-center">
         <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-4" />

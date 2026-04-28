@@ -9,6 +9,48 @@ import { storage } from "./storage";
 const app = express();
 const httpServer = createServer(app);
 
+// ─── Stripe webhook (raw body required — must be before express.json()) ────────
+app.post(
+  "/api/webhooks/stripe",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    res.status(200).json({ received: true });
+
+    try {
+      const { getUncachableStripeClient } = await import("./stripeClient");
+      const stripe = await getUncachableStripeClient();
+
+      let event: any;
+      const sig = req.headers["stripe-signature"] as string;
+      const secret = process.env.STRIPE_WEBHOOK_SECRET;
+
+      if (secret && sig) {
+        try {
+          event = stripe.webhooks.constructEvent(req.body as Buffer, sig, secret);
+        } catch (err: any) {
+          console.warn("[Stripe] Webhook signature verification failed:", err.message);
+          return;
+        }
+      } else {
+        // No secret configured — parse payload directly (dev mode)
+        event = JSON.parse((req.body as Buffer).toString("utf-8"));
+      }
+
+      console.log(`[Stripe] Webhook event: ${event.type}`);
+
+      const { handleCheckoutCompleted, handlePaymentFailed } = await import("./services/stripeService");
+
+      if (event.type === "checkout.session.completed") {
+        await handleCheckoutCompleted(event.data.object);
+      } else if (event.type === "checkout.session.async_payment_failed" || event.type === "payment_intent.payment_failed") {
+        await handlePaymentFailed(event.data.object);
+      }
+    } catch (err: any) {
+      console.error("[Stripe] Webhook error:", err.message);
+    }
+  }
+);
+
 // ─── Paddle webhook (raw body required) ───────────────────────────────────────
 app.post(
   "/api/webhooks/paddle",

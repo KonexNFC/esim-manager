@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { db } from "./storage";
 import { sql, eq, and, inArray } from "drizzle-orm";
-import { insertOrderSchema, insertPlanSchema, settings, normalizedPlans, providerOffers } from "@shared/schema";
+import { insertOrderSchema, insertPlanSchema, settings, normalizedPlans, providerOffers, orders } from "@shared/schema";
 import { fetchProviderPlans, getBestPlan } from "./providers";
 import { purchaseEsim as providerPurchase, getAvailableProviders } from "./providers/providerManager";
 import { z } from "zod";
@@ -278,7 +278,13 @@ export async function registerRoutes(
   // ─── CHECKOUT (PayPal + Paddle) ──────────────────────
 
   // GET /api/checkout/config — payment provider info for frontend
-  app.get("/api/checkout/config", (_req, res) => {
+  app.get("/api/checkout/config", async (_req, res) => {
+    let stripePublishableKey = "";
+    try {
+      const { getStripePublishableKey } = await import('./stripeClient');
+      stripePublishableKey = await getStripePublishableKey();
+    } catch { /* stripe not configured */ }
+
     res.json({
       paypal: {
         enabled: !!(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET),
@@ -289,6 +295,10 @@ export async function registerRoutes(
         enabled: !!(process.env.PADDLE_API_KEY),
         clientToken: process.env.PADDLE_CLIENT_TOKEN ?? "",
         sandbox: process.env.PADDLE_SANDBOX === "true",
+      },
+      stripe: {
+        enabled: !!stripePublishableKey,
+        publishableKey: stripePublishableKey,
       },
     });
   });
@@ -418,6 +428,39 @@ export async function registerRoutes(
     }
   });
 
+  // POST /api/checkout/stripe/create-session
+  // Body: { normalizedPlanId, countryCode, countryName, region, dataLabel, validityLabel, dataAmountGb, validityDays, email, userId?, userName? }
+  app.post("/api/checkout/stripe/create-session", async (req, res) => {
+    try {
+      const {
+        normalizedPlanId, countryCode, countryName, region,
+        dataLabel, validityLabel, dataAmountGb, validityDays,
+        email, userId, userName,
+      } = req.body;
+      if (!normalizedPlanId || !email || !countryCode) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+      const { createCountryPlanCheckoutSession } = await import('./services/stripeService');
+      const { url } = await createCountryPlanCheckoutSession({
+        normalizedPlanId,
+        countryCode,
+        countryName: countryName || countryCode,
+        region: region || countryCode,
+        dataLabel: dataLabel || '',
+        validityLabel: validityLabel || '',
+        dataAmountGb: parseFloat(dataAmountGb) || 0,
+        validityDays: parseInt(validityDays) || 0,
+        email,
+        userId: userId || undefined,
+        userName: userName || undefined,
+      });
+      res.json({ sessionUrl: url });
+    } catch (err: any) {
+      console.error("[stripe/create-session]", err.message);
+      res.status(500).json({ message: err.message || "Failed to create Stripe checkout" });
+    }
+  });
+
   // GET /api/checkout/plan-meta/:planId
   // Returns checkout metadata for a legacy plans-table plan, including normalizedPlanId lookup.
   app.get("/api/checkout/plan-meta/:planId", async (req, res) => {
@@ -463,6 +506,29 @@ export async function registerRoutes(
   app.get("/api/checkout/order/:orderId", async (req, res) => {
     try {
       const order = await storage.getOrder(req.params.orderId);
+      if (!order) return res.status(404).json({ message: "Order not found yet" });
+      res.json({
+        id: order.id,
+        status: order.status,
+        esimStatus: order.esimStatus,
+        qrCode: order.qrCode,
+        iccid: order.iccid,
+        email: order.email,
+        totalPrice: order.totalPrice,
+        currency: order.currency,
+        planId: order.planId,
+        providerEsimId: order.providerEsimId,
+      });
+    } catch {
+      res.status(500).json({ message: "Failed to look up order" });
+    }
+  });
+
+  // GET /api/checkout/order-by-session/:sessionId — look up order by Stripe checkout session ID
+  app.get("/api/checkout/order-by-session/:sessionId", async (req, res) => {
+    try {
+      const [order] = await db.select().from(orders)
+        .where(eq(orders.stripeCheckoutSessionId, req.params.sessionId));
       if (!order) return res.status(404).json({ message: "Order not found yet" });
       res.json({
         id: order.id,

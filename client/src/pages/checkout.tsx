@@ -40,6 +40,7 @@ interface PlanMeta {
 interface CheckoutConfig {
   paypal: { enabled: boolean; clientId: string; sandbox: boolean };
   paddle: { enabled: boolean; clientToken: string; sandbox: boolean };
+  stripe: { enabled: boolean; publishableKey: string };
 }
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -112,6 +113,7 @@ export default function Checkout() {
   const [paypalReady, setPaypalReady]     = useState(false);
   const [paypalError, setPaypalError]     = useState("");
   const [paddleLoading, setPaddleLoading] = useState(false);
+  const [stripeLoading, setStripeLoading] = useState(false);
   const paypalContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Data queries ──────────────────────────────────────────────────────────
@@ -262,6 +264,39 @@ export default function Checkout() {
     }
   };
 
+  // ── Stripe handler ────────────────────────────────────────────────────────
+
+  const handleStripe = async () => {
+    if (!plan) return;
+    setStripeLoading(true);
+    try {
+      const res = await fetch("/api/checkout/stripe/create-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          normalizedPlanId: plan.normalizedPlanId ?? plan.id,
+          countryCode: plan.countryCode,
+          countryName: plan.coverage || plan.countryCode,
+          region: plan.coverage || plan.countryCode,
+          dataLabel: plan.dataLabel,
+          validityLabel: plan.validityLabel,
+          dataAmountGb: plan.dataAmountGb,
+          validityDays: plan.validityDays,
+          email: resolvedEmail,
+          userId: user?.id,
+          userName: formData?.name || user?.name,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Stripe checkout failed");
+      window.location.href = data.sessionUrl;
+    } catch (err: any) {
+      toast({ title: "Checkout failed", description: err.message, variant: "destructive" });
+    } finally {
+      setStripeLoading(false);
+    }
+  };
+
   // ── Step handlers ─────────────────────────────────────────────────────────
 
   const onDetailsSubmit = (data: CheckoutFormData) => {
@@ -299,7 +334,8 @@ export default function Checkout() {
 
   const noProviders = checkoutConfig &&
     !checkoutConfig.paypal.enabled &&
-    !checkoutConfig.paddle.enabled;
+    !checkoutConfig.paddle.enabled &&
+    !checkoutConfig.stripe?.enabled;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -577,10 +613,48 @@ export default function Checkout() {
                     </div>
                   )}
 
+                  {/* Stripe — Card / Apple Pay / Google Pay */}
+                  {checkoutConfig?.stripe?.enabled && (
+                    <div>
+                      {checkoutConfig.paypal.enabled && (
+                        <div className="flex items-center gap-3 my-4">
+                          <div className="flex-1 h-px bg-border" />
+                          <span className="text-xs text-muted-foreground">or</span>
+                          <div className="flex-1 h-px bg-border" />
+                        </div>
+                      )}
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Pay with Card · Apple Pay · Google Pay</p>
+                      <Button
+                        className="w-full"
+                        size="lg"
+                        onClick={handleStripe}
+                        disabled={stripeLoading}
+                        data-testid="button-stripe-checkout"
+                      >
+                        {stripeLoading ? (
+                          <span className="flex items-center gap-2">
+                            <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            Redirecting…
+                          </span>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-2 mr-2">
+                              <SiVisa className="h-4 w-auto" />
+                              <SiMastercard className="h-4 w-auto" />
+                              <SiApplepay className="h-5 w-auto" />
+                              <SiGooglepay className="h-5 w-auto" />
+                            </div>
+                            Pay ${totalPriceUsd.toFixed(2)}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Paddle */}
                   {checkoutConfig?.paddle.enabled && (
                     <div>
-                      {checkoutConfig.paypal.enabled && (
+                      {(checkoutConfig.paypal.enabled || checkoutConfig.stripe?.enabled) && (
                         <div className="flex items-center gap-3 my-4">
                           <div className="flex-1 h-px bg-border" />
                           <span className="text-xs text-muted-foreground">or</span>
