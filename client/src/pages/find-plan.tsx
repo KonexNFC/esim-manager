@@ -41,6 +41,8 @@ interface RecommendResponse {
   country: string;
   tripDays: number;
   bucket: string;
+  requestedBucket: string;
+  isFallback: boolean;
   validityDays: number;
   recommended: RecommendedOffer | null;
   alternatives: RecommendedOffer[];
@@ -52,6 +54,7 @@ interface RecommendResponse {
 function bucketLabel(bucket: string): string {
   const map: Record<string, string> = {
     DAY_1: "1-Day", DAY_3: "3-Day", DAY_5: "5-Day", DAY_7: "7-Day",
+    DAY_14: "14-Day", DAY_30: "30-Day",
   };
   return map[bucket] ?? bucket;
 }
@@ -300,6 +303,11 @@ export default function FindPlan() {
               <p className="text-sm text-muted-foreground">
                 {bucketLabel(data.bucket)} coverage · showing {allCards.length} curated options
               </p>
+              {data.isFallback && (
+                <p className="mt-3 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-2 inline-block">
+                  No {bucketLabel(data.requestedBucket).toLowerCase()} plan available — showing the shortest available option ({bucketLabel(data.bucket)})
+                </p>
+              )}
             </div>
           )}
 

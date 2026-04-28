@@ -2033,15 +2033,20 @@ export async function registerRoutes(
 
         // Map trip duration → best-fit duration bucket
         function daysToBucket(d: number): string {
-          if (d <= 1) return "DAY_1";
-          if (d <= 3) return "DAY_3";
-          if (d <= 5) return "DAY_5";
-          return "DAY_7";
+          if (d <= 1)  return "DAY_1";
+          if (d <= 3)  return "DAY_3";
+          if (d <= 5)  return "DAY_5";
+          if (d <= 7)  return "DAY_7";
+          if (d <= 14) return "DAY_14";
+          return "DAY_30";
         }
 
         const BUCKET_VALIDITY: Record<string, number> = {
-          DAY_1: 1, DAY_3: 3, DAY_5: 5, DAY_7: 7,
+          DAY_1: 1, DAY_3: 3, DAY_5: 5, DAY_7: 7, DAY_14: 14, DAY_30: 30,
         };
+
+        // Ordered from shortest to longest — used for nearest-bucket fallback
+        const BUCKET_ORDER = ["DAY_1", "DAY_3", "DAY_5", "DAY_7", "DAY_14", "DAY_30"];
 
         const targetBucket = daysToBucket(days);
         const supplierPlans = await getDbSupplierPlans(country);
@@ -2051,18 +2056,31 @@ export async function registerRoutes(
           return res.status(404).json({ message: `No plans found for country: ${country}` });
         }
 
-        // Fall back to the closest available bucket if target isn't available
-        const resolvedBucket: string =
-          catalogue.availableDurations.includes(targetBucket as any)
-            ? targetBucket
-            : (catalogue.availableDurations[catalogue.availableDurations.length - 1] as string);
+        // Fall back to the nearest available bucket if the exact target isn't available.
+        // "Nearest" = the bucket with the smallest validity that is >= the requested duration.
+        // If none is >=, fall back to the longest available (better than nothing).
+        let resolvedBucket: string;
+        let isFallback = false;
+        if (catalogue.availableDurations.includes(targetBucket as any)) {
+          resolvedBucket = targetBucket;
+        } else {
+          isFallback = true;
+          const available = BUCKET_ORDER.filter(b =>
+            catalogue.availableDurations.includes(b as any)
+          );
+          const targetIdx = BUCKET_ORDER.indexOf(targetBucket);
+          // Find the smallest bucket that is >= the requested one
+          const nearest = available.find(b => BUCKET_ORDER.indexOf(b) >= targetIdx);
+          // If none found (all are shorter), pick the longest available
+          resolvedBucket = nearest ?? available[available.length - 1];
+        }
 
         const slot = (catalogue.durations as any)[resolvedBucket];
         if (!slot) {
           return res.status(404).json({ message: `No plans available for duration bucket: ${resolvedBucket}` });
         }
 
-        const validityDays = BUCKET_VALIDITY[resolvedBucket] ?? 3;
+        const validityDays = BUCKET_VALIDITY[resolvedBucket] ?? 1;
 
         function toUsd(gbp: number) {
           return Math.round((gbp / GBP_RATE) * 100) / 100;
@@ -2117,6 +2135,8 @@ export async function registerRoutes(
           country,
           tripDays: days,
           bucket: resolvedBucket,
+          requestedBucket: targetBucket,
+          isFallback,
           validityDays,
           recommended: rec,
           alternatives,
