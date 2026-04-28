@@ -175,6 +175,7 @@ export default function Checkout() {
         setPaypalError("");
 
         paypal.Buttons({
+          fundingSource: paypal.FUNDING?.PAYPAL ?? "paypal",
           style: { layout: "vertical", color: "blue", shape: "rect", label: "pay", height: 44 },
           createOrder: async () => {
             const fd = form.getValues();
