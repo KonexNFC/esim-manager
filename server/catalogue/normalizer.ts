@@ -121,6 +121,7 @@ export function normalizePlan(plan: SupplierPlan): NormalizedOffer | null {
 
   return {
     id: plan.id,
+    normalizedPlanId: plan.normalizedPlanId,
     countryCode: plan.countryCode,
     supplier: plan.supplier,
     bucket,

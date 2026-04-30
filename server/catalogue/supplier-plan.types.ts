@@ -68,6 +68,7 @@ export enum PlanStatus {
  */
 export interface SupplierPlan {
   id: string;
+  normalizedPlanId?: string;
   supplier: "breeze" | "esimgo" | "esimaccess" | "zendit" | "airalo";
   countryCode: string;          // ISO-3166-1 alpha-2
   validityDays: number;         // raw days from supplier
@@ -88,6 +89,7 @@ export interface SupplierPlan {
  */
 export interface NormalizedOffer {
   id: string;
+  normalizedPlanId?: string;
   countryCode: string;
   supplier: string;
   bucket: DurationBucket;

@@ -919,6 +919,7 @@ function AlternativePlanRow({
 
 interface PublicPlan {
   id: string;
+  normalizedPlanId?: string;
   bucket: string;
   offerType: string;
   dataGb: number | null;
@@ -1960,7 +1961,7 @@ function PublicCheckoutModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          normalizedPlanId: plan.id,
+          normalizedPlanId: plan.normalizedPlanId || plan.id,
           countryCode,
           countryName: plan.region || countryCode,
           region: plan.region || countryCode,

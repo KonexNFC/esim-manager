@@ -14,6 +14,7 @@ import { Category, PlanStatus, SupplierPlan } from "./supplier-plan.types";
 
 interface OfferRow {
   id: string;
+  normalized_plan_id: string;
   provider_key: string;
   region_code: string;
   validity_days: number;
@@ -39,6 +40,7 @@ export async function getDbSupplierPlans(
   const rows = await db.execute<OfferRow>(sql`
     SELECT
       po.id,
+      po.normalized_plan_id,
       po.provider_key,
       np.region_code,
       np.validity_days,
@@ -69,6 +71,7 @@ export async function getDbSupplierPlans(
     const dataMb = row.is_unlimited ? null : (row.data_mb ?? null);
     return {
       id: row.id,
+      normalizedPlanId: row.normalized_plan_id,
       supplier: mapProviderKey(row.provider_key),
       countryCode: code,
       validityDays: row.validity_days,
