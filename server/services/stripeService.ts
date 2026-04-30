@@ -242,7 +242,7 @@ export async function createPlanCheckoutSession(
 
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
-    automatic_payment_methods: { enabled: true },
+    payment_method_types: ['card'],
     line_items: lineItems,
     mode: 'payment',
     success_url: `${BASE_URL}/checkout-success?session_id={CHECKOUT_SESSION_ID}`,
@@ -317,7 +317,7 @@ export async function createCountryPlanCheckoutSession(
 
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
-    automatic_payment_methods: { enabled: true },
+    payment_method_types: ['card'],
     line_items: [
       {
         price_data: {
