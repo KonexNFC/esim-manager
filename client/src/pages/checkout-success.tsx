@@ -3,12 +3,14 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
   CheckCircle2, Mail, Smartphone, Wifi, ArrowRight,
-  Loader2, Clock, AlertCircle, RefreshCcw, QrCode,
+  Loader2, Clock, AlertCircle, RefreshCcw, QrCode, User, Lock, Eye, EyeOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
 import { EsimQrDisplay } from "@/components/EsimQrDisplay";
 
@@ -30,7 +32,148 @@ interface OrderData {
 // ─── Constants ────────────────────────────────────────
 
 const POLL_INTERVAL_MS = 2500;
-const POLL_MAX_ATTEMPTS = 20; // ~50 seconds max
+const POLL_MAX_ATTEMPTS = 20;
+
+// ─── Inline post-purchase account creation ────────────
+
+function InlineSignup({ email }: { email: string }) {
+  const { signup, user } = useAuth();
+  const [, navigate] = useLocation();
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  if (user || done) {
+    return (
+      <Card className="mb-6 p-5 border-green-500/30 bg-green-500/5">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-green-500/15 flex items-center justify-center flex-shrink-0">
+            <CheckCircle2 className="w-5 h-5 text-green-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm">Account created — you're all set!</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Your eSIM is now saved to your dashboard.</p>
+          </div>
+          <Link href="/dashboard">
+            <Button size="sm" data-testid="button-go-dashboard-inline">
+              Dashboard <ArrowRight className="w-3.5 h-3.5 ml-1" />
+            </Button>
+          </Link>
+        </div>
+      </Card>
+    );
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) { setError("Please enter your name."); return; }
+    if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
+    setError(null);
+    setLoading(true);
+    try {
+      await signup(name.trim(), email, password);
+      setDone(true);
+    } catch (err: any) {
+      const msg = err?.message ?? "";
+      if (msg.toLowerCase().includes("already")) {
+        setError("An account with this email already exists. Sign in instead.");
+      } else {
+        setError(msg || "Something went wrong. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card className="mb-6 p-5 border-primary/20 bg-primary/5">
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
+          <User className="w-4 h-4 text-primary" />
+        </div>
+        <div>
+          <p className="font-semibold text-sm leading-tight">Save your eSIM to an account</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Access your QR code and manage data from anywhere</p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <Label htmlFor="signup-email" className="text-xs text-muted-foreground mb-1 block">Email</Label>
+          <Input
+            id="signup-email"
+            value={email}
+            readOnly
+            className="bg-muted/60 text-muted-foreground text-sm h-9"
+            data-testid="input-signup-email"
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="signup-name" className="text-xs mb-1 block">Your name</Label>
+          <Input
+            id="signup-name"
+            placeholder="Full name"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            disabled={loading}
+            className="text-sm h-9"
+            data-testid="input-signup-name"
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="signup-password" className="text-xs mb-1 block">Create a password</Label>
+          <div className="relative">
+            <Input
+              id="signup-password"
+              type={showPassword ? "text" : "password"}
+              placeholder="At least 6 characters"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              disabled={loading}
+              className="text-sm h-9 pr-9"
+              data-testid="input-signup-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(v => !v)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              tabIndex={-1}
+              data-testid="button-toggle-password"
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-xs text-destructive" data-testid="text-signup-error">{error}</p>
+        )}
+
+        <Button
+          type="submit"
+          className="w-full h-9 text-sm"
+          disabled={loading}
+          data-testid="button-create-account-inline"
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+          {loading ? "Creating account…" : "Create account & save eSIM"}
+        </Button>
+      </form>
+
+      <p className="text-center text-xs text-muted-foreground mt-3">
+        Already have an account?{" "}
+        <Link href="/login" className="text-primary hover:underline" data-testid="link-login-inline">
+          Sign in
+        </Link>
+      </p>
+    </Card>
+  );
+}
 
 // ─── Main component ───────────────────────────────────
 
@@ -226,6 +369,9 @@ export default function CheckoutSuccess() {
         </Card>
       )}
 
+      {/* ── Inline account creation (guests only) ── */}
+      {email && !user && <InlineSignup email={email} />}
+
       {/* ── Payment summary ── */}
       {order && (
         <Card className="mb-6 p-5">
@@ -281,16 +427,10 @@ export default function CheckoutSuccess() {
           </Link>
         )}
 
-        {user ? (
+        {user && (
           <Link href="/dashboard">
             <Button variant="outline" className="w-full" data-testid="button-go-dashboard">
               Go to My Dashboard
-            </Button>
-          </Link>
-        ) : (
-          <Link href="/signup">
-            <Button variant="outline" className="w-full" data-testid="button-create-account">
-              Create an account to manage your eSIMs
             </Button>
           </Link>
         )}
