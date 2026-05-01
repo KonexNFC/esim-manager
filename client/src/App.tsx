@@ -27,6 +27,8 @@ import RefundPolicy from "@/pages/refund-policy";
 import Roadmap from "@/pages/roadmap";
 import FindPlan from "@/pages/find-plan";
 import NfcCard from "@/pages/nfc-card";
+import Events from "@/pages/events";
+import EventDetail from "@/pages/event-detail";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -52,6 +54,8 @@ function Router() {
       <Route path="/roadmap" component={Roadmap} />
       <Route path="/find-plan" component={FindPlan} />
       <Route path="/nfc-card" component={NfcCard} />
+      <Route path="/events" component={Events} />
+      <Route path="/events/:slug" component={EventDetail} />
       <Route component={NotFound} />
     </Switch>
   );

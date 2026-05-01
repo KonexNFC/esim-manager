@@ -1252,9 +1252,76 @@ function CompatibilitySection() {
 }
 
 // ─────────────────────────────────────────────
+// 10. GLOBAL EVENTS SECTION
+// ─────────────────────────────────────────────
+const EVENT_CATEGORIES = [
+  { slug: "trade-fairs",     emoji: "🏭", label: "Trade Fairs",        desc: "Canton Fair, GITEX, CES & more" },
+  { slug: "festivals",       emoji: "🎉", label: "Festivals & Carnivals", desc: "Rio, Oktoberfest, Glastonbury" },
+  { slug: "sports",          emoji: "🏆", label: "Sports Events",       desc: "F1, Wimbledon, Grand Prix" },
+  { slug: "fashion-culture", emoji: "👗", label: "Fashion & Culture",   desc: "Milan, Paris, London Fashion Week" },
+  { slug: "luxury",          emoji: "💎", label: "Luxury Events",       desc: "Art Basel, Monaco, Cannes" },
+  { slug: "business",        emoji: "💼", label: "Business Travel",     desc: "Hannover Messe, Maison & Objet" },
+];
+
+function GlobalEventsSection() {
+  return (
+    <section className="py-16 sm:py-20 bg-white border-t border-border/50">
+      <div className="max-w-6xl mx-auto px-4">
+        <Reveal>
+          <div className="text-center mb-10">
+            <Badge className="mb-3 bg-primary/10 text-primary border-primary/20 hover:bg-primary/15">
+              🌍 Travel by Event
+            </Badge>
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight mb-3">
+              Stay Connected at the World's Biggest Events
+            </h2>
+            <p className="text-muted-foreground text-base sm:text-lg max-w-2xl mx-auto">
+              From Canton Fair to Rio Carnival, KONEX gives travellers instant data before they land.
+            </p>
+          </div>
+        </Reveal>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-8">
+          {EVENT_CATEGORIES.map((cat, i) => (
+            <Reveal key={cat.slug} delay={Math.min(i + 1, 4) as 1 | 2 | 3 | 4}>
+              <Link href={`/events?category=${cat.slug}`} data-testid={`event-category-${cat.slug}`}>
+                <div className="group flex flex-col gap-2 p-4 sm:p-5 bg-white border border-border rounded-2xl hover:border-primary/40 hover:shadow-md transition-all cursor-pointer h-full">
+                  <span className="text-2xl sm:text-3xl">{cat.emoji}</span>
+                  <p className="font-semibold text-sm sm:text-base leading-tight group-hover:text-primary transition-colors">
+                    {cat.label}
+                  </p>
+                  <p className="text-xs text-muted-foreground leading-relaxed hidden sm:block">
+                    {cat.desc}
+                  </p>
+                  <div className="flex items-center gap-1 text-xs text-primary font-medium mt-auto pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    Browse <ArrowRight className="w-3 h-3" />
+                  </div>
+                </div>
+              </Link>
+            </Reveal>
+          ))}
+        </div>
+
+        <Reveal>
+          <div className="text-center">
+            <Link href="/events">
+              <Button size="lg" className="rounded-xl font-semibold px-8" data-testid="button-browse-all-events">
+                Browse All Events
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+            </Link>
+            <p className="mt-3 text-sm text-muted-foreground">
+              40+ global events · trade fairs · festivals · sports · luxury travel
+            </p>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
 
 // ─────────────────────────────────────────────
-// 10. TESTIMONIALS
+// 11. TESTIMONIALS
 // ─────────────────────────────────────────────
 function TestimonialsSection() {
   const testimonials = [
@@ -1658,6 +1725,7 @@ export default function Home() {
       <HeroSection />
       <Reveal><HowItWorks /></Reveal>
       <Reveal><PopularDestinations /></Reveal>
+      <GlobalEventsSection />
       <Reveal><TestimonialsSection /></Reveal>
       <Reveal><WhyKonex /></Reveal>
       <Reveal><WorldCoverageSection /></Reveal>
