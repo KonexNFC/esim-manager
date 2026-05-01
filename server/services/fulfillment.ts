@@ -514,6 +514,12 @@ export async function fulfillInitialPurchase(
       iccid: result.iccid,
       destination: planData.destination,
       manualCode: result.manualCode,
+      planName: planData.name,
+      dataAmount: planData.dataAmount,
+      validity: planData.validity,
+      totalPrice: order.totalPrice,
+      currency: order.currency,
+      paymentMethod: order.paypalOrderId ? 'PayPal' : 'Card',
     }).catch(console.error);
 
     console.log(`[Fulfillment] ✓ Order ${orderId} fulfilled via ${resolvedProviderKey} — ICCID: ${result.iccid}`);
