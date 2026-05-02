@@ -1,5 +1,6 @@
 import { useRoute, Link, useLocation } from "wouter";
 import { SiVisa, SiMastercard, SiApplepay, SiGooglepay, SiPaypal } from "react-icons/si";
+import { useCurrency } from "@/lib/currency";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -152,6 +153,7 @@ export default function Checkout() {
 
   // ── Derived values ────────────────────────────────────────────────────────
 
+  const { fmt, isApprox, currency } = useCurrency();
   const upsellPrice  = upsellOptions.find(u => u.id === selectedUpsell)?.price ?? 0;
   const totalPriceUsd = plan ? parseFloat((plan.priceUsd + upsellPrice).toFixed(2)) : 0;
   const resolvedEmail = formData?.email ?? "";
@@ -544,7 +546,7 @@ export default function Checkout() {
                       <span className="font-bold text-sm">{opt.label}</span>
                     </div>
                     <p className="text-xs text-muted-foreground mb-2">{opt.desc}</p>
-                    <p className="font-semibold text-sm">+${opt.price}</p>
+                    <p className="font-semibold text-sm">+{isApprox ? "≈ " : ""}{fmt(opt.price)}</p>
                   </button>
                 ))}
               </div>
@@ -557,7 +559,7 @@ export default function Checkout() {
                       {upsellOptions.find(u => u.id === selectedUpsell)?.label} added
                     </span>
                   </div>
-                  <span className="text-sm font-bold">+${upsellPrice}</span>
+                  <span className="text-sm font-bold">+{isApprox ? "≈ " : ""}{fmt(upsellPrice)}</span>
                 </div>
               )}
 
@@ -569,14 +571,14 @@ export default function Checkout() {
                   data-testid="button-complete-purchase"
                 >
                   <Lock className="w-4 h-4 mr-2" />
-                  Continue to Payment — ${totalPriceUsd.toFixed(2)}
+                  Continue to Payment — {isApprox ? "≈ " : ""}{fmt(totalPriceUsd)}
                 </Button>
                 <button
                   onClick={() => { setSelectedUpsell(null); proceedToPay(); }}
                   className="w-full text-center text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
                   data-testid="button-skip-upsell"
                 >
-                  No thanks, pay ${plan.priceUsd.toFixed(2)} only
+                  No thanks, pay {isApprox ? "≈ " : ""}{fmt(plan.priceUsd)} only
                 </button>
               </div>
             </Card>
@@ -624,7 +626,7 @@ export default function Checkout() {
                               <SiApplepay className="h-5 w-auto" />
                               <SiGooglepay className="h-5 w-auto" />
                             </div>
-                            Pay ${totalPriceUsd.toFixed(2)}
+                            Pay {isApprox ? "≈ " : ""}{fmt(totalPriceUsd)}
                           </>
                         )}
                       </Button>
@@ -679,7 +681,7 @@ export default function Checkout() {
                         ) : (
                           <>
                             <Lock className="w-4 h-4 mr-2" />
-                            Pay ${totalPriceUsd.toFixed(2)} via Paddle
+                            Pay {isApprox ? "≈ " : ""}{fmt(totalPriceUsd)} via Paddle
                           </>
                         )}
                       </Button>
@@ -752,20 +754,31 @@ export default function Checkout() {
             <div className="space-y-2 mb-4">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Base plan</span>
-                <span>${plan.priceUsd.toFixed(2)}</span>
+                <span>{isApprox ? "≈ " : ""}{fmt(plan.priceUsd)}</span>
               </div>
               {selectedUpsell && (
                 <div className="flex items-center justify-between text-sm" data-testid="text-upsell-line">
                   <span className="text-muted-foreground">{upsellOptions.find(u => u.id === selectedUpsell)?.label}</span>
-                  <span>+${upsellPrice.toFixed(2)}</span>
+                  <span>+{isApprox ? "≈ " : ""}{fmt(upsellPrice)}</span>
                 </div>
               )}
             </div>
 
-            <div className="flex items-center justify-between mb-5 pt-2 border-t">
+            <div className="flex items-center justify-between mb-2 pt-2 border-t">
               <span className="font-semibold">Total</span>
-              <span className="text-xl font-bold" data-testid="text-total-price">${totalPriceUsd.toFixed(2)}</span>
+              <div className="text-right">
+                <span className="text-xl font-bold" data-testid="text-total-price">{isApprox ? "≈ " : ""}{fmt(totalPriceUsd)}</span>
+                {isApprox && (
+                  <p className="text-[11px] text-muted-foreground">${totalPriceUsd.toFixed(2)} USD</p>
+                )}
+              </div>
             </div>
+            {isApprox && (
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1 mb-4">
+                <Lock className="w-3 h-3 flex-shrink-0" />
+                Checkout is processed in USD · {currency.code} shown for reference
+              </p>
+            )}
 
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">What happens next</p>

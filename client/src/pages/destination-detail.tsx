@@ -311,19 +311,22 @@ function CheckoutModal({
 
   const checkout = useMutation({
     mutationFn: () =>
-      apiRequest("POST", "/api/checkout/country-plan", {
+      apiRequest("POST", "/api/checkout/stripe/create-session", {
         normalizedPlanId: plan.normalizedPlanId,
         countryCode,
+        countryName: countryCode,
+        region: countryCode,
         dataLabel: plan.dataLabel,
         validityLabel: plan.validityLabel,
         dataAmountGb: plan.dataAmountGb,
         validityDays: plan.validityDays,
         email: me?.email || email,
-        name: me?.name,
+        userId: me?.id,
+        userName: me?.name,
       }),
     onSuccess: async (res: any) => {
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
+      if (data.sessionUrl) window.location.href = data.sessionUrl;
     },
     onError: (err: any) => {
       toast({ title: "Checkout failed", description: err.message, variant: "destructive" });
@@ -1569,7 +1572,7 @@ function TravelPlansFlow({
                   {isApprox ? "≈ " : ""}{fmt(recommended.sellPriceGbp * GBP_TO_USD)}
                 </p>
                 {isApprox && (
-                  <p className="text-[11px] text-muted-foreground">£{recommended.sellPriceGbp.toFixed(2)} GBP</p>
+                  <p className="text-[11px] text-muted-foreground">${(recommended.sellPriceGbp * GBP_TO_USD).toFixed(2)} USD</p>
                 )}
               </div>
             </div>
@@ -2020,7 +2023,7 @@ function PublicCheckoutModal({
                 {isApprox ? "≈ " : ""}{fmt(priceUsd)}
               </span>
               {isApprox && (
-                <p className="text-[11px] text-muted-foreground">£{plan.sellPriceGbp.toFixed(2)} GBP</p>
+                <p className="text-[11px] text-muted-foreground">${priceUsd.toFixed(2)} USD</p>
               )}
             </div>
           </div>
