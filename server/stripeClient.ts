@@ -18,9 +18,13 @@ async function fetchStripeConnection(hostname: string, xReplitToken: string, env
 }
 
 async function getCredentials() {
-  // Prefer explicit environment variable keys (live/production keys)
-  if (process.env.STRIPE_SECRET_KEY) {
-    const secretKey = process.env.STRIPE_SECRET_KEY;
+  // STRIPE_LIVE_SECRET_KEY takes priority — use this in production to avoid
+  // conflicts with the Replit Stripe integration that owns STRIPE_SECRET_KEY.
+  const secretKey =
+    process.env.STRIPE_LIVE_SECRET_KEY ||
+    process.env.STRIPE_SECRET_KEY;
+
+  if (secretKey) {
     const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY || '';
     const isLive = secretKey.startsWith('sk_live_');
     console.log(`[Stripe] Using env var keys (${isLive ? 'live' : 'test'} mode)`);
