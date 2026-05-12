@@ -166,7 +166,7 @@ export default function FindPlan() {
       isRecommended: true,
       savings: savingsPct ? `Save ${savingsPct}% vs Premium` : undefined,
       ctaLabel: "Get This Plan",
-      onSelect: () => navigate(`/destinations/${countryCode?.toLowerCase()}?bucket=${data?.bucket ?? "DAY_3"}`),
+      onSelect: () => navigate(`/destinations/${countryCode?.toLowerCase()}?bucket=${data?.bucket ?? "DAY_3"}&plan=${o.id}`),
     });
   }
 
@@ -189,7 +189,7 @@ export default function FindPlan() {
       isRecommended: false,
       savings: savingsPct ? `Save ${savingsPct}% vs Best Value` : undefined,
       ctaLabel: o.role === "CHEAPER" ? "Choose Budget Plan" : "Go Premium",
-      onSelect: () => navigate(`/destinations/${countryCode?.toLowerCase()}?bucket=${data?.bucket ?? "DAY_3"}`),
+      onSelect: () => navigate(`/destinations/${countryCode?.toLowerCase()}?bucket=${o.bucket ?? data?.bucket ?? "DAY_3"}&plan=${o.id}`),
     });
   }
 

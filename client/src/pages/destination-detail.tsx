@@ -1688,9 +1688,11 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
   const [checkoutPlan, setCheckoutPlan] = useState<PublicPlan | null>(null);
   const code = countryCode.toUpperCase();
 
-  const urlBucket = typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("bucket") ?? undefined
-    : undefined;
+  const urlParams = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search)
+    : new URLSearchParams();
+  const urlBucket = urlParams.get("bucket") ?? undefined;
+  const urlPlan   = urlParams.get("plan")   ?? undefined;
 
   const { data: meta, isLoading: metaLoading } = useQuery<CountryMeta>({
     queryKey: ["/api/countries", code],
@@ -1717,6 +1719,24 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
       document.title = "Konex eSIM | Instant Data Plans for 205+ Countries";
     }
   }, [meta?.name]);
+
+  // Auto-open checkout when a specific plan ID is passed via ?plan=<id>
+  useEffect(() => {
+    if (!urlPlan || !publicPlans) return;
+    for (const dur of Object.values(publicPlans.durations)) {
+      const candidates = [
+        dur.recommended,
+        dur.cheaper,
+        dur.premium,
+        ...(dur.browseAll ?? []),
+      ].filter(Boolean) as PublicPlan[];
+      const found = candidates.find(p => p.id === urlPlan);
+      if (found) {
+        setCheckoutPlan(found);
+        break;
+      }
+    }
+  }, [publicPlans, urlPlan]);
 
   const isLoading = metaLoading || plansLoading;
   if (isLoading) return <LoadingSkeleton />;
