@@ -435,7 +435,7 @@ export async function registerRoutes(
       const {
         normalizedPlanId, countryCode, countryName, region,
         dataLabel, validityLabel, dataAmountGb, validityDays,
-        email, userId, userName,
+        email, userId, userName, sellPriceGbp,
       } = req.body;
       if (!normalizedPlanId || !email || !countryCode) {
         return res.status(400).json({ message: "Missing required fields" });
@@ -453,6 +453,7 @@ export async function registerRoutes(
         email,
         userId: userId || undefined,
         userName: userName || undefined,
+        sellPriceGbp: sellPriceGbp ? parseFloat(sellPriceGbp) : undefined,
       });
       res.json({ sessionUrl: url });
     } catch (err: any) {

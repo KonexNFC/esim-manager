@@ -280,6 +280,7 @@ export interface CountryPlanCheckoutParams {
   email: string;
   userId?: string;
   userName?: string;
+  sellPriceGbp?: number; // catalogue-computed price; if provided, charged directly in GBP
 }
 
 export async function createCountryPlanCheckoutSession(
@@ -292,19 +293,11 @@ export async function createCountryPlanCheckoutSession(
   const [np] = await db.select().from(normalizedPlans).where(eq(normalizedPlans.id, params.normalizedPlanId));
   if (!np) throw new Error(`Normalized plan ${params.normalizedPlanId} not found`);
 
-  // Run routing engine to get best provider + compute price
-  const [routing, targetMargin] = await Promise.all([
+  // Run routing engine for provider selection (fulfillment), not for pricing
+  const [routing] = await Promise.all([
     selectBestProviderForPlan(np.id, 'blended_score'),
-    getTargetMarginPercent(),
   ]);
   const winner = routing.fallbackChain[0];
-  const minimumMarginPercent = Math.round(targetMargin * 100);
-  const pricing = calculateRetailPrice(winner.wholesalePriceUsd, {
-    markupPercent: Math.round(minimumMarginPercent * 1.2),
-    minimumMarginPercent,
-    charmPricing: true,
-    floorPriceUsd: 0.99,
-  });
 
   const compactChain: FallbackEntry[] = routing.fallbackChain.map(p => ({
     r: p.rank,
@@ -312,6 +305,21 @@ export async function createCountryPlanCheckoutSession(
     c: p.providerPlanCode,
     w: p.wholesalePriceUsd,
   }));
+
+  // Use the catalogue-computed GBP price passed from the frontend.
+  // This guarantees Stripe charges exactly what was displayed to the user.
+  // Fall back to np.retailPriceUsd (stored during catalogue sync) if not provided.
+  const chargeInGbp = params.sellPriceGbp != null && params.sellPriceGbp > 0;
+  const chargeCurrency = chargeInGbp ? 'gbp' : 'usd';
+  const chargeAmount   = chargeInGbp
+    ? Math.round(params.sellPriceGbp! * 100)
+    : Math.round(np.retailPriceUsd * 100);
+
+  console.log(
+    `[Stripe] createCountryPlanCheckoutSession: plan=${np.id}` +
+    ` charge=${chargeCurrency.toUpperCase()} ${(chargeAmount / 100).toFixed(2)}` +
+    ` provider=${routing.selectedProviderKey}`,
+  );
 
   const productName = `${params.countryName} eSIM — ${params.dataLabel} · ${params.validityLabel}`;
 
@@ -321,8 +329,8 @@ export async function createCountryPlanCheckoutSession(
     line_items: [
       {
         price_data: {
-          currency: 'usd',
-          unit_amount: Math.round(pricing.retailPriceUsd * 100),
+          currency: chargeCurrency,
+          unit_amount: chargeAmount,
           product_data: {
             name: productName,
             description: `Konex eSIM plan for ${params.countryName}. ${params.dataLabel} data valid for ${params.validityLabel}.`,

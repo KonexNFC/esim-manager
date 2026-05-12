@@ -1995,6 +1995,7 @@ function PublicCheckoutModal({
           email: resolvedEmail,
           userId: me?.id,
           userName: me?.name,
+          sellPriceGbp: plan.sellPriceGbp,
         }),
       });
       const data = await res.json();
@@ -2040,16 +2041,16 @@ function PublicCheckoutModal({
             <span className="text-muted-foreground">Total</span>
             <div className="text-right">
               <span className="font-bold text-lg" data-testid="text-checkout-price">
-                {isApprox ? "≈ " : ""}{fmt(priceUsd)}
+                £{plan.sellPriceGbp.toFixed(2)}
               </span>
               {isApprox && (
-                <p className="text-[11px] text-muted-foreground">${priceUsd.toFixed(2)} USD</p>
+                <p className="text-[11px] text-muted-foreground">≈ {fmt(priceUsd)} {currency.code}</p>
               )}
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
             <Lock className="w-3 h-3" />
-            {isApprox ? `Processed in USD · ${currency.code} shown for reference` : "Price in USD"}
+            {isApprox ? `Charged in GBP · ${currency.code} shown for reference` : "Charged in GBP"}
           </p>
         </div>
 
@@ -2123,7 +2124,7 @@ function PublicCheckoutModal({
                           Redirecting…
                         </span>
                       ) : (
-                        <>Pay {isApprox ? "≈ " : ""}{fmt(priceUsd)}</>
+                        <>Pay £{plan.sellPriceGbp.toFixed(2)}</>
                       )}
                     </Button>
                   </div>
