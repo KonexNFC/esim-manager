@@ -365,7 +365,9 @@ export async function createCountryPlanCheckoutSession(
       selectedProviderPlanCode: routing.selectedProviderPlanCode,
       fallbackChainJson: chainJson(compactChain),
       wholesaleCostUsd: winner.wholesalePriceUsd.toFixed(4),
-      marginPercent: pricing.marginPercent.toFixed(2),
+      marginPercent: chargeAmount > 0
+        ? (((chargeAmount / 100) - winner.wholesalePriceUsd) / (chargeAmount / 100) * 100).toFixed(2)
+        : '0',
       confidenceScore: String(routing.confidenceScore),
       confidenceLabel: routing.confidenceLabel,
     },
