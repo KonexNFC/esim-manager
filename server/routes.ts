@@ -1839,6 +1839,136 @@ export async function registerRoutes(
     }
   });
 
+  // POST /api/admin/orders/:id/inject-esim
+  // Manually record eSIM credentials for an order that was provisioned by the provider
+  // but not captured by the system (e.g. due to a timeout after a successful API call).
+  // Updates the order to fulfilled, creates the esims record, and sends the eSIM email.
+  app.post("/api/admin/orders/:id/inject-esim", requireAdmin, async (req, res) => {
+    const orderId = req.params.id;
+    try {
+      const { iccid, qrCodeUrl, lpaUri, providerEsimId, providerName } = req.body as {
+        iccid: string;
+        qrCodeUrl: string;
+        lpaUri?: string;
+        providerEsimId?: string;
+        providerName?: string;
+      };
+
+      if (!iccid || !qrCodeUrl) {
+        return res.status(400).json({ message: "iccid and qrCodeUrl are required" });
+      }
+
+      const { db } = await import("./storage");
+      const { orders, esims, users, normalizedPlans } = await import("@shared/schema");
+      const { eq, sql } = await import("drizzle-orm");
+
+      const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+      if (!order) return res.status(404).json({ message: "Order not found" });
+      if (order.status === "fulfilled") {
+        return res.status(409).json({ message: "Order is already fulfilled — use resend-esim instead" });
+      }
+
+      const user = order.userId
+        ? (await db.select().from(users).where(eq(users.id, order.userId)))[0]
+        : null;
+
+      // Resolve plan metadata for display and email
+      let planName = "eSIM Plan";
+      let destination = "";
+      let dataAmount = "";
+      let validity = "";
+      let validityDays = 1;
+
+      if (order.normalizedPlanId) {
+        const planRows = await db.execute<{
+          name: string; region_code: string; data_mb: number | null;
+          is_unlimited: boolean; validity_days: number;
+        }>(sql`
+          SELECT np.name, np.region_code, np.data_mb, np.is_unlimited, np.validity_days
+          FROM normalized_plans np
+          WHERE np.id = ${order.normalizedPlanId}
+          UNION ALL
+          SELECT np.name, np.region_code, np.data_mb, np.is_unlimited, np.validity_days
+          FROM provider_offers po
+          JOIN normalized_plans np ON np.id = po.normalized_plan_id
+          WHERE po.id = ${order.normalizedPlanId}
+          LIMIT 1
+        `);
+        const p = planRows.rows[0];
+        if (p) {
+          planName = p.name;
+          destination = p.region_code;
+          validityDays = p.validity_days;
+          validity = `${p.validity_days} Day${p.validity_days !== 1 ? "s" : ""}`;
+          const gbVal = p.is_unlimited ? null : (p.data_mb ?? 0) / 1024;
+          dataAmount = p.is_unlimited ? "Unlimited" :
+            (gbVal && gbVal >= 1) ? `${gbVal.toFixed(1)} GB` : `${p.data_mb ?? 0} MB`;
+        }
+      }
+
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + validityDays);
+      const resolvedProvider = providerName || "esimaccess";
+
+      // Mark order fulfilled and record eSIM credentials
+      await db.update(orders).set({
+        status: "fulfilled",
+        esimStatus: "issued",
+        qrCode: qrCodeUrl,
+        iccid,
+        providerName: resolvedProvider,
+        providerEsimId: providerEsimId ?? undefined,
+        activationDate: new Date(),
+        expiresAt,
+        lastSyncedAt: new Date(),
+      }).where(eq(orders.id, orderId));
+
+      const [esimRecord] = await db.insert(esims).values({
+        userId: order.userId ?? undefined,
+        orderId: order.id,
+        planId: order.planId ?? undefined,
+        providerName: resolvedProvider,
+        providerEsimId: providerEsimId ?? undefined,
+        providerIccid: iccid,
+        providerReference: lpaUri ?? undefined,
+        qrCodeUrl,
+        manualCode: lpaUri ?? undefined,
+        destination,
+        region: "",
+        planName,
+        activationStatus: "issued",
+        validityDays,
+        daysRemaining: validityDays,
+        expiresAt,
+        lastSyncedAt: new Date(),
+      }).returning();
+
+      // Send the eSIM ready email to the customer
+      const { sendEsimReadyEmail } = await import("./services/notifications");
+      await sendEsimReadyEmail({
+        email: order.email,
+        name: user?.name,
+        orderId,
+        qrCodeUrl,
+        iccid,
+        destination,
+        manualCode: lpaUri,
+        planName,
+        dataAmount,
+        validity,
+        totalPrice: order.totalPrice,
+        currency: order.currency,
+        paymentMethod: order.paypalOrderId ? "PayPal" : "Card",
+      });
+
+      console.log(`[Admin] Injected eSIM for order ${orderId}: iccid=${iccid}, esimId=${esimRecord?.id}`);
+      res.json({ message: "eSIM injected and email sent", orderId, iccid, esimId: esimRecord?.id });
+    } catch (err: any) {
+      console.error("/api/admin/orders/:id/inject-esim error:", err.message);
+      res.status(500).json({ message: err.message || "Failed to inject eSIM" });
+    }
+  });
+
   // GET /api/admin/orders/:id/available-plans
   // Returns active non-paused provider offers for the order's country,
   // so the admin can pick an alternative plan for manual re-fulfillment.

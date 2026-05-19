@@ -1154,6 +1154,41 @@ function OrdersTab() {
 
   const [refulfillPending, setRefulfillPending] = useState<Record<string, boolean>>({});
 
+  // ── Inject eSIM dialog state ───────────────────────────────────────────────
+  const [injectDialog, setInjectDialog] = useState<{ orderId: string; email: string } | null>(null);
+  const [injectForm, setInjectForm] = useState({ iccid: "", qrCodeUrl: "", lpaUri: "", providerEsimId: "" });
+  const [injectPending, setInjectPending] = useState(false);
+
+  const submitInjectEsim = async () => {
+    if (!injectDialog) return;
+    if (!injectForm.iccid.trim() || !injectForm.qrCodeUrl.trim()) {
+      toast({ title: "ICCID and QR Code URL are required", variant: "destructive" });
+      return;
+    }
+    setInjectPending(true);
+    try {
+      const res = await apiRequest("POST", `/api/admin/orders/${injectDialog.orderId}/inject-esim`, {
+        iccid: injectForm.iccid.trim(),
+        qrCodeUrl: injectForm.qrCodeUrl.trim(),
+        lpaUri: injectForm.lpaUri.trim() || undefined,
+        providerEsimId: injectForm.providerEsimId.trim() || undefined,
+        providerName: "esimaccess",
+      });
+      const data = await res.json();
+      toast({ title: "eSIM injected", description: `Order fulfilled and email sent to ${injectDialog.email}` });
+      setInjectDialog(null);
+      setInjectForm({ iccid: "", qrCodeUrl: "", lpaUri: "", providerEsimId: "" });
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+      }, 1000);
+    } catch (err: any) {
+      toast({ title: "Inject failed", description: err.message, variant: "destructive" });
+    } finally {
+      setInjectPending(false);
+    }
+  };
+
   // ── Plan override dialog state ─────────────────────────────────────────────
   const [overrideDialog, setOverrideDialog] = useState<{ orderId: string; email: string } | null>(null);
   const [availablePlans, setAvailablePlans] = useState<any[]>([]);
@@ -1481,6 +1516,14 @@ function OrdersTab() {
                         <Wand2 className="w-3 h-3 mr-1.5" />
                         Pick alternative plan…
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                          setInjectDialog({ orderId: order.id, email: order.email });
+                          setInjectForm({ iccid: "", qrCodeUrl: "", lpaUri: "", providerEsimId: "" });
+                        }}
+                        className="text-blue-700 dark:text-blue-400 font-medium">
+                        <Send className="w-3 h-3 mr-1.5" />
+                        Inject eSIM credentials…
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => refulfillOrder(order.id, "esimgo")}>
                         Force via eSIMGo
@@ -1514,6 +1557,82 @@ function OrdersTab() {
         </Card>
         );
       })}
+
+      {/* ── Inject eSIM credentials dialog ───────────────────────────────── */}
+      <Dialog open={!!injectDialog} onOpenChange={open => { if (!open) setInjectDialog(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="w-4 h-4 text-blue-500" />
+              Inject eSIM credentials
+            </DialogTitle>
+            <DialogDescription>
+              The eSIM was provisioned by the provider but our system didn't record it. Paste the credentials from the provider dashboard to mark the order fulfilled and send the customer their QR code.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">ICCID <span className="text-red-500">*</span></label>
+              <Input
+                placeholder="894801001010908290"
+                value={injectForm.iccid}
+                onChange={e => setInjectForm(f => ({ ...f, iccid: e.target.value }))}
+                data-testid="input-inject-iccid"
+                className="font-mono text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">QR Code URL <span className="text-red-500">*</span></label>
+              <Input
+                placeholder="https://p.qrsim.net/..."
+                value={injectForm.qrCodeUrl}
+                onChange={e => setInjectForm(f => ({ ...f, qrCodeUrl: e.target.value }))}
+                data-testid="input-inject-qr-url"
+                className="text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">LPA URI / Activation Code <span className="text-muted-foreground font-normal">(optional but recommended)</span></label>
+              <Input
+                placeholder="LPA:1$rsp-eu.simlessly.com$55C585E0E667..."
+                value={injectForm.lpaUri}
+                onChange={e => setInjectForm(f => ({ ...f, lpaUri: e.target.value }))}
+                data-testid="input-inject-lpa"
+                className="font-mono text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Provider eSIM Transaction No <span className="text-muted-foreground font-normal">(optional)</span></label>
+              <Input
+                placeholder="26051906480018"
+                value={injectForm.providerEsimId}
+                onChange={e => setInjectForm(f => ({ ...f, providerEsimId: e.target.value }))}
+                data-testid="input-inject-provider-id"
+                className="font-mono text-sm"
+              />
+            </div>
+          </div>
+          {injectDialog && (
+            <div className="pt-2 border-t">
+              <p className="text-xs text-muted-foreground mb-3">
+                This will mark the order as fulfilled and send the eSIM QR code to <span className="font-medium">{injectDialog.email}</span>.
+              </p>
+              <Button
+                className="w-full"
+                data-testid="button-confirm-inject-esim"
+                disabled={injectPending || !injectForm.iccid.trim() || !injectForm.qrCodeUrl.trim()}
+                onClick={submitInjectEsim}
+              >
+                {injectPending ? (
+                  <><RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />Injecting…</>
+                ) : (
+                  <><Send className="w-3.5 h-3.5 mr-1.5" />Inject & send QR to customer</>
+                )}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ── Plan override dialog ─────────────────────────────────────────── */}
       <Dialog open={!!overrideDialog} onOpenChange={open => { if (!open) setOverrideDialog(null); }}>
