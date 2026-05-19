@@ -39,7 +39,8 @@ export function getProviderAdapterByKey(key: string): ProviderAdapter | null {
   if (norm === 'zendit') {
     const zKey = process.env.ZENDIT_API_KEY;
     if (!zKey) { console.warn(`[Provider] getProviderAdapterByKey: ZENDIT_API_KEY missing`); return null; }
-    const zEnv = (process.env.ZENDIT_ENV ?? '').toLowerCase() === 'production' ? 'production' : 'test';
+    // Default to production — only use test API when ZENDIT_ENV is explicitly set to 'test'
+    const zEnv = (process.env.ZENDIT_ENV ?? '').toLowerCase() === 'test' ? 'test' : 'production';
     return new ZenditAdapter(zKey, zEnv);
   }
 

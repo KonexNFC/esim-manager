@@ -458,7 +458,15 @@ export async function registerRoutes(
       res.json({ sessionUrl: url });
     } catch (err: any) {
       console.error("[stripe/create-session]", err.message);
-      res.status(500).json({ message: err.message || "Failed to create Stripe checkout" });
+      const msg = err.message || "Failed to create Stripe checkout";
+      // No providers available for this plan — return 400 (not 500) with a helpful message
+      if (msg.includes('No enabled active offers') || msg.includes('no candidates')) {
+        return res.status(400).json({
+          message: "This plan is not currently available. Please choose a different plan.",
+          code: "NO_PROVIDERS",
+        });
+      }
+      res.status(500).json({ message: msg });
     }
   });
 

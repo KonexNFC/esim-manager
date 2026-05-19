@@ -73,8 +73,9 @@ export class ZenditProvider implements EsimProvider {
 
   constructor() {
     this.apiKey = process.env.ZENDIT_API_KEY;
-    const isProduction = (process.env.ZENDIT_ENV ?? "").toLowerCase() === "production";
-    const host = isProduction ? "api.zendit.io" : "test-api.zendit.io";
+    // Default to production — only use test API when ZENDIT_ENV is explicitly set to 'test'
+    const isTest = (process.env.ZENDIT_ENV ?? "").toLowerCase() === "test";
+    const host = isTest ? "test-api.zendit.io" : "api.zendit.io";
     this.baseUrl = `https://${host}/v1`;
   }
 
