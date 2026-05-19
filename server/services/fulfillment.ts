@@ -235,7 +235,14 @@ export async function fulfillInitialPurchase(
   let dynamicFallbackChain: FallbackEntry[] | null = null;
 
   if (!planData && order.normalizedPlanId) {
-    // New checkout flow: normalizedPlanId = provider_offers.id
+    // Resolve plan data via two paths:
+    //   Path A: normalizedPlanId is a provider_offers.id (old checkout flow)
+    //   Path B: normalizedPlanId is a normalized_plans.id (new checkout flow — Stripe stores np.id)
+    // Both paths resolve to a normalized_plan_id so we can build the dynamic chain after.
+
+    let resolvedNormalizedPlanId: string | null = null;
+
+    // ── Path A: try provider_offers lookup first ──────────────────────────────
     const offerRows = await db.execute<{
       id: string; provider_key: string; provider_plan_code: string;
       region_code: string; validity_days: number; data_mb: number | null;
@@ -268,24 +275,48 @@ export async function fulfillInitialPurchase(
         dataAmount: dataAmountLabel,
         validity: validityLabel,
       };
+      resolvedNormalizedPlanId = offer.normalized_plan_id;
+    } else {
+      // ── Path B: normalizedPlanId is a normalized_plans.id (new checkout) ──
+      const [np] = await db.select().from(normalizedPlans).where(eq(normalizedPlans.id, order.normalizedPlanId));
+      if (np) {
+        const dataAmountGb = np.isUnlimited ? 0 : np.dataMb / 1024;
+        const dataAmountLabel = np.isUnlimited ? 'Unlimited' : dataAmountGb >= 1 ? `${Math.round(dataAmountGb * 10) / 10} GB` : `${np.dataMb} MB`;
+        const validityLabel = `${np.validityDays} Day${np.validityDays !== 1 ? 's' : ''}`;
+        planData = {
+          countryCode: np.regionCode,
+          dataAmountGb,
+          validityDays: np.validityDays,
+          providerRef: undefined, // will be resolved per-provider in dynamic chain
+          name: np.name,
+          destination: np.regionCode,
+          region: '',
+          dataAmount: dataAmountLabel,
+          validity: validityLabel,
+        };
+        resolvedNormalizedPlanId = np.id;
+        console.log(`[Fulfillment] Resolved plan via normalized_plans.id for order ${orderId}: ${np.name}`);
+      }
+    }
 
+    // ── Build dynamic fallback chain once planData & normalizedPlanId are known ──
+    // This runs for BOTH Path A and Path B now.
+    if (planData && resolvedNormalizedPlanId) {
       // Admin forced provider override — bypass the dynamic chain entirely.
       if (opts?.forceProviderKey) {
         dynamicFallbackChain = [{ k: opts.forceProviderKey, c: opts.forcePlanCode ?? '' }];
         console.log(`[Fulfillment] Admin force-provider "${opts.forceProviderKey}" planCode="${opts.forcePlanCode ?? 'auto'}" for order ${orderId}`);
       }
 
-      // Build dynamic fallback chain from all active providers for this plan.
-      // IMPORTANT: Only include providers that have a registered purchase adapter.
-      // Providers synced into the catalogue (e.g. Zendit) but without an adapter
-      // implementation must be excluded — otherwise the entire chain silently skips
-      // and the customer is left with no eSIM after a successful payment.
+      // Only build dynamic chain if no routing chain was stored at checkout time.
+      // (If selectedProviderKey+fallbackProvidersJson were stored by the routing engine,
+      //  those take priority and are used directly at line ~402.)
       if (!opts?.forceProviderKey && !order.selectedProviderKey) {
         const allOffersRows = await db.execute<{ provider_key: string; provider_plan_code: string }>(sql`
           SELECT po2.provider_key, po2.provider_plan_code
           FROM provider_offers po2
           JOIN providers p ON p.key = po2.provider_key
-          WHERE po2.normalized_plan_id = ${offer.normalized_plan_id}
+          WHERE po2.normalized_plan_id = ${resolvedNormalizedPlanId}
             AND po2.is_active = true
             AND p.enabled = true
             AND p.auto_paused = false
@@ -293,11 +324,11 @@ export async function fulfillInitialPurchase(
         `);
 
         if (allOffersRows.rows.length > 0) {
-          // Filter to only providers that have a working adapter
+          // Filter to only providers that have a working adapter with credentials
           const adapterReady = allOffersRows.rows.filter(r => {
             const adapter = getProviderAdapterByKey(r.provider_key);
             if (!adapter) {
-              console.warn(`[Fulfillment] Excluding "${r.provider_key}" from dynamic chain — no adapter registered`);
+              console.warn(`[Fulfillment] Excluding "${r.provider_key}" from dynamic chain — no adapter/credentials`);
               return false;
             }
             return true;
@@ -310,46 +341,23 @@ export async function fulfillInitialPurchase(
             }));
 
             // Safety-net: if eSIMGo is configured and not already in the chain,
-            // append a spec-based eSIMGo entry as last resort.  This ensures that
-            // even when the entire chain is from a single provider (e.g. esimaccess)
-            // there is still a funded alternative rather than a total failure.
+            // append a spec-based eSIMGo entry as last resort.
             const alreadyHasEsimGo = dynamicFallbackChain.some(e => e.k.toLowerCase().replace(/[_\-\s]/g, '') === 'esimgo');
             const esimGoAdapter = getProviderAdapterByKey('esimgo');
             if (!alreadyHasEsimGo && esimGoAdapter) {
-              dynamicFallbackChain.push({ k: 'esimgo', c: '' }); // empty code → spec-based lookup
+              dynamicFallbackChain.push({ k: 'esimgo', c: '' });
               console.log(`[Fulfillment] Appended eSIMGo safety-net to chain for ${orderId}`);
             }
 
             console.log(`[Fulfillment] Dynamic chain for ${orderId}: ${dynamicFallbackChain.map(e => e.k).join(' → ')}`);
           } else {
-            // All offers belong to providers without adapters — log and fall through
-            // to the legacy getActiveProvider() path below so we still attempt fulfillment.
-            // Clear providerRef so the active provider does a spec-based plan search
-            // (the stored code belongs to the non-adapter provider and is meaningless to eSIMGo).
-            console.warn(`[Fulfillment] No adapter-ready providers in dynamic chain for ${orderId} — falling through to active provider (spec-based lookup)`);
+            // All offers belong to providers without adapters/credentials — fall through
+            // to getActiveProvider() with spec-based lookup.
+            console.warn(`[Fulfillment] No adapter-ready providers in dynamic chain for ${orderId} — falling through to active provider`);
             planData.providerRef = undefined;
             dynamicFallbackChain = null;
           }
         }
-      }
-    } else {
-      // Legacy fallback: look in normalized_plans directly (old checkout path)
-      const [np] = await db.select().from(normalizedPlans).where(eq(normalizedPlans.id, order.normalizedPlanId));
-      if (np) {
-        const dataAmountGb = np.dataMb / 1024;
-        const dataAmountLabel = np.isUnlimited ? 'Unlimited' : dataAmountGb >= 1 ? `${dataAmountGb} GB` : `${np.dataMb} MB`;
-        const validityLabel = `${np.validityDays} Day${np.validityDays !== 1 ? 's' : ''}`;
-        planData = {
-          countryCode: np.regionCode,
-          dataAmountGb,
-          validityDays: np.validityDays,
-          providerRef: undefined,
-          name: np.name,
-          destination: np.regionCode,
-          region: '',
-          dataAmount: dataAmountLabel,
-          validity: validityLabel,
-        };
       }
     }
   }

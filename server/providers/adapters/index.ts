@@ -21,8 +21,9 @@ const PROVIDER_NAME = process.env.PROVIDER_NAME;
  */
 export function getProviderAdapterByKey(key: string): ProviderAdapter | null {
   const esimgoKey = process.env.ESIMGO_API_KEY;
-  const eaCode = process.env.ESIM_ACCESS_API_KEY;
-  const eaSecret = process.env.ESIM_ACCESS_SECRET_KEY;
+  // Accept both naming conventions for backward compatibility
+  const eaCode   = process.env.ESIM_ACCESS_API_KEY   || process.env.ESIMACCESS_API_KEY;
+  const eaSecret = process.env.ESIM_ACCESS_SECRET_KEY || process.env.ESIMACCESS_PARTNER_ID || process.env.ESIMACCESS_SECRET_KEY;
 
   const norm = key.toLowerCase().replace(/[_\-\s]/g, '');
 
@@ -62,8 +63,9 @@ export function getProviderAdapterByKey(key: string): ProviderAdapter | null {
 
 export function getActiveProvider(): ProviderAdapter {
   const esimgoKey      = process.env.ESIMGO_API_KEY;
-  const eaAccessCode   = process.env.ESIM_ACCESS_API_KEY;
-  const eaSecret       = process.env.ESIM_ACCESS_SECRET_KEY;
+  // Accept both naming conventions for backward compatibility
+  const eaAccessCode   = process.env.ESIM_ACCESS_API_KEY   || process.env.ESIMACCESS_API_KEY;
+  const eaSecret       = process.env.ESIM_ACCESS_SECRET_KEY || process.env.ESIMACCESS_PARTNER_ID || process.env.ESIMACCESS_SECRET_KEY;
   const airaloId       = process.env.AIRALO_CLIENT_ID;
   const airaloSecret   = process.env.AIRALO_CLIENT_SECRET;
 
