@@ -145,7 +145,8 @@ const orderSelectFields = (_db: any) => ({
        FROM provider_offers po
        JOIN normalized_plans np ON np.id = po.normalized_plan_id
       WHERE po.id = ${orders.normalizedPlanId}
-      LIMIT 1)
+      LIMIT 1),
+    (SELECT np.name FROM normalized_plans np WHERE np.id = ${orders.normalizedPlanId} LIMIT 1)
   )`,
   dataAmount: sql<string>`COALESCE(
     ${plans.dataAmount},
@@ -157,7 +158,13 @@ const orderSelectFields = (_db: any) => ({
        FROM provider_offers po
        JOIN normalized_plans np ON np.id = po.normalized_plan_id
       WHERE po.id = ${orders.normalizedPlanId}
-      LIMIT 1)
+      LIMIT 1),
+    (SELECT CASE
+              WHEN np.data_mb >= 999999 THEN 'Unlimited'
+              WHEN np.data_mb >= 1024   THEN ROUND((np.data_mb / 1024.0)::numeric, 0)::text || ' GB'
+              ELSE np.data_mb::text || ' MB'
+            END
+       FROM normalized_plans np WHERE np.id = ${orders.normalizedPlanId} LIMIT 1)
   )`,
   dataAmountGb: sql<number>`COALESCE(
     ${plans.dataAmountGb},
@@ -165,7 +172,9 @@ const orderSelectFields = (_db: any) => ({
        FROM provider_offers po
        JOIN normalized_plans np ON np.id = po.normalized_plan_id
       WHERE po.id = ${orders.normalizedPlanId}
-      LIMIT 1)
+      LIMIT 1),
+    (SELECT ROUND((np.data_mb / 1024.0)::numeric, 2)
+       FROM normalized_plans np WHERE np.id = ${orders.normalizedPlanId} LIMIT 1)
   )`,
   validity: sql<string>`COALESCE(
     ${plans.validity},
@@ -173,7 +182,9 @@ const orderSelectFields = (_db: any) => ({
        FROM provider_offers po
        JOIN normalized_plans np ON np.id = po.normalized_plan_id
       WHERE po.id = ${orders.normalizedPlanId}
-      LIMIT 1)
+      LIMIT 1),
+    (SELECT np.validity_days::text || ' Day' || CASE WHEN np.validity_days = 1 THEN '' ELSE 's' END
+       FROM normalized_plans np WHERE np.id = ${orders.normalizedPlanId} LIMIT 1)
   )`,
   validityDays: sql<number>`COALESCE(
     ${plans.validityDays},
@@ -181,7 +192,8 @@ const orderSelectFields = (_db: any) => ({
        FROM provider_offers po
        JOIN normalized_plans np ON np.id = po.normalized_plan_id
       WHERE po.id = ${orders.normalizedPlanId}
-      LIMIT 1)
+      LIMIT 1),
+    (SELECT np.validity_days FROM normalized_plans np WHERE np.id = ${orders.normalizedPlanId} LIMIT 1)
   )`,
   destinationName: sql<string>`COALESCE(
     ${destinations.name},
@@ -190,7 +202,11 @@ const orderSelectFields = (_db: any) => ({
        JOIN normalized_plans np ON np.id = po.normalized_plan_id
        JOIN destinations d      ON d.id  = np.destination_id
       WHERE po.id = ${orders.normalizedPlanId}
-      LIMIT 1)
+      LIMIT 1),
+    (SELECT d.name
+       FROM normalized_plans np
+       JOIN destinations d ON d.id = np.destination_id
+      WHERE np.id = ${orders.normalizedPlanId} LIMIT 1)
   )`,
   flagEmoji: sql<string>`COALESCE(
     ${destinations.flagEmoji},
@@ -199,7 +215,11 @@ const orderSelectFields = (_db: any) => ({
        JOIN normalized_plans np ON np.id = po.normalized_plan_id
        JOIN destinations d      ON d.id  = np.destination_id
       WHERE po.id = ${orders.normalizedPlanId}
-      LIMIT 1)
+      LIMIT 1),
+    (SELECT d.flag_emoji
+       FROM normalized_plans np
+       JOIN destinations d ON d.id = np.destination_id
+      WHERE np.id = ${orders.normalizedPlanId} LIMIT 1)
   )`,
   // Region code for JS-side country name/flag lookup when destinations table has no entry
   regionCode: sql<string>`COALESCE(
@@ -207,7 +227,8 @@ const orderSelectFields = (_db: any) => ({
        FROM provider_offers po
        JOIN normalized_plans np ON np.id = po.normalized_plan_id
       WHERE po.id = ${orders.normalizedPlanId}
-      LIMIT 1)
+      LIMIT 1),
+    (SELECT np.region_code FROM normalized_plans np WHERE np.id = ${orders.normalizedPlanId} LIMIT 1)
   )`,
 });
 
