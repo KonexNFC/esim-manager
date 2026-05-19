@@ -1808,6 +1808,7 @@ export async function registerRoutes(
   app.post("/api/admin/orders/:id/refulfill", requireAdmin, async (req, res) => {
     const orderId = req.params.id;
     const forceProviderKey: string | undefined = req.body?.providerKey || undefined;
+    const forcePlanCode: string | undefined = req.body?.planCode || undefined;
     try {
       const { db } = await import("./storage");
       const { orders } = await import("@shared/schema");
@@ -1827,14 +1828,104 @@ export async function registerRoutes(
 
       const { fulfillInitialPurchase } = await import("./services/fulfillment");
       // Fire async — don't block the HTTP response
-      fulfillInitialPurchase(orderId, { forceProviderKey }).catch(err =>
+      fulfillInitialPurchase(orderId, { forceProviderKey, forcePlanCode }).catch(err =>
         console.error(`[Admin] Manual re-fulfillment failed for ${orderId}:`, err.message)
       );
 
-      res.json({ message: "Re-fulfillment triggered", orderId, providerKey: forceProviderKey ?? "auto" });
+      res.json({ message: "Re-fulfillment triggered", orderId, providerKey: forceProviderKey ?? "auto", planCode: forcePlanCode ?? "auto" });
     } catch (err: any) {
       console.error("/api/admin/orders/:id/refulfill error:", err.message);
       res.status(500).json({ message: "Failed to trigger re-fulfillment" });
+    }
+  });
+
+  // GET /api/admin/orders/:id/available-plans
+  // Returns active non-paused provider offers for the order's country,
+  // so the admin can pick an alternative plan for manual re-fulfillment.
+  app.get("/api/admin/orders/:id/available-plans", requireAdmin, async (req, res) => {
+    const orderId = req.params.id;
+    try {
+      const { db } = await import("./storage");
+      const { orders, normalizedPlans, providerOffers, providers } = await import("@shared/schema");
+      const { eq, and, inArray, sql } = await import("drizzle-orm");
+
+      const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
+      if (!order) return res.status(404).json({ message: "Order not found" });
+
+      // Determine the country/region code for this order
+      let regionCode: string | null = null;
+
+      // Try via normalizedPlanId → provider_offers → normalized_plans
+      if (order.normalizedPlanId) {
+        const offerRows = await db.execute<{ region_code: string }>(sql`
+          SELECT np.region_code
+          FROM provider_offers po
+          JOIN normalized_plans np ON np.id = po.normalized_plan_id
+          WHERE po.id = ${order.normalizedPlanId}
+          LIMIT 1
+        `);
+        if (offerRows.rows[0]) {
+          regionCode = offerRows.rows[0].region_code;
+        } else {
+          // Legacy normalized_plans path
+          const [np] = await db.select({ regionCode: normalizedPlans.regionCode })
+            .from(normalizedPlans).where(eq(normalizedPlans.id, order.normalizedPlanId));
+          if (np) regionCode = np.regionCode;
+        }
+      }
+
+      if (!regionCode) {
+        return res.status(400).json({ message: "Could not determine country for this order" });
+      }
+
+      // Fetch all active offers for that region from non-paused providers
+      const rows = await db.execute<{
+        provider_key: string;
+        provider_plan_code: string;
+        wholesale_price_usd: string;
+        data_mb: number | null;
+        is_unlimited: boolean;
+        validity_days: number;
+        plan_name: string;
+      }>(sql`
+        SELECT
+          po.provider_key,
+          po.provider_plan_code,
+          po.wholesale_price_usd,
+          np.data_mb,
+          np.is_unlimited,
+          np.validity_days,
+          np.name AS plan_name
+        FROM provider_offers po
+        JOIN normalized_plans np ON np.id = po.normalized_plan_id
+        JOIN providers p ON p.key = po.provider_key
+        WHERE np.region_code = ${regionCode}
+          AND po.is_active = true
+          AND p.enabled = true
+          AND p.auto_paused = false
+          AND po.provider_key IN ('airalo', 'zendit', 'esimgo')
+        ORDER BY po.provider_key ASC, po.wholesale_price_usd ASC
+        LIMIT 100
+      `);
+
+      const plans = rows.rows.map(r => ({
+        providerKey: r.provider_key,
+        planCode: r.provider_plan_code,
+        wholesaleUsd: parseFloat(r.wholesale_price_usd as string),
+        dataMb: r.data_mb,
+        isUnlimited: r.is_unlimited,
+        validityDays: r.validity_days,
+        planName: r.plan_name,
+        dataLabel: r.is_unlimited ? 'Unlimited' :
+          (r.data_mb ?? 0) >= 1024
+            ? `${((r.data_mb ?? 0) / 1024).toFixed(1)} GB`
+            : `${r.data_mb ?? 0} MB`,
+      }));
+
+      res.json({ regionCode, plans });
+    } catch (err: any) {
+      console.error("/api/admin/orders/:id/available-plans error:", err.message);
+      res.status(500).json({ message: "Failed to fetch available plans" });
     }
   });
 

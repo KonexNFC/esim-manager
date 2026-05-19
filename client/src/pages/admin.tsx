@@ -26,11 +26,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
   LayoutDashboard, Package, ShoppingCart, Wifi, TrendingUp,
   DollarSign, Globe, BarChart3, Pause, Play, HelpCircle,
   Send, RotateCcw, Download, ChevronRight, ArrowLeft, Smartphone, LogOut,
   Zap, Wrench, Settings, Target, TrendingDown, RefreshCw,
-  Network, CheckCircle2, XCircle, AlertCircle, Clock, GitBranch, Server, ChevronDown
+  Network, CheckCircle2, XCircle, AlertCircle, Clock, GitBranch, Server, ChevronDown,
+  Wand2
 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -1145,15 +1153,41 @@ function OrdersTab() {
   };
 
   const [refulfillPending, setRefulfillPending] = useState<Record<string, boolean>>({});
-  const refulfillOrder = async (orderId: string, providerKey?: string) => {
+
+  // ── Plan override dialog state ─────────────────────────────────────────────
+  const [overrideDialog, setOverrideDialog] = useState<{ orderId: string; email: string } | null>(null);
+  const [availablePlans, setAvailablePlans] = useState<any[]>([]);
+  const [availablePlansLoading, setAvailablePlansLoading] = useState(false);
+  const [selectedOverridePlan, setSelectedOverridePlan] = useState<{ providerKey: string; planCode: string } | null>(null);
+
+  const openOverrideDialog = async (orderId: string, email: string) => {
+    setOverrideDialog({ orderId, email });
+    setSelectedOverridePlan(null);
+    setAvailablePlans([]);
+    setAvailablePlansLoading(true);
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/available-plans`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed");
+      setAvailablePlans(data.plans || []);
+    } catch (err: any) {
+      toast({ title: "Failed to load plans", description: err.message, variant: "destructive" });
+      setOverrideDialog(null);
+    } finally {
+      setAvailablePlansLoading(false);
+    }
+  };
+
+  const refulfillOrder = async (orderId: string, providerKey?: string, planCode?: string) => {
     setRefulfillPending(p => ({ ...p, [orderId]: true }));
     try {
       const body: Record<string, string> = {};
       if (providerKey) body.providerKey = providerKey;
+      if (planCode) body.planCode = planCode;
       const res = await apiRequest("POST", `/api/admin/orders/${orderId}/refulfill`, body);
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed");
-      const via = providerKey ? ` via ${providerKey}` : "";
+      const via = planCode ? ` via ${providerKey} (${planCode})` : providerKey ? ` via ${providerKey}` : "";
       toast({ title: "Re-fulfillment triggered", description: `The order will be provisioned again shortly${via}.` });
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
@@ -1442,6 +1476,12 @@ function OrdersTab() {
                         Auto (smart chain)
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => openOverrideDialog(order.id, order.email)}
+                        className="text-violet-700 dark:text-violet-400 font-medium">
+                        <Wand2 className="w-3 h-3 mr-1.5" />
+                        Pick alternative plan…
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => refulfillOrder(order.id, "esimgo")}>
                         Force via eSIMGo
                       </DropdownMenuItem>
@@ -1450,6 +1490,9 @@ function OrdersTab() {
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => refulfillOrder(order.id, "airalo")}>
                         Force via Airalo
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => refulfillOrder(order.id, "zendit")}>
+                        Force via Zendit
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -1471,6 +1514,93 @@ function OrdersTab() {
         </Card>
         );
       })}
+
+      {/* ── Plan override dialog ─────────────────────────────────────────── */}
+      <Dialog open={!!overrideDialog} onOpenChange={open => { if (!open) setOverrideDialog(null); }}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="w-4 h-4 text-violet-500" />
+              Pick alternative plan
+            </DialogTitle>
+            <DialogDescription>
+              Choose a replacement plan from an active provider. The original order's amount is unchanged — you may need to contact the customer if value differs significantly.
+            </DialogDescription>
+          </DialogHeader>
+
+          {availablePlansLoading ? (
+            <div className="space-y-2 py-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full rounded-md" />
+              ))}
+            </div>
+          ) : availablePlans.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              No active plans found for this country in Airalo, Zendit, or eSIMGo.
+            </div>
+          ) : (
+            <div className="space-y-1.5 py-1">
+              {availablePlans.map((plan, i) => {
+                const key = `${plan.providerKey}::${plan.planCode}`;
+                const isSelected = selectedOverridePlan?.planCode === plan.planCode && selectedOverridePlan?.providerKey === plan.providerKey;
+                return (
+                  <button
+                    key={i}
+                    data-testid={`plan-override-option-${i}`}
+                    onClick={() => setSelectedOverridePlan({ providerKey: plan.providerKey, planCode: plan.planCode })}
+                    className={`w-full text-left rounded-md border px-3 py-2.5 transition-colors text-sm ${
+                      isSelected
+                        ? "border-violet-500 bg-violet-500/10 text-violet-700 dark:text-violet-300"
+                        : "border-border hover:border-muted-foreground/40 hover:bg-muted/40"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <span className="font-medium">{plan.dataLabel}</span>
+                        <span className="text-muted-foreground mx-1.5">·</span>
+                        <span className="text-muted-foreground">{plan.validityDays}d</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                          {plan.providerKey}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">${plan.wholesaleUsd.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5 font-mono truncate">{plan.planCode}</div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {selectedOverridePlan && overrideDialog && (
+            <div className="pt-2 border-t">
+              <p className="text-xs text-muted-foreground mb-2">
+                Will fulfill order for <span className="font-medium">{overrideDialog.email}</span> using{" "}
+                <span className="font-medium">{selectedOverridePlan.providerKey}</span> plan code{" "}
+                <code className="text-[10px] bg-muted px-1 rounded">{selectedOverridePlan.planCode}</code>
+              </p>
+              <Button
+                className="w-full"
+                data-testid="button-confirm-override-fulfill"
+                disabled={refulfillPending[overrideDialog.orderId]}
+                onClick={async () => {
+                  const { orderId } = overrideDialog;
+                  setOverrideDialog(null);
+                  await refulfillOrder(orderId, selectedOverridePlan.providerKey, selectedOverridePlan.planCode);
+                }}
+              >
+                {refulfillPending[overrideDialog?.orderId] ? (
+                  <><RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />Fulfilling…</>
+                ) : (
+                  <><Wand2 className="w-3.5 h-3.5 mr-1.5" />Fulfill with this plan</>
+                )}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

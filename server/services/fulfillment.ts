@@ -165,7 +165,7 @@ async function fulfillWithFallbackChain(
 
 export async function fulfillInitialPurchase(
   orderId: string,
-  opts?: { forceProviderKey?: string },
+  opts?: { forceProviderKey?: string; forcePlanCode?: string },
 ): Promise<void> {
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
   if (!order) throw new Error(`Order ${orderId} not found`);
@@ -271,8 +271,8 @@ export async function fulfillInitialPurchase(
 
       // Admin forced provider override — bypass the dynamic chain entirely.
       if (opts?.forceProviderKey) {
-        dynamicFallbackChain = [{ k: opts.forceProviderKey, c: '' }];
-        console.log(`[Fulfillment] Admin force-provider "${opts.forceProviderKey}" for order ${orderId}`);
+        dynamicFallbackChain = [{ k: opts.forceProviderKey, c: opts.forcePlanCode ?? '' }];
+        console.log(`[Fulfillment] Admin force-provider "${opts.forceProviderKey}" planCode="${opts.forcePlanCode ?? 'auto'}" for order ${orderId}`);
       }
 
       // Build dynamic fallback chain from all active providers for this plan.
@@ -378,8 +378,8 @@ export async function fulfillInitialPurchase(
   // Admin force-provider: apply for legacy planId orders or when the
   // normalizedPlanId branch didn't set a dynamic chain.
   if (opts?.forceProviderKey && (dynamicFallbackChain === null || dynamicFallbackChain.length === 0)) {
-    dynamicFallbackChain = [{ k: opts.forceProviderKey, c: '' }];
-    console.log(`[Fulfillment] Admin force-provider "${opts.forceProviderKey}" (fallback) for order ${orderId}`);
+    dynamicFallbackChain = [{ k: opts.forceProviderKey, c: opts.forcePlanCode ?? '' }];
+    console.log(`[Fulfillment] Admin force-provider "${opts.forceProviderKey}" planCode="${opts.forcePlanCode ?? 'auto'}" (fallback) for order ${orderId}`);
   }
 
   try {
