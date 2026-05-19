@@ -38,7 +38,7 @@ import {
   Send, RotateCcw, Download, ChevronRight, ArrowLeft, Smartphone, LogOut,
   Zap, Wrench, Settings, Target, TrendingDown, RefreshCw,
   Network, CheckCircle2, XCircle, AlertCircle, Clock, GitBranch, Server, ChevronDown,
-  Wand2
+  Wand2, KeyRound
 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -1541,6 +1541,19 @@ function OrdersTab() {
                   </DropdownMenu>
                 </div>
               )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                onClick={() => {
+                  setInjectDialog({ orderId: order.id, email: order.email });
+                  setInjectForm({ iccid: "", qrCodeUrl: "", lpaUri: "", providerEsimId: "" });
+                }}
+                data-testid={`button-inject-esim-${order.id}`}
+              >
+                <KeyRound className="w-3.5 h-3.5 mr-1" />
+                Inject eSIM
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
