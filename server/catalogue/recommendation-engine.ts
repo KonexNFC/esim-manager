@@ -2,23 +2,37 @@
 // Assigns recommendation roles to scored offers for each (country, bucket).
 //
 // Priority order for RECOMMENDED slot:
-//   1. Unlimited in target band   (ideal: simple + competitive price)
-//   2. Unlimited above target band (still unlimited, slightly pricier)
-//   3. Best fixed-data travel plan (no native unlimited available)
-//   4. Synthetic unlimited bundle  (last-resort: built from DAY_1 plans)
-//   5. Synthetic fixed-data bundle
+//   1. Unlimited in target band         (ideal: simple + competitive price)
+//   2. Unlimited ≤1.5× band ceiling     (acceptable: "slightly pricier")
+//   3. Best fixed-data native plan      (no affordable unlimited available)
+//   4. Best fixed-data synthetic plan   (native not available)
+//   5. Synthetic unlimited              (last-resort, only if ≤1.5× band ceiling)
+//
+// If the cheapest unlimited is more than 1.5× the band ceiling it is too
+// expensive to lead with — customers should see an affordable fixed plan as
+// their hero recommendation and the pricey unlimited moves to PREMIUM.
 //
 // CHEAPER slot: best fixed-data plan priced below RECOMMENDED (no duplicates).
-// PREMIUM slot: better unlimited or more data than RECOMMENDED (no duplicates).
+// PREMIUM slot: best unlimited (or MAX-data) above RECOMMENDED price.
 // BROWSE_ALL:   all remaining public offers in the bucket.
 
 import {
-  DurationBucket,
   NormalizedOffer,
   OfferType,
   RecommendationRole,
   Visibility,
 } from "./supplier-plan.types";
+import { getTargetBand } from "./pricing-engine";
+
+// ─── Constants ─────────────────────────────────────────────────────────────────
+
+/**
+ * Maximum multiple of the target-band ceiling at which an unlimited plan is
+ * still considered "affordable enough" to be the hero RECOMMENDED offer.
+ * Above this threshold the cheapest unlimited plan moves to PREMIUM and we
+ * surface the best fixed-data plan as RECOMMENDED instead.
+ */
+const UNLIMITED_PRICE_CEILING_MULTIPLE = 1.5;
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -27,74 +41,98 @@ function isUnlimited(offer: NormalizedOffer) {
 }
 
 /**
+ * True when an unlimited offer is "affordably priced" — within
+ * UNLIMITED_PRICE_CEILING_MULTIPLE × the target band's upper boundary.
+ */
+function unlimitedIsAffordable(offer: NormalizedOffer): boolean {
+  const band = getTargetBand(offer.bucket, OfferType.UNLIMITED);
+  return offer.sellPriceGbp <= band.max * UNLIMITED_PRICE_CEILING_MULTIPLE;
+}
+
+/**
  * Pick the RECOMMENDED offer for one bucket from a sorted (highest-score first)
  * list of offers. Returns the best offer matching the priority order above.
  */
 function pickRecommended(sorted: NormalizedOffer[]): NormalizedOffer | null {
-  // 1. Unlimited in target band
-  const unlimitedInBand = sorted.find((o) => isUnlimited(o) && o.inTargetBand && !o.isSynthetic);
+  // 1. Unlimited in target band — ideal hero
+  const unlimitedInBand = sorted.find(
+    (o) => isUnlimited(o) && o.inTargetBand && !o.isSynthetic,
+  );
   if (unlimitedInBand) return unlimitedInBand;
 
-  // 2. Unlimited above target band (still native)
-  const unlimitedNative = sorted.find((o) => isUnlimited(o) && !o.isSynthetic);
+  // 2. Native unlimited above band but still within 1.5× ceiling
+  //    If all native unlimited plans are pricier than this threshold, the
+  //    product is too expensive for most customers → fall through to fixed.
+  const unlimitedNative = sorted.find(
+    (o) => isUnlimited(o) && !o.isSynthetic && unlimitedIsAffordable(o),
+  );
   if (unlimitedNative) return unlimitedNative;
 
-  // 3. Best fixed-data (native, highest score)
+  // 3. Best fixed-data native plan (highest score)
   const fixedNative = sorted.find((o) => !isUnlimited(o) && !o.isSynthetic);
   if (fixedNative) return fixedNative;
 
-  // 4. Synthetic unlimited
-  const syntheticUnlimited = sorted.find((o) => isUnlimited(o) && o.isSynthetic);
+  // 4. Cheapest fixed-data synthetic plan (sort by price, not score — avoids
+  //    picking a high-score but absurdly-priced synthetic like 10 GB × 5 days)
+  const fixedSynthetics = sorted
+    .filter((o) => !isUnlimited(o) && o.isSynthetic)
+    .sort((a, b) => a.sellPriceGbp - b.sellPriceGbp);
+  const fixedSynthetic = fixedSynthetics[0] ?? null;
+  if (fixedSynthetic) return fixedSynthetic;
+
+  // 5. Synthetic unlimited — last resort, still price-gated
+  const syntheticUnlimited = sorted.find(
+    (o) => isUnlimited(o) && o.isSynthetic && unlimitedIsAffordable(o),
+  );
   if (syntheticUnlimited) return syntheticUnlimited;
 
-  // 5. Synthetic fixed-data fallback
-  return sorted.find((o) => !isUnlimited(o) && o.isSynthetic) ?? null;
+  // 6. Anything remaining
+  return sorted[0] ?? null;
 }
 
 /**
- * Pick the CHEAPER offer: best fixed-data plan that is cheaper than the
- * recommended price and isn't the same offer.
+ * Pick the CHEAPER offer: best non-unlimited plan priced below RECOMMENDED.
  */
 function pickCheaper(
   sorted: NormalizedOffer[],
-  recommended: NormalizedOffer | null
+  recommended: NormalizedOffer | null,
 ): NormalizedOffer | null {
   return (
     sorted.find(
       (o) =>
         o.id !== recommended?.id &&
         !isUnlimited(o) &&
-        (recommended === null || o.sellPriceGbp < recommended.sellPriceGbp)
+        (recommended === null || o.sellPriceGbp < recommended.sellPriceGbp),
     ) ?? null
   );
 }
 
 /**
- * Pick the PREMIUM offer: a higher-data or higher-tier offer different from
- * RECOMMENDED and CHEAPER. Prefers unlimited with more headroom.
+ * Pick the PREMIUM offer: a higher-tier option distinct from RECOMMENDED and
+ * CHEAPER. Prefers unlimited (ideal upsell from a fixed-data RECOMMENDED).
  */
 function pickPremium(
   sorted: NormalizedOffer[],
   recommended: NormalizedOffer | null,
-  cheaper: NormalizedOffer | null
+  cheaper: NormalizedOffer | null,
 ): NormalizedOffer | null {
-  const excludeIds = new Set([recommended?.id, cheaper?.id].filter(Boolean) as string[]);
+  const excludeIds = new Set(
+    [recommended?.id, cheaper?.id].filter(Boolean) as string[],
+  );
 
-  // Prefer unlimited above the recommended price (premium tier)
+  // Prefer unlimited at or above the recommended price (natural upsell)
   const premium = sorted.find(
     (o) =>
       !excludeIds.has(o.id) &&
       isUnlimited(o) &&
-      (recommended === null || o.sellPriceGbp >= recommended.sellPriceGbp)
+      (recommended === null || o.sellPriceGbp >= recommended.sellPriceGbp),
   );
-  if (premium && premium.id !== recommended?.id) return premium;
+  if (premium) return premium;
 
-  // Fall back to a fixed MAX-data plan
+  // Fall back to a MAX fixed-data plan
   return (
     sorted.find(
-      (o) =>
-        !excludeIds.has(o.id) &&
-        o.offerType === OfferType.MAX
+      (o) => !excludeIds.has(o.id) && o.offerType === OfferType.MAX,
     ) ?? null
   );
 }
@@ -111,8 +149,7 @@ function pickPremium(
 export function assignRecommendations(
   offers: NormalizedOffer[]
 ): NormalizedOffer[] {
-  // Only assign roles to public offers
-  const publicOffers = offers.filter((o) => o.visibility === Visibility.PUBLIC);
+  const publicOffers   = offers.filter((o) => o.visibility === Visibility.PUBLIC);
   const internalOffers = offers.filter((o) => o.visibility !== Visibility.PUBLIC);
 
   // Group by countryCode + bucket
@@ -126,7 +163,6 @@ export function assignRecommendations(
   const result: NormalizedOffer[] = [];
 
   for (const [, group] of groups) {
-    // Sort by score descending (should already be sorted, but be explicit)
     const sorted = [...group].sort((a, b) => b.score - a.score);
 
     const recommended = pickRecommended(sorted);
@@ -134,20 +170,22 @@ export function assignRecommendations(
     const premium     = pickPremium(sorted, recommended, cheaper);
 
     const assignedIds = new Set(
-      [recommended?.id, cheaper?.id, premium?.id].filter(Boolean) as string[]
+      [recommended?.id, cheaper?.id, premium?.id].filter(Boolean) as string[],
     );
 
     for (const offer of sorted) {
       let role: RecommendationRole;
-      if (offer.id === recommended?.id)   role = RecommendationRole.RECOMMENDED;
-      else if (offer.id === cheaper?.id)  role = RecommendationRole.CHEAPER;
-      else if (offer.id === premium?.id)  role = RecommendationRole.PREMIUM;
-      else                                role = RecommendationRole.BROWSE_ALL;
+      if (offer.id === recommended?.id)  role = RecommendationRole.RECOMMENDED;
+      else if (offer.id === cheaper?.id) role = RecommendationRole.CHEAPER;
+      else if (offer.id === premium?.id) role = RecommendationRole.PREMIUM;
+      else                               role = RecommendationRole.BROWSE_ALL;
 
       result.push({ ...offer, recommendationRole: role });
     }
   }
 
-  // Internal offers pass through without roles
-  return [...result, ...internalOffers.map((o) => ({ ...o, recommendationRole: null }))];
+  return [
+    ...result,
+    ...internalOffers.map((o) => ({ ...o, recommendationRole: null })),
+  ];
 }
