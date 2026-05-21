@@ -9,7 +9,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   ArrowLeft, Wifi, Clock, Globe, Check, Zap, Star,
   Smartphone, BarChart2, ShoppingCart, Lock, ChevronDown,
-  Flame, Gauge, Timer, TrendingUp,
+  Flame, Gauge, Timer, TrendingUp, Infinity, HardDrive,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -1352,74 +1352,8 @@ function TravelPlansFlow({
     ? data.defaultDuration
     : availBuckets[0] ?? "DAY_3";
 
-  const resolvedInitial = initialBucket && availBuckets.includes(initialBucket)
-    ? initialBucket
-    : defaultBucket;
-
-  const [selectedBucket, setSelectedBucket] = useState(resolvedInitial);
-  const [showAll, setShowAll] = useState(false);
   const [viewMode, setViewMode] = useState<"flow" | "matrix">("flow");
-
-  const dur = data.durations[selectedBucket];
-  const recommended = dur?.recommended ?? null;
-  const cheaper = dur?.cheaper ?? null;
-  const browseAll = dur?.browseAll ?? [];
-
-  const bucketDays = parseInt(selectedBucket.replace("DAY_", ""), 10);
-
-  // ── Build up to 3 data-tier cards (Light / Standard / Heavy) ─────────────
-  // Pool: cheaper plan + all non-unlimited browseAll plans, deduped by GB+price
-  const dataTiers: PublicPlan[] = (() => {
-    const pool = [
-      ...(cheaper && !cheaper.isUnlimited ? [cheaper] : []),
-      ...browseAll.filter(p => !p.isUnlimited),
-    ];
-    const seen = new Set<string>();
-    const unique: PublicPlan[] = [];
-    for (const p of pool) {
-      const key = `${(p.dataGb ?? 0).toFixed(2)}::${p.sellPriceGbp.toFixed(2)}`;
-      if (!seen.has(key)) { seen.add(key); unique.push(p); }
-    }
-    // Tier boundaries: Light ≤ 2.5 GB, Standard ≤ 7 GB, Heavy > 7 GB
-    const tiers = [
-      unique.filter(p => (p.dataGb ?? 0) <= 2.5),
-      unique.filter(p => (p.dataGb ?? 0) > 2.5 && (p.dataGb ?? 0) <= 7),
-      unique.filter(p => (p.dataGb ?? 0) > 7),
-    ];
-    const picks: PublicPlan[] = [];
-    for (const tier of tiers) {
-      if (tier.length === 0) continue;
-      // Best value = most GB per pound
-      const best = tier.sort(
-        (a, b) => (b.dataGb ?? 0) / b.sellPriceGbp - (a.dataGb ?? 0) / a.sellPriceGbp
-      )[0];
-      picks.push(best);
-    }
-    return picks;
-  })();
-
-  const dataTierIds = new Set(dataTiers.map(p => p.id));
-  const totalBrowse = browseAll.filter(
-    p => p.id !== recommended?.id && p.id !== cheaper?.id && !dataTierIds.has(p.id)
-  ).length;
-
-  // ── Detect price inversion (e.g. 1-day more expensive than 3-day) ──────────
-  // If the current bucket's recommended price is higher than a longer duration,
-  // surface a nudge so customers pick the better-value option.
-  const BUCKET_ORDER = ["DAY_1", "DAY_3", "DAY_5", "DAY_7", "DAY_14", "DAY_30"];
-  const betterValueBucket: { bucket: string; price: number; label: string } | null = (() => {
-    if (!recommended) return null;
-    const currentPrice = recommended.sellPriceGbp;
-    const currentIdx = BUCKET_ORDER.indexOf(selectedBucket);
-    for (let i = currentIdx + 1; i < BUCKET_ORDER.length; i++) {
-      const b = BUCKET_ORDER[i];
-      const bRec = data.durations[b]?.recommended;
-      if (bRec && bRec.sellPriceGbp < currentPrice) {
-        return { bucket: b, price: bRec.sellPriceGbp, label: BUCKET_LABELS[b] };
-      }
-    }
-    return null;
-  })();
+  const [expandedBrowse, setExpandedBrowse] = useState<Set<string>>(new Set());
 
   // ── Build plan matrix: dataKey × bucket → best plan ──────────────────────
   const DATA_ROW_ORDER = [1, 2, 3, 5, 10, 0]; // 0 = unlimited sentinel
@@ -1442,17 +1376,16 @@ function TravelPlansFlow({
       }
     }
   }
-  // Determine which GB rows actually have any data
   const matrixRows = DATA_ROW_ORDER.filter(gb =>
     availBuckets.some(b => matrixMap.has(`${gb}::${b}`))
   );
 
   return (
     <div>
-      {/* View mode toggle + duration title header */}
-      <div className="flex items-center justify-between mb-3">
+      {/* Header + view toggle */}
+      <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold" data-testid="text-duration-title">
-          {viewMode === "flow" ? "How long is your trip?" : "All available plans"}
+          {viewMode === "flow" ? "Choose your plan" : "All available plans"}
         </h2>
         <div className="flex border rounded-lg overflow-hidden text-xs font-semibold">
           <button
@@ -1524,159 +1457,184 @@ function TravelPlansFlow({
         </div>
       )}
 
-      {/* ── Flow view (duration tabs) ─────────────────────────────── */}
+      {/* ── Flow view — all durations simultaneously ──────────────── */}
       {viewMode === "flow" && (
-      <div>
-      {/* Duration tabs */}
-      <div className="mb-7">
-        <div className="flex gap-2 flex-wrap">
-          {availBuckets.map(b => (
-            <button
-              key={b}
-              onClick={() => { setSelectedBucket(b); setShowAll(false); }}
-              className={`px-5 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-150 min-w-[80px] ${
-                selectedBucket === b
-                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                  : "border-border bg-background text-foreground hover:border-primary/40"
-              }`}
-              data-testid={`button-duration-${b}`}
-            >
-              {BUCKET_LABELS[b]}
-            </button>
-          ))}
-        </div>
-      </div>
+        <div className="space-y-3">
+          {availBuckets.map(bucket => {
+            const durData = data.durations[bucket];
+            const rec = durData?.recommended ?? null;
+            const cheaper = durData?.cheaper ?? null;
+            const browseAll = durData?.browseAll ?? [];
+            const days = parseInt(bucket.replace("DAY_", ""), 10);
+            const isPopular = bucket === defaultBucket;
 
-      {/* Primary recommended plan */}
-      {recommended ? (
-        <div className="mb-5" data-testid="card-recommended-primary">
-          <Card className="p-5 sm:p-6 ring-2 ring-primary bg-primary/[0.03] shadow-lg">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-primary text-primary-foreground">
-                <Zap className="w-3 h-3" /> Recommended
-              </span>
-              {recommended.isUnlimited && (
-                <span className="text-[11px] text-muted-foreground">No data cap</span>
-              )}
-            </div>
+            // Best fixed-data alternative: prefer cheaper slot, then first non-unlimited in browseAll
+            const fixedAlt: PublicPlan | null =
+              (cheaper && !cheaper.isUnlimited ? cheaper : null) ??
+              browseAll.find(p => !p.isUnlimited) ??
+              null;
 
-            <div className="flex items-start justify-between gap-3 mb-1">
-              <div>
-                <p className="text-2xl font-bold tracking-tight">{publicPlanTitle(recommended)}</p>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  {bucketDays} {bucketDays === 1 ? "day" : "days"} validity
-                </p>
+            // Extra browse options (excluding rec + fixedAlt)
+            const excludeIds = new Set([rec?.id, fixedAlt?.id].filter(Boolean) as string[]);
+            const extraOptions = browseAll.filter(p => !excludeIds.has(p.id));
+            const isExpanded = expandedBrowse.has(bucket);
+
+            return (
+              <div
+                key={bucket}
+                className={`rounded-2xl border overflow-hidden transition-all ${
+                  isPopular
+                    ? "border-primary/50 shadow-md shadow-primary/10"
+                    : "border-border"
+                }`}
+                data-testid={`card-bucket-${bucket}`}
+              >
+                {/* Duration header */}
+                <div className={`px-4 py-2.5 flex items-center justify-between ${isPopular ? "bg-primary/5" : "bg-muted/30"}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm">{BUCKET_LABELS[bucket]}</span>
+                    {isPopular && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
+                        <Star className="w-2.5 h-2.5" /> Popular
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {days === 1 ? "Daily plan" : `${days}-day validity`}
+                  </span>
+                </div>
+
+                {/* Plan rows */}
+                <div className="divide-y divide-border/40">
+                  {/* Recommended plan row */}
+                  {rec ? (
+                    <div className="flex items-center justify-between px-4 py-3.5 bg-background gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${rec.isUnlimited ? "bg-primary/10" : "bg-emerald-50 dark:bg-emerald-950/40"}`}>
+                          {rec.isUnlimited
+                            ? <Infinity className="w-4 h-4 text-primary" />
+                            : <HardDrive className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-sm">{publicPlanTitle(rec)}</span>
+                            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary whitespace-nowrap">
+                              <Zap className="w-2.5 h-2.5" /> Best value
+                            </span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {isApprox ? "≈ " : ""}£{(rec.sellPriceGbp / days).toFixed(2)}/day
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5 flex-shrink-0">
+                        <span className="font-bold text-base tabular-nums">
+                          {isApprox ? "≈" : ""}{fmt(rec.sellPriceGbp * GBP_TO_USD)}
+                        </span>
+                        <Button
+                          size="sm"
+                          className="h-8 px-3 text-xs font-semibold"
+                          onClick={() => onSelectPublic(rec)}
+                          data-testid={`button-get-plan-${bucket}`}
+                        >
+                          Get plan
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="px-4 py-3.5 text-sm text-muted-foreground italic">
+                      No plans available for this duration
+                    </div>
+                  )}
+
+                  {/* Fixed-data alternative row */}
+                  {fixedAlt && (
+                    <div className="flex items-center justify-between px-4 py-3 bg-muted/20 gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-muted flex items-center justify-center">
+                          <HardDrive className="w-3.5 h-3.5 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-medium text-sm text-foreground">{publicPlanTitle(fixedAlt)}</span>
+                          <div className="text-xs text-muted-foreground">
+                            Fixed data · {isApprox ? "≈ " : ""}£{(fixedAlt.sellPriceGbp / days).toFixed(2)}/day
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5 flex-shrink-0">
+                        <span className="font-semibold text-sm tabular-nums text-muted-foreground">
+                          {isApprox ? "≈" : ""}{fmt(fixedAlt.sellPriceGbp * GBP_TO_USD)}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-3 text-xs"
+                          onClick={() => onSelectPublic(fixedAlt)}
+                          data-testid={`button-get-fixed-${bucket}`}
+                        >
+                          Select
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* More options toggle */}
+                  {extraOptions.length > 0 && (
+                    <div className="bg-muted/10">
+                      <button
+                        className="w-full flex items-center justify-between px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => setExpandedBrowse(prev => {
+                          const next = new Set(prev);
+                          if (next.has(bucket)) next.delete(bucket);
+                          else next.add(bucket);
+                          return next;
+                        })}
+                        data-testid={`button-more-options-${bucket}`}
+                      >
+                        <span>{isExpanded ? "Hide" : `${extraOptions.length} more option${extraOptions.length > 1 ? "s" : ""}`}</span>
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                      </button>
+                      {isExpanded && (
+                        <div className="px-4 pb-3 space-y-1.5">
+                          {extraOptions.map(p => (
+                            <div
+                              key={p.id}
+                              className="flex items-center justify-between py-2 px-3 rounded-lg border border-border/60 bg-background hover:border-primary/30 transition-colors"
+                              data-testid={`row-extra-${p.id}`}
+                            >
+                              <div className="min-w-0">
+                                <span className="font-medium text-sm">{publicPlanDataLabel(p)}</span>
+                                {p.isUnlimited && (
+                                  <span className="ml-2 text-xs text-muted-foreground">Unlimited</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                                <span className="font-semibold text-sm tabular-nums">
+                                  {isApprox ? "≈" : ""}{fmt(p.sellPriceGbp * GBP_TO_USD)}
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2.5 text-xs"
+                                  onClick={() => onSelectPublic(p)}
+                                  data-testid={`button-extra-select-${p.id}`}
+                                >
+                                  Select
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-3xl font-bold tracking-tight" data-testid="text-recommended-price">
-                  {isApprox ? "≈ " : ""}{fmt(recommended.sellPriceGbp * GBP_TO_USD)}
-                </p>
-                {isApprox && (
-                  <p className="text-[11px] text-muted-foreground">${(recommended.sellPriceGbp * GBP_TO_USD).toFixed(2)} USD</p>
-                )}
-              </div>
-            </div>
+            );
+          })}
 
-            <p className="text-sm text-muted-foreground mb-5 mt-3 leading-relaxed">
-              {travelCopy(recommended, bucketDays)}
-            </p>
-
-            <Button
-              className="w-full h-11 text-sm font-semibold"
-              onClick={() => onSelectPublic(recommended)}
-              data-testid="button-get-recommended"
-            >
-              {recommended.isUnlimited ? "Get unlimited plan" : "Select this plan"}
-            </Button>
-
-            <PlanTrustBadges />
-          </Card>
+          <PlanTrustBadges />
         </div>
-      ) : (
-        <div className="mb-5 p-6 rounded-xl border border-dashed text-center text-muted-foreground text-sm">
-          No plans available for this duration — try another trip length above.
-        </div>
-      )}
-
-      {/* Better-value nudge — shown when a longer duration is actually cheaper */}
-      {betterValueBucket && (
-        <div className="mb-5 flex items-center gap-2.5 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50">
-          <span className="text-amber-500 text-base flex-shrink-0">💡</span>
-          <p className="text-sm text-amber-800 dark:text-amber-300 leading-snug">
-            <strong>Better value:</strong> the {betterValueBucket.label} plan is only{" "}
-            <strong>{isApprox ? "≈ " : ""}{fmt(betterValueBucket.price * GBP_TO_USD)}</strong> — save money and get more time to use your eSIM.{" "}
-            <button
-              className="underline font-semibold hover:no-underline"
-              onClick={() => setSelectedBucket(betterValueBucket.bucket)}
-              data-testid="button-switch-better-value"
-            >
-              Switch to {betterValueBucket.label} →
-            </button>
-          </p>
-        </div>
-      )}
-
-      {/* Data tier grid — shown when unlimited is recommended and fixed options exist */}
-      {recommended?.isUnlimited && dataTiers.length > 0 && (
-        <div className="mb-7">
-          <p className="text-sm font-semibold text-foreground mb-1">Prefer a fixed data plan?</p>
-          <p className="text-xs text-muted-foreground mb-3">Choose an allowance that fits your trip</p>
-          <div className={`grid gap-3 ${dataTiers.length === 1 ? "grid-cols-1" : dataTiers.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
-            {dataTiers.map((plan, idx) => {
-              const tierLabels = ["Light", "Standard", "Heavy"];
-              const tierLabel = tierLabels[idx] ?? "";
-              const perDayGbp = plan.sellPriceGbp / bucketDays;
-              return (
-                <button
-                  key={plan.id}
-                  onClick={() => onSelectPublic(plan)}
-                  className="group flex flex-col items-center text-center p-3.5 rounded-xl border-2 border-border hover:border-primary/50 hover:bg-primary/[0.02] transition-all duration-150 bg-background cursor-pointer"
-                  data-testid={`card-data-tier-${idx}`}
-                >
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">{tierLabel}</span>
-                  <span className="text-xl font-bold tracking-tight text-foreground leading-none mb-1">
-                    {publicPlanTitle(plan)}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground mb-2.5">
-                    £{perDayGbp.toFixed(2)}/day
-                  </span>
-                  <span className="text-base font-bold text-primary">
-                    {isApprox ? "≈ " : ""}{fmt(plan.sellPriceGbp * GBP_TO_USD)}
-                  </span>
-                  <span className="mt-2 text-[11px] font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                    Select →
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Browse all options — collapsed, travel-friendly */}
-      {totalBrowse > 0 && (
-        <div className="pt-5 border-t border-border/50">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">Not seeing the right fit?</p>
-            <button
-              onClick={() => setShowAll(v => !v)}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              data-testid="button-toggle-all-plans"
-            >
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAll ? "rotate-180" : ""}`} />
-              {showAll ? "Hide options" : `Browse all ${totalBrowse} options`}
-            </button>
-          </div>
-          {showAll && (
-            <PublicBrowseAll
-              plans={browseAll.filter(p => p.id !== recommended?.id && !dataTierIds.has(p.id))}
-              fmt={fmt}
-              onSelect={onSelectPublic}
-            />
-          )}
-        </div>
-      )}
-      </div>
       )}
     </div>
   );
