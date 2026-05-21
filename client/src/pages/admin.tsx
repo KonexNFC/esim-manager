@@ -38,9 +38,10 @@ import {
   Send, RotateCcw, Download, ChevronRight, ArrowLeft, Smartphone, LogOut,
   Zap, Wrench, Settings, Target, TrendingDown, RefreshCw,
   Network, CheckCircle2, XCircle, AlertCircle, Clock, GitBranch, Server, ChevronDown,
-  Wand2, KeyRound
+  Wand2, KeyRound, Activity, Cpu, Layers, Shield, Radio
 } from "lucide-react";
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
@@ -1885,10 +1886,21 @@ function HealthBadge({ status }: { status: string }) {
 }
 
 function AttemptStatusBadge({ status }: { status: string }) {
-  if (status === 'ok')      return <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium"><CheckCircle2 className="w-3 h-3" />ok</span>;
-  if (status === 'error')   return <span className="inline-flex items-center gap-1 text-xs text-red-500 dark:text-red-400 font-medium"><XCircle className="w-3 h-3" />error</span>;
-  if (status === 'skipped') return <span className="inline-flex items-center gap-1 text-xs text-yellow-600 dark:text-yellow-400 font-medium"><AlertCircle className="w-3 h-3" />skipped</span>;
-  return <span className="text-xs text-muted-foreground">{status}</span>;
+  const label: Record<string, string> = {
+    ok: "Provisioned",
+    error: "Failed",
+    skipped: "Skipped",
+    timeout: "Timed out",
+    pending: "In progress",
+    retried: "Retried",
+  };
+  const human = label[status] ?? status;
+  if (status === "ok")      return <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium"><CheckCircle2 className="w-3 h-3" />{human}</span>;
+  if (status === "error")   return <span className="inline-flex items-center gap-1 text-xs text-red-500 dark:text-red-400 font-medium"><XCircle className="w-3 h-3" />{human}</span>;
+  if (status === "timeout") return <span className="inline-flex items-center gap-1 text-xs text-orange-500 dark:text-orange-400 font-medium"><Clock className="w-3 h-3" />{human}</span>;
+  if (status === "skipped") return <span className="inline-flex items-center gap-1 text-xs text-yellow-600 dark:text-yellow-400 font-medium"><AlertCircle className="w-3 h-3" />{human}</span>;
+  if (status === "pending") return <span className="inline-flex items-center gap-1 text-xs text-blue-500 dark:text-blue-400 font-medium"><RefreshCw className="w-3 h-3 animate-spin" />{human}</span>;
+  return <span className="text-xs text-muted-foreground">{human}</span>;
 }
 
 // ─── Routing Tab ───────────────────────────────────────────────────────────
@@ -2079,7 +2091,7 @@ function RoutingTab() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <Server className="w-5 h-5 text-violet-500" />
-            <h3 className="font-semibold text-base">Provider Management</h3>
+            <h3 className="font-semibold text-base">Provider Network</h3>
             {providers && providers.filter((p: any) => p.autoPaused).length > 0 ? (
               <Badge variant="outline" className="border-orange-400 text-orange-600 bg-orange-50 dark:bg-orange-950/30 gap-1">
                 <AlertCircle className="w-3 h-3" />
@@ -2117,86 +2129,102 @@ function RoutingTab() {
         </div>
         <p className="text-xs text-muted-foreground mb-4">
           Seed registers the known providers (eSIMGo, eSIM Access, Mock). Sync reads all active plans and creates routing data so the engine can pick the cheapest provider at checkout.
-          The system automatically pauses any provider that drops below 80% success rate or fails 3 times in a row — you'll see an orange row and a <strong>Resume</strong> button here when that happens.
+          The system automatically pauses any provider that drops below 80% success rate or fails 3 times in a row.
         </p>
         {providersLoading ? (
-          <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-36 w-full rounded-xl" />)}
+          </div>
         ) : !providers || providers.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <Server className="w-8 h-8 mx-auto mb-2 opacity-30" />
             <p className="text-sm">No providers found. Click "Seed Providers" to register them.</p>
           </div>
         ) : (
-          <div className="divide-y divide-border rounded-lg border overflow-hidden">
-            <div className="grid grid-cols-5 gap-3 px-4 py-2 bg-muted/40 text-xs font-medium text-muted-foreground">
-              <span>Provider</span>
-              <span className="text-center">Priority</span>
-              <span className="text-center">Health</span>
-              <span className="text-center">Last Check</span>
-              <span className="text-center">Action</span>
-            </div>
-            {providers.map((p) => (
-              <div
-                key={p.key}
-                className={`grid grid-cols-5 gap-3 px-4 py-3 items-center ${p.autoPaused ? "bg-orange-50 dark:bg-orange-950/20" : ""}`}
-                data-testid={`row-provider-${p.key}`}
-              >
-                <div>
-                  <p className="text-sm font-medium">{p.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{p.key}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {providers.map((p) => {
+              const isWarn = p.autoPaused;
+              const isOk = p.enabled && !p.autoPaused;
+              return (
+                <div
+                  key={p.key}
+                  className={`relative rounded-xl border p-4 transition-all ${
+                    isWarn
+                      ? "border-orange-400/50 bg-orange-50/60 dark:bg-orange-950/20"
+                      : isOk
+                      ? "border-green-400/30 bg-green-50/20 dark:bg-green-950/10"
+                      : "border-border bg-muted/20"
+                  }`}
+                  data-testid={`row-provider-${p.key}`}
+                >
+                  {/* Status dot */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <p className="text-sm font-semibold leading-tight">{p.name}</p>
+                      <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{p.key}</p>
+                    </div>
+                    <div className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${
+                      isWarn ? "bg-orange-500" : isOk ? "bg-green-500" : "bg-muted-foreground/40"
+                    }`} />
+                  </div>
+
+                  {/* Meta row */}
+                  <div className="flex items-center gap-3 mb-3 flex-wrap">
+                    <div className="flex items-center gap-1">
+                      <HealthBadge status={p.healthStatus} />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground font-mono">Priority #{p.priority}</span>
+                  </div>
+
+                  {/* Last check */}
+                  <p className="text-[10px] text-muted-foreground mb-3">
+                    Last check: {p.lastHealthCheck ? new Date(p.lastHealthCheck).toLocaleDateString() : "Never"}
+                  </p>
+
+                  {/* Auto-pause reason */}
                   {p.autoPaused && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex items-center gap-1 mt-1 cursor-help w-fit">
-                          <AlertCircle className="w-3 h-3 text-orange-500 shrink-0" />
-                          <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Auto-Paused</span>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-xs">
-                        <p className="text-xs font-medium mb-1">Paused by system</p>
-                        <p className="text-xs text-muted-foreground">{p.autoPauseReason ?? "Performance threshold exceeded"}</p>
+                    <div className="flex items-start gap-1.5 mb-3 rounded-lg bg-orange-100 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 px-2.5 py-2">
+                      <AlertCircle className="w-3 h-3 text-orange-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-[10px] font-semibold text-orange-700 dark:text-orange-400 mb-0.5">Auto-paused by system</p>
+                        <p className="text-[10px] text-orange-600 dark:text-orange-400/80 leading-snug">
+                          {p.autoPauseReason ?? "Performance threshold exceeded"}
+                        </p>
                         {p.autoPausedAt && (
-                          <p className="text-xs text-muted-foreground mt-1">{new Date(p.autoPausedAt).toLocaleString()}</p>
+                          <p className="text-[9px] text-orange-500/70 mt-0.5">{new Date(p.autoPausedAt).toLocaleString()}</p>
                         )}
-                      </TooltipContent>
-                    </Tooltip>
+                      </div>
+                    </div>
                   )}
-                </div>
-                <p className="text-sm text-center font-mono">#{p.priority}</p>
-                <div className="flex justify-center"><HealthBadge status={p.healthStatus} /></div>
-                <p className="text-xs text-center text-muted-foreground">
-                  {p.lastHealthCheck ? new Date(p.lastHealthCheck).toLocaleDateString() : "Never"}
-                </p>
-                <div className="flex flex-col gap-1.5 items-center">
-                  {p.autoPaused && (
+
+                  {/* Actions */}
+                  <div className="flex gap-1.5">
+                    {p.autoPaused && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-orange-400 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30 flex-1"
+                        onClick={() => resumeProvider.mutate(p.key)}
+                        disabled={resumeProvider.isPending}
+                        data-testid={`button-resume-provider-${p.key}`}
+                      >
+                        {resumeProvider.isPending ? <RefreshCw className="w-3 h-3 mr-1 animate-spin" /> : <Play className="w-3 h-3 mr-1" />}
+                        Resume
+                      </Button>
+                    )}
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="h-7 text-xs border-orange-400 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30 w-full"
-                      onClick={() => resumeProvider.mutate(p.key)}
-                      disabled={resumeProvider.isPending}
-                      data-testid={`button-resume-provider-${p.key}`}
+                      variant={p.enabled ? "default" : "outline"}
+                      className="h-7 text-xs flex-1"
+                      onClick={() => toggleProvider.mutate({ key: p.key, enabled: !p.enabled })}
+                      data-testid={`button-toggle-provider-${p.key}`}
                     >
-                      {resumeProvider.isPending ? (
-                        <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
-                      ) : (
-                        <Play className="w-3 h-3 mr-1" />
-                      )}
-                      Resume
+                      {p.enabled ? <><Pause className="w-3 h-3 mr-1" />Disable</> : <><Play className="w-3 h-3 mr-1" />Enable</>}
                     </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant={p.enabled ? "default" : "outline"}
-                    className="h-7 text-xs w-full"
-                    onClick={() => toggleProvider.mutate({ key: p.key, enabled: !p.enabled })}
-                    data-testid={`button-toggle-provider-${p.key}`}
-                  >
-                    {p.enabled ? <><Pause className="w-3 h-3 mr-1" />Disable</> : <><Play className="w-3 h-3 mr-1" />Enable</>}
-                  </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>
@@ -2389,6 +2417,9 @@ function RoutingTab() {
             <RefreshCw className="w-3 h-3 mr-1.5" />Refresh
           </Button>
         </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Every time the routing engine selects a provider at checkout, the decision is logged here with scores and confidence rating.
+        </p>
         {decisionsLoading ? (
           <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
         ) : !decisions || decisions.length === 0 ? (
@@ -2398,34 +2429,47 @@ function RoutingTab() {
           </div>
         ) : (
           <div className="divide-y divide-border rounded-lg border overflow-hidden">
-            <div className="grid grid-cols-4 gap-3 px-4 py-2 bg-muted/40 text-xs font-medium text-muted-foreground">
-              <span>Winner</span>
+            <div className="grid grid-cols-5 gap-3 px-4 py-2 bg-muted/40 text-xs font-medium text-muted-foreground">
+              <span className="col-span-2">Winner</span>
               <span>Strategy</span>
-              <span>Scores</span>
+              <span>Confidence</span>
               <span className="text-right">Time</span>
             </div>
             {decisions.slice(0, 50).map((d) => {
               const winnerScores = d.scores?.[d.selectedProviderKey];
+              const confLabel = d.confidenceLabel as string | undefined;
+              const confScore = d.confidenceScore as number | undefined;
+              const confColor =
+                confLabel === "high" ? "text-green-600 dark:text-green-400"
+                : confLabel === "medium" ? "text-yellow-600 dark:text-yellow-400"
+                : confLabel === "low" ? "text-red-500 dark:text-red-400"
+                : "text-muted-foreground";
               return (
-                <div key={d.id} className="grid grid-cols-4 gap-3 px-4 py-3 items-start" data-testid={`row-decision-${d.id}`}>
-                  <div>
-                    <p className="text-sm font-medium font-mono">{d.selectedProviderKey}</p>
-                    <p className="text-xs text-muted-foreground font-mono truncate">{d.selectedProviderPlanCode}</p>
-                  </div>
-                  <div>
-                    <Badge variant="outline" className="text-xs">{d.strategy}</Badge>
-                  </div>
-                  <div className="text-xs text-muted-foreground space-y-0.5">
-                    {winnerScores ? (
-                      <>
-                        <p>cost: <span className="font-medium text-foreground">{winnerScores.cost_score}</span></p>
-                        <p>health: <span className="font-medium text-foreground">{winnerScores.health_score}</span></p>
-                      </>
-                    ) : (
-                      <p className="italic">—</p>
+                <div key={d.id} className="grid grid-cols-5 gap-3 px-4 py-3 items-start" data-testid={`row-decision-${d.id}`}>
+                  <div className="col-span-2">
+                    <p className="text-sm font-semibold font-mono">{d.selectedProviderKey}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono truncate">{d.selectedProviderPlanCode}</p>
+                    {winnerScores && (
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        cost <span className="text-foreground">{winnerScores.cost_score}</span>
+                        {" · "}health <span className="text-foreground">{winnerScores.health_score}</span>
+                      </p>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground text-right">
+                  <div>
+                    <Badge variant="outline" className="text-[10px] px-1.5">{d.strategy}</Badge>
+                  </div>
+                  <div>
+                    {confLabel ? (
+                      <span className={`text-xs font-semibold capitalize ${confColor}`}>
+                        {confLabel}
+                        {confScore != null && <span className="font-normal text-muted-foreground ml-1">({confScore})</span>}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground text-right">
                     {new Date(d.createdAt).toLocaleString()}
                   </p>
                 </div>
@@ -2435,24 +2479,27 @@ function RoutingTab() {
         )}
       </Card>
 
-      {/* ── Provider Attempts ── */}
+      {/* ── Fulfilment Attempts ── */}
       <Card className="p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Clock className="w-5 h-5 text-violet-500" />
-            <h3 className="font-semibold text-base">Provider Attempts</h3>
+            <h3 className="font-semibold text-base">Fulfilment Attempts</h3>
             {attempts && <Badge variant="secondary" className="text-xs">{attempts.length}</Badge>}
           </div>
           <Button size="sm" variant="ghost" onClick={() => refetchAttempts()} data-testid="button-refresh-attempts">
             <RefreshCw className="w-3 h-3 mr-1.5" />Refresh
           </Button>
         </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Every eSIM provisioning attempt after a successful payment is recorded here. Multiple attempts per order indicate the fallback chain was triggered.
+        </p>
         {attemptsLoading ? (
           <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
         ) : !attempts || attempts.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <Clock className="w-8 h-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">No provider attempts yet. Attempts are logged during eSIM provisioning after payment.</p>
+            <p className="text-sm">No fulfilment attempts yet. Attempts are logged when an eSIM is provisioned after payment.</p>
           </div>
         ) : (
           <div className="divide-y divide-border rounded-lg border overflow-hidden">
@@ -2474,16 +2521,25 @@ function RoutingTab() {
                     <p className="text-[10px] text-muted-foreground font-mono truncate">{a.providerPlanCode}</p>
                   )}
                 </div>
-                <p className="text-xs text-center">#{a.attemptNumber}</p>
+                <p className="text-xs text-center font-mono">#{a.attemptNumber}</p>
                 <div className="flex justify-center">
                   <AttemptStatusBadge status={a.status} />
                 </div>
                 <div className="text-right">
                   {a.durationMs != null ? (
-                    <span className="text-xs text-muted-foreground">{a.durationMs}ms</span>
+                    <span className={`text-xs ${a.durationMs > 5000 ? "text-orange-500" : "text-muted-foreground"}`}>{a.durationMs}ms</span>
                   ) : <span className="text-xs text-muted-foreground">—</span>}
                   {a.errorMessage && (
-                    <p className="text-[10px] text-red-500 dark:text-red-400 truncate mt-0.5" title={a.errorMessage}>{a.errorMessage}</p>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <p className="text-[10px] text-red-500 dark:text-red-400 truncate mt-0.5 cursor-help max-w-[120px] ml-auto" title={a.errorMessage}>
+                          {a.errorMessage.length > 30 ? a.errorMessage.slice(0, 30) + "…" : a.errorMessage}
+                        </p>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-xs">
+                        <p className="text-xs">{a.errorMessage}</p>
+                      </TooltipContent>
+                    </Tooltip>
                   )}
                 </div>
               </div>
@@ -2491,6 +2547,86 @@ function RoutingTab() {
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+// ─── System Health Bar ─────────────────────────────────────────────────────
+
+function SystemHealthBar() {
+  const { data: stats } = useQuery<any>({ queryKey: ["/api/admin/stats"] });
+  const { data: catalogHealth } = useQuery<any>({ queryKey: ["/api/admin/catalog-health"] });
+  const { data: providers } = useQuery<any[]>({ queryKey: ["/api/admin/providers"] });
+  const { data: routingSettings } = useQuery<any>({ queryKey: ["/api/admin/settings"] });
+
+  const activeProviders = providers?.filter((p: any) => p.enabled && !p.autoPaused).length ?? 0;
+  const totalProviders = providers?.length ?? 0;
+  const autoPaused = providers?.filter((p: any) => p.autoPaused).length ?? 0;
+  const totalOffers = catalogHealth?.totalOffers ?? 0;
+  const lastSync = catalogHealth?.lastSyncAt ? new Date(catalogHealth.lastSyncAt) : null;
+  const syncAgo = lastSync
+    ? Math.round((Date.now() - lastSync.getTime()) / 60000)
+    : null;
+  const routingMode = routingSettings?.routingMode ?? "balanced";
+  const revenue = stats?.totalRevenue ?? 0;
+
+  const providerStatus = autoPaused > 0 ? "warn" : activeProviders === totalProviders && totalProviders > 0 ? "ok" : "info";
+  const syncStatus = syncAgo == null ? "info" : syncAgo > 180 ? "warn" : "ok";
+
+  const pill = (status: "ok" | "warn" | "info", children: ReactNode) => {
+    const cls =
+      status === "ok" ? "bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400"
+      : status === "warn" ? "bg-orange-500/10 border-orange-500/20 text-orange-600 dark:text-orange-400"
+      : "bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400";
+    return (
+      <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${cls}`}>
+        {children}
+      </span>
+    );
+  };
+
+  return (
+    <div className="rounded-xl border bg-muted/30 px-4 py-3 mb-6 flex flex-wrap items-center gap-2.5" data-testid="system-health-bar">
+      <div className="flex items-center gap-1.5 mr-1">
+        <Activity className="w-3.5 h-3.5 text-muted-foreground" />
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">System Status</span>
+      </div>
+      {pill(
+        providerStatus,
+        <>
+          <Server className="w-3 h-3" />
+          {activeProviders}/{totalProviders} providers active
+          {autoPaused > 0 && <span className="font-bold">· {autoPaused} paused</span>}
+        </>
+      )}
+      {pill(
+        syncStatus,
+        <>
+          <RefreshCw className="w-3 h-3" />
+          {syncAgo == null ? "No sync yet" : syncAgo < 60 ? `Synced ${syncAgo}m ago` : `Synced ${Math.round(syncAgo / 60)}h ago`}
+        </>
+      )}
+      {pill(
+        "info",
+        <>
+          <Layers className="w-3 h-3" />
+          {totalOffers > 0 ? `${totalOffers.toLocaleString()} offers` : "Loading catalogue…"}
+        </>
+      )}
+      {pill(
+        "info",
+        <>
+          <Network className="w-3 h-3" />
+          <span className="capitalize">Routing: {routingMode}</span>
+        </>
+      )}
+      {revenue > 0 && pill(
+        "ok",
+        <>
+          <DollarSign className="w-3 h-3" />
+          ${Number(revenue).toFixed(0)} revenue
+        </>
+      )}
     </div>
   );
 }
@@ -2769,7 +2905,7 @@ export default function Admin() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
+      <div className="flex items-center justify-between gap-4 mb-5 flex-wrap">
         <div>
           <Link href="/">
             <Button variant="ghost" size="sm" className="mb-2">
@@ -2778,10 +2914,10 @@ export default function Admin() {
             </Button>
           </Link>
           <h1 className="text-2xl font-bold" data-testid="text-admin-title">
-            Admin Dashboard
+            Konex Operations Console
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Manage plans, orders, and eSIM inventory
+            eSIM platform administration &amp; routing intelligence
           </p>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
@@ -2795,6 +2931,8 @@ export default function Admin() {
           </Button>
         </div>
       </div>
+
+      <SystemHealthBar />
 
       <Tabs defaultValue="dashboard" className="w-full">
         <TabsList className="w-full flex flex-wrap h-auto gap-1 mb-6">

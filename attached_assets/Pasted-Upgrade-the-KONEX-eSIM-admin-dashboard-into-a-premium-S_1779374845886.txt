@@ -1,0 +1,151 @@
+Upgrade the KONEX eSIM admin dashboard into a premium SaaS-grade telecom operations console.
+
+Do not remove existing functionality. Preserve all current routes, API integrations, database logic, provider sync, routing, margin, plans, orders, and eSIM inventory features.
+
+Main objective:
+Make the admin dashboard cleaner, more readable, more investor-ready, and more operationally useful on mobile and desktop.
+
+Implement the following changes:
+
+1. Add a new top “System Health” summary bar on the admin dashboard:
+- Providers Online: active providers / total providers
+- Last Catalogue Sync
+- Fulfilment Success Rate
+- Routing Mode
+- Failed Attempts in last 24h
+- Average Fulfilment Time
+Use green/amber/red status indicators.
+
+2. Improve dashboard hierarchy:
+- Keep key commercial metrics at the top:
+  - Revenue
+  - Net Profit
+  - Margin %
+  - Completed Orders
+  - eSIMs Issued
+- Move deep diagnostics such as orphan plans, duplicates, merges, provider attempt logs, and sync history into collapsible “Advanced Diagnostics” sections.
+
+3. Improve mobile UX:
+- Replace wide tables with responsive mobile cards.
+- On desktop, tables can remain.
+- On mobile, each row should become a clean card with label/value pairs.
+- Apply this to:
+  - Provider Attempts
+  - Routing Decisions
+  - Plan Catalogue
+  - Provider Performance
+  - Top Performing Plans
+  - Orders
+
+4. Improve error states:
+- Replace generic red “error” labels with human-readable status messages.
+Examples:
+  - “Provider timeout — fallback attempted”
+  - “No provider fulfilled this request”
+  - “Provider unavailable — auto-paused”
+  - “Recovered via backup provider”
+- Add severity badges:
+  - Info
+  - Warning
+  - Degraded
+  - Critical
+- Group repeated failures by provider and plan instead of showing endless repeated red rows.
+
+5. Improve routing console:
+- Keep Profit First, Balanced, and Reliability First modes.
+- Add clearer descriptions:
+  - Profit First: prioritises margin where reliability is acceptable.
+  - Balanced: optimises margin, fulfilment success, and provider health.
+  - Reliability First: prioritises successful fulfilment and provider stability.
+- Add a visual provider scoring card showing:
+  - Cost Score
+  - Health Score
+  - Success Score
+  - Final Routing Score
+
+6. Improve provider management:
+- Add provider health cards for each provider:
+  - Provider name
+  - Status: Active / Paused / Degraded / Disabled
+  - Last successful order
+  - Success rate
+  - Average fulfilment time
+  - Current priority
+  - Resume / Pause / Disable action
+- Make auto-paused providers visually clear but not alarming.
+
+7. Improve catalogue sync section:
+- Add a clean sync status panel:
+  - Last successful sync
+  - Last failed sync
+  - Plans updated
+  - Price changes
+  - Duration
+  - Error reason if failed
+- Make “Sync Providers Now” prominent.
+- Keep “Run Normalizer” but place it under Advanced Tools.
+
+8. Improve terminology:
+Replace overly technical labels where possible:
+- “SI duplicates” → “Similar duplicate plans”
+- “Orphan plans” → “Unmatched provider plans”
+- “Plans to remove” → “Inactive plans pending cleanup”
+- “Normalize Plan Mapping” → “Plan Matching & Cleanup”
+- “Provider Attempts” → “Fulfilment Attempts”
+- “Routing Decisions” → “Provider Routing Decisions”
+
+9. Add visual charts using existing data:
+- Revenue trend
+- Profit trend
+- Orders by provider
+- Margin by provider
+- Fulfilment success rate
+Use lightweight charts and ensure they match the existing dark KONEX design system.
+
+10. Public-facing site enhancement:
+Add a section to the homepage titled:
+“Powered by Smart Routing”
+Copy:
+“KONEX connects travellers through multiple global network partners, automatically selecting reliable coverage based on destination, availability, and provider performance.”
+Include 3 feature cards:
+- Multi-provider coverage
+- Automatic fallback
+- Optimised pricing
+CTA: “Find My Plan”
+
+11. Keep design language consistent:
+- Dark premium UI
+- Blue/purple glow accents
+- Rounded cards
+- Strong spacing
+- Clear typography
+- Better grey text contrast for readability
+
+12. Do not break:
+- Stripe checkout
+- PayPal checkout
+- Provider APIs
+- Order fulfilment
+- QR resend
+- eSIM injection
+- Auto pricing
+- Provider sync
+- Routing logic
+- Existing admin authentication
+
+Before coding:
+- Inspect the existing file structure.
+- Identify relevant components/routes.
+- Reuse existing design tokens/components where possible.
+- Make changes incrementally.
+- After implementation, run type checks/build checks.
+- Fix any TypeScript, React, routing, or styling errors.
+
+Deliverables:
+- Upgraded admin dashboard UI
+- Responsive mobile card layouts
+- Improved system health summary
+- Improved routing/provider management UX
+- Cleaner diagnostics structure
+- Homepage “Powered by Smart Routing” section
+- No regressions to existing checkout or provider logic
