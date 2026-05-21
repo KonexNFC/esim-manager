@@ -1302,7 +1302,7 @@ const EVENT_CATEGORIES = [
 
 function GlobalEventsSection() {
   return (
-    <section className="py-16 sm:py-20 bg-white border-t border-border/50">
+    <section className="py-16 sm:py-20 bg-background border-t border-border/50">
       <div className="max-w-6xl mx-auto px-4">
         <Reveal>
           <div className="text-center mb-10">
@@ -1322,9 +1322,9 @@ function GlobalEventsSection() {
           {EVENT_CATEGORIES.map((cat, i) => (
             <Reveal key={cat.slug} delay={Math.min(i + 1, 4) as 1 | 2 | 3 | 4}>
               <Link href={`/events?category=${cat.slug}`} data-testid={`event-category-${cat.slug}`}>
-                <div className="group flex flex-col gap-2 p-4 sm:p-5 bg-white border border-border rounded-2xl hover:border-primary/40 hover:shadow-md transition-all cursor-pointer h-full">
+                <div className="group flex flex-col gap-2 p-4 sm:p-5 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-md transition-all cursor-pointer h-full">
                   <span className="text-2xl sm:text-3xl">{cat.emoji}</span>
-                  <p className="font-semibold text-sm sm:text-base leading-tight group-hover:text-primary transition-colors">
+                  <p className="font-semibold text-sm sm:text-base leading-tight text-card-foreground group-hover:text-primary transition-colors">
                     {cat.label}
                   </p>
                   <p className="text-xs text-muted-foreground leading-relaxed hidden sm:block">
