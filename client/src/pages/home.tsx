@@ -28,7 +28,7 @@ import { SiVisa, SiMastercard, SiApplepay, SiPaypal, SiGooglepay, SiVodafone, Si
 import type { Destination, Plan } from "@shared/schema";
 import { CountryCombobox } from "@/components/country-combobox";
 import { useInView } from "@/hooks/use-in-view";
-import worldMapImg from "@assets/IMG_9153_1776332722553.jpeg";
+import { GlobeVisualization } from "@/components/globe-visualization";
 import wimbledonImg from "@assets/wimbledon_2026.png";
 import travelLandmarksImg from "@assets/Travel_Image__1776723002223.jpeg";
 
@@ -1086,17 +1086,53 @@ function WorldCoverageSection() {
           </p>
         </div>
 
-        {/* Map card */}
+        {/* Globe card */}
         <div
-          className={`relative rounded-2xl sm:rounded-3xl overflow-hidden border border-border/60 shadow-2xl reveal reveal-delay-1 ${inView ? "in-view" : ""}`}
+          className={`relative rounded-2xl sm:rounded-3xl overflow-hidden border border-blue-500/20 shadow-2xl reveal reveal-delay-1 ${inView ? "in-view" : ""}`}
+          style={{ background: "radial-gradient(ellipse at 50% 60%, rgba(30,40,80,0.85) 0%, rgba(8,12,28,0.97) 100%)" }}
+          data-testid="img-world-coverage-map"
         >
-          <img
-            src={worldMapImg}
-            alt="World map showing Konex eSIM coverage across 205+ countries"
-            className="w-full object-cover block"
-            style={{ maxHeight: "520px", objectPosition: "center 30%" }}
-            data-testid="img-world-coverage-map"
-          />
+          {/* Subtle top edge glow */}
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-400/40 to-transparent" />
+
+          {/* Globe canvas */}
+          <div className="w-full" style={{ height: "480px" }}>
+            <GlobeVisualization />
+          </div>
+
+          {/* Floating city labels */}
+          <div className="absolute inset-0 pointer-events-none select-none">
+            {[
+              { label: "London",      top: "22%", left: "44%" },
+              { label: "New York",    top: "28%", left: "22%" },
+              { label: "Dubai",       top: "38%", right: "28%" },
+              { label: "Tokyo",       top: "26%", right: "14%" },
+              { label: "Singapore",   top: "54%", right: "19%" },
+              { label: "São Paulo",   top: "65%", left: "24%" },
+            ].map(({ label, top, left, right }) => (
+              <div
+                key={label}
+                className="absolute flex items-center gap-1.5"
+                style={{ top, left, right }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_6px_2px_rgba(96,165,250,0.7)] flex-shrink-0" />
+                <span className="text-[10px] sm:text-xs font-semibold text-blue-200/80 tracking-wide whitespace-nowrap">
+                  {label}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Bottom gradient fade */}
+          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[rgba(8,12,28,0.7)] to-transparent" />
+
+          {/* Bottom badge */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold tracking-widest uppercase text-blue-300/80 border border-blue-500/25 bg-blue-950/40 backdrop-blur-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+              Live network · 205+ countries
+            </span>
+          </div>
         </div>
 
         {/* Stats row under map */}
