@@ -256,8 +256,8 @@ const QUICK_COUNTRIES = [
 const STATS = [
   { value: "205+",   label: "Countries covered",   accent: "text-blue-500 dark:text-blue-400" },
   { value: "5,000+", label: "Happy travellers",     accent: "text-emerald-500 dark:text-emerald-400" },
-  { value: "800+",   label: "Networks",             accent: "text-amber-500 dark:text-amber-400" },
-  { value: "Instant", label: "Activation",          accent: "text-sky-500 dark:text-sky-400" },
+  { value: "4.9/5",  label: "Customer rating",      accent: "text-amber-500 dark:text-amber-400" },
+  { value: "<60s",   label: "Average setup time",   accent: "text-sky-500 dark:text-sky-400" },
 ];
 
 function StatsStrip() {
@@ -284,7 +284,7 @@ function StatsStrip() {
 }
 
 // ─────────────────────────────────────────────
-// FESTIVAL EVENTS CAROUSEL  (primary hero)
+// FESTIVAL EVENTS CAROUSEL
 // ─────────────────────────────────────────────
 function EventsCarousel() {
   const [active, setActive] = useState(0);
@@ -304,52 +304,36 @@ function EventsCarousel() {
 
   return (
     <section
-      className="relative overflow-hidden min-h-[92vh] sm:min-h-screen flex flex-col"
+      className="relative overflow-hidden"
       data-testid="section-events-carousel"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      {/* Background slides */}
+      {/* Slides */}
       {FESTIVAL_EVENTS.map((event, i) => (
         <div
           key={event.id}
           className={`absolute inset-0 transition-opacity duration-700 ${i === active ? "opacity-100 z-10" : "opacity-0 z-0"}`}
           style={{ background: `linear-gradient(135deg, ${event.bgFrom} 0%, ${event.bgTo} 100%)` }}
         >
+          {/* Background photo overlay */}
           <img
             src={event.photo}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-40"
+            className="absolute inset-0 w-full h-full object-cover opacity-35"
             loading="lazy"
           />
-          {/* Stronger overlay for readability */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/20" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent" />
         </div>
       ))}
 
       {/* Content layer */}
-      <div className="relative z-20 flex-1 max-w-7xl mx-auto px-4 sm:px-6 w-full flex flex-col">
+      <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 items-center gap-8 py-12 sm:py-16">
 
-        {/* ── Static hero headline ── */}
-        <div className="pt-12 sm:pt-20 lg:pt-24 pb-8 sm:pb-10">
-          <h1
-            className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-[1.05] tracking-tight mb-4"
-            data-testid="text-hero-title"
-          >
-            Stay connected at the
-            <br className="hidden sm:block" /> world's biggest events.
-          </h1>
-          <p className="text-white/55 text-base sm:text-xl max-w-2xl leading-relaxed">
-            From Monaco to Tomorrowland, activate instant eSIM data in 205+ countries before you land.
-          </p>
-        </div>
-
-        {/* ── Event-specific content ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 items-center gap-8 pb-4">
-
-          {/* Left: event detail */}
+          {/* Left: text */}
           <div className="text-white">
+            {/* Event type pill */}
             <div
               className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest mb-4 text-white"
               style={{ backgroundColor: ev.accent + "33", border: `1px solid ${ev.accent}55` }}
@@ -358,18 +342,19 @@ function EventsCarousel() {
               Upcoming Event
             </div>
 
+            {/* Title */}
             <h2
-              className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold leading-tight mb-3 text-white"
+              className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-3 text-white"
               data-testid="text-event-title"
             >
               {ev.name}
             </h2>
 
-            <p className="text-white/65 text-sm sm:text-base max-w-md leading-relaxed mb-5">
+            <p className="text-white/70 text-sm sm:text-base max-w-md leading-relaxed mb-5">
               {ev.subtitle}
             </p>
 
-            {/* Location + Date + flag chips */}
+            {/* Location + Date chips */}
             <div className="flex flex-wrap gap-2 mb-6">
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 text-white/80 text-xs font-medium border border-white/15">
                 <MapPin className="w-3 h-3 flex-shrink-0" style={{ color: ev.accent }} />
@@ -395,17 +380,21 @@ function EventsCarousel() {
                 {ev.cta}
                 <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
-              <span className="text-white/40 text-xs">eSIM ready in seconds · No SIM card needed</span>
+              <span className="text-white/40 text-xs">
+                eSIM ready in seconds · No SIM card needed
+              </span>
             </div>
           </div>
 
-          {/* Right: 16:9 event image */}
+          {/* Right: full image */}
           <div className="hidden lg:flex justify-center items-center">
             <div className="relative w-full max-w-lg">
+              {/* Subtle glow behind image */}
               <div
                 className="absolute -inset-4 rounded-2xl blur-3xl opacity-30"
                 style={{ backgroundColor: ev.accent }}
               />
+              {/* Full rectangular image */}
               <div
                 className="relative w-full rounded-2xl overflow-hidden border-2 shadow-2xl"
                 style={{ borderColor: ev.accent + "60", aspectRatio: "16/9" }}
@@ -416,6 +405,7 @@ function EventsCarousel() {
                   className="w-full h-full object-cover"
                   loading="lazy"
                 />
+                {/* Floating date badge */}
                 <div className="absolute bottom-3 right-3 px-3 py-2 rounded-xl bg-black/80 backdrop-blur border border-white/15 shadow-xl">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 leading-none mb-0.5">When</p>
                   <p className="text-xs font-bold text-white">{ev.dates}</p>
@@ -425,8 +415,8 @@ function EventsCarousel() {
           </div>
         </div>
 
-        {/* Dots navigation — pushed to bottom */}
-        <div className="flex items-center gap-2 py-5 mt-auto">
+        {/* Dots navigation */}
+        <div className="relative z-20 flex items-center gap-2 pb-5">
           {FESTIVAL_EVENTS.map((e, i) => (
             <button
               key={e.id}
@@ -447,207 +437,210 @@ function EventsCarousel() {
 }
 
 // ─────────────────────────────────────────────
-// PLAN FINDER SECTION
+// QUICK COUNTRIES GRID
+
 // ─────────────────────────────────────────────
-function PlanFinderSection() {
+// 1. HERO
+// ─────────────────────────────────────────────
+function HeroSection() {
+  useEffect(() => { document.title = "Konex eSIM – Instant Data Plans for 205+ Countries"; }, []);
   const [, navigate] = useLocation();
   const [heroCode, setHeroCode] = useState<string>("");
   const [heroDays, setHeroDays] = useState<number | null>(null);
-  const DURATION_OPTIONS = [1, 3, 5, 7, 30];
 
-  const handleFind = () => {
+  const DURATION_OPTIONS = [1, 3, 5, 7];
+
+  const handleHeroFind = () => {
     const params = new URLSearchParams();
     if (heroDays) params.set("days", String(heroDays));
     if (heroCode && heroCode !== "any") params.set("country", heroCode);
-    navigate(params.toString() ? `/find-plan?${params}` : "/find-plan");
+    const qs = params.toString();
+    navigate(qs ? `/find-plan?${qs}` : "/find-plan");
   };
 
   return (
-    <section className="py-12 sm:py-16 border-b" data-testid="section-plan-finder">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-
-          {/* Left: copy */}
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-3">Instant eSIM · 205+ countries</p>
-            <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight mb-4" data-testid="text-plan-finder-title">
-              Find your destination plan
-            </h2>
-            <p className="text-muted-foreground leading-relaxed mb-7 max-w-md">
-              Search any destination and get a QR code delivered to your inbox in seconds. No SIM swap, no queues, no contracts.
-            </p>
-            <div className="flex flex-col gap-3">
-              {[
-                { icon: Zap,          text: "QR code in seconds — activate before you fly" },
-                { icon: Banknote,     text: "Flat price, no hidden roaming charges" },
-                { icon: CheckCircle2, text: "No contracts · cancel any time" },
-                { icon: Smartphone,   text: "Your regular number stays fully active" },
-              ].map(({ icon: Icon, text }) => (
-                <div key={text} className="flex items-center gap-3 text-sm">
-                  <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-3.5 h-3.5 text-primary" />
-                  </div>
-                  <span className="text-muted-foreground">{text}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Right: plan finder card */}
-          <div className="rounded-2xl border bg-card shadow-xl p-6 sm:p-7" data-testid="hero-plan-selector">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">Find your plan</p>
-
-            {/* Destination */}
-            <div className="mb-4">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                Where are you travelling?
-              </label>
-              <CountryCombobox
-                value={heroCode}
-                onSelect={code => setHeroCode(code ?? "")}
-                placeholder="Search destination…"
-                allowAny
-                className="h-11 text-sm w-full"
-                data-testid="hero-select-destination"
-              />
-            </div>
-
-            {/* Duration */}
-            <div className="mb-5">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
-                How long?
-              </label>
-              <div className="flex gap-2 flex-wrap" data-testid="hero-duration-buttons">
-                {DURATION_OPTIONS.map((d) => {
-                  const isActive = heroDays === d;
-                  return (
-                    <button
-                      key={d}
-                      onClick={() => setHeroDays(isActive ? null : d)}
-                      className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 cursor-pointer select-none ${
-                        isActive
-                          ? "bg-primary border-primary text-white shadow-lg shadow-primary/30 scale-[1.04]"
-                          : "bg-muted border-border text-foreground hover:bg-muted/70 hover:border-border/80"
-                      }`}
-                      data-testid={`hero-duration-${d}`}
-                    >
-                      {d === 30 ? "30 days" : `${d} ${d === 1 ? "day" : "days"}`}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Submit */}
-            <button
-              onClick={handleFind}
-              className="group w-full flex items-center justify-center gap-2.5 h-12 rounded-xl bg-primary font-bold text-white text-base shadow-xl shadow-primary/25 hover:bg-primary/90 hover:shadow-primary/40 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200"
-              data-testid="button-hero-find-plan"
-            >
-              <Search className="w-4 h-4" />
-              Find My Plan
-              <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────
-// K. TRAVEL SMARTER (secondary explainer — moved lower)
-// ─────────────────────────────────────────────
-function TravelSmarterSection() {
-  const [, navigate] = useLocation();
-
-  return (
-    <section className="relative overflow-hidden border-t" data-testid="section-travel-smarter">
-      {/* Dark background */}
+    <section className="relative overflow-hidden sm:min-h-[90vh] flex flex-col" data-testid="hero-section">
+      {/* Background */}
       <div className="absolute inset-0">
         <img
           src="/images/hero-bg.png"
           alt=""
           className="w-full h-full object-cover"
-          style={{ filter: "brightness(0.25) saturate(1.2)" }}
+          style={{ filter: "brightness(0.35) saturate(1.2)", transform: "scale(1.04)" }}
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0A0A0A]/97 via-black/88 to-blue-950/90" />
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full opacity-10 pointer-events-none"
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0A0A0A]/95 via-black/75 to-blue-950/80" />
+        {/* Glow blobs */}
+        <div className="absolute top-0 right-0 w-[700px] h-[700px] rounded-full opacity-15 pointer-events-none"
           style={{ background: "radial-gradient(circle, #2563eb 0%, transparent 65%)" }} />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full opacity-8 pointer-events-none"
+        <div className="absolute bottom-0 left-0 w-[500px] h-[400px] rounded-full opacity-10 pointer-events-none"
           style={{ background: "radial-gradient(circle, #4f46e5 0%, transparent 70%)" }} />
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+      <div className="relative flex-1 max-w-7xl mx-auto px-4 sm:px-6 pt-10 pb-0 sm:pt-24 lg:pt-32 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center pb-10 sm:pb-20">
 
-          {/* Left: copy */}
+          {/* ── Left: Copy + Search form ─────────────────── */}
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-primary/80 mb-4">Your global connectivity</p>
-            <h2
-              className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight tracking-tight mb-5"
-              data-testid="text-travel-smarter-title"
+            <h1
+              className="font-display text-3xl sm:text-4xl lg:text-[2.75rem] xl:text-[3.25rem] font-bold text-white leading-[1.1] tracking-tight mb-5"
+              data-testid="text-hero-title"
             >
-              Travel smarter<br />with KONEX.
-            </h2>
-            <p className="text-white/55 text-base sm:text-lg leading-relaxed mb-8 max-w-lg" data-testid="text-hero-subtitle">
-              Choose your destination, activate in minutes, and stay connected in 205+ countries with instant eSIM data.
+              Land anywhere.
+              <br />
+              <span className="text-gradient-bright">Stay connected</span>
+              <br />
+              in 60 Seconds.
+            </h1>
+
+            <p
+              className="text-white/55 text-sm sm:text-lg max-w-lg leading-relaxed mb-5"
+              data-testid="text-hero-subtitle"
+            >
+              Your eSIM is ready the instant you check out. Scan the QR, skip the airport queues, and land with data already working.
             </p>
 
-            {/* 2×2 trust grid */}
-            <div className="grid grid-cols-2 gap-3 mb-10">
+            {/* Trust bullets */}
+            <div className="flex flex-col gap-1.5 mb-5 sm:mb-8" data-testid="trust-bullets">
               {[
-                { icon: Zap,          text: "Instant delivery" },
-                { icon: Banknote,     text: "No roaming fees" },
-                { icon: CheckCircle2, text: "No contracts" },
-                { icon: Smartphone,   text: "No physical SIM" },
-              ].map(({ icon: Icon, text }) => (
-                <div key={text} className="flex items-center gap-2.5 text-white/70 text-sm">
-                  <div className="w-7 h-7 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-3.5 h-3.5 text-primary" />
-                  </div>
-                  {text}
+                "QR code delivered to your inbox in seconds",
+                "Your regular number stays fully active",
+                "One flat price — no daily fees, no bill shock",
+              ].map((b) => (
+                <div key={b} className="flex items-center gap-2.5 text-white/55 text-sm">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                  {b}
                 </div>
               ))}
             </div>
 
-            {/* CTAs */}
-            <div className="flex flex-wrap gap-3" data-testid="trust-bullets">
-              <Button
-                onClick={() => navigate("/find-plan")}
-                className="font-bold h-12 px-7"
-                data-testid="button-travel-smarter-find"
+            {/* ── Plan finder card ── */}
+            <div
+              className="rounded-2xl border border-white/12 bg-white/[0.06] backdrop-blur-xl p-5 sm:p-6 shadow-2xl shadow-black/40"
+              data-testid="hero-plan-selector"
+            >
+              <p className="text-[10px] font-bold uppercase tracking-widest text-white/35 mb-4">Find your plan</p>
+
+              {/* Destination input */}
+              <div className="mb-4">
+                <label className="text-[11px] font-semibold text-white/40 uppercase tracking-wider block mb-1.5">
+                  Where are you travelling?
+                </label>
+                <CountryCombobox
+                  value={heroCode}
+                  onSelect={code => setHeroCode(code ?? "")}
+                  placeholder="Search destination…"
+                  allowAny
+                  className="bg-white/10 border-white/15 text-white h-11 text-sm hover:bg-white/15 hover:text-white transition-all duration-200 focus-within:ring-2 focus-within:ring-primary/50 w-full"
+                  data-testid="hero-select-destination"
+                />
+              </div>
+
+              {/* Duration pill buttons */}
+              <div className="mb-5">
+                <label className="text-[11px] font-semibold text-white/40 uppercase tracking-wider block mb-2">
+                  How long?
+                </label>
+                <div className="flex gap-2 flex-wrap" data-testid="hero-duration-buttons">
+                  {DURATION_OPTIONS.map((d) => {
+                    const active = heroDays === d;
+                    return (
+                      <button
+                        key={d}
+                        onClick={() => setHeroDays(active ? null : d)}
+                        className={`
+                          px-4 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 cursor-pointer select-none
+                          ${active
+                            ? "bg-primary border-primary text-white shadow-lg shadow-primary/30 scale-[1.04]"
+                            : "bg-white/8 border-white/15 text-white/65 hover:bg-white/14 hover:border-white/30 hover:text-white hover:shadow-md hover:shadow-primary/10 hover:scale-[1.02]"
+                          }
+                        `}
+                        data-testid={`hero-duration-${d}`}
+                      >
+                        {d} {d === 1 ? "day" : "days"}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setHeroDays(heroDays && heroDays > 7 ? null : 30)}
+                    className={`
+                      px-4 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 cursor-pointer select-none
+                      ${heroDays === 30
+                        ? "bg-primary border-primary text-white shadow-lg shadow-primary/30 scale-[1.04]"
+                        : "bg-white/8 border-white/15 text-white/65 hover:bg-white/14 hover:border-white/30 hover:text-white hover:shadow-md hover:shadow-primary/10 hover:scale-[1.02]"
+                      }
+                    `}
+                    data-testid="hero-duration-30"
+                  >
+                    30 days
+                  </button>
+                </div>
+              </div>
+
+              {/* CTA */}
+              <button
+                onClick={handleHeroFind}
+                className="group w-full flex items-center justify-center gap-2.5 h-12 rounded-xl bg-primary font-bold text-white text-base shadow-xl shadow-primary/30 hover:bg-primary/90 hover:shadow-primary/50 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200"
+                data-testid="button-hero-find-plan"
               >
-                <Search className="w-4 h-4 mr-2" />
+                <Search className="w-4 h-4 transition-transform duration-200 group-hover:-translate-y-px" />
                 Find My Plan
-              </Button>
-              <Link href="/destinations">
-                <Button
-                  variant="outline"
-                  className="font-bold h-12 px-7 border-white/20 text-white hover:bg-white/10 hover:text-white"
-                  data-testid="button-travel-smarter-browse"
-                >
-                  View Plans
-                </Button>
-              </Link>
+                <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+              </button>
             </div>
           </div>
 
-          {/* Right: 2×2 feature tiles */}
-          <div className="hidden lg:grid grid-cols-2 gap-4">
-            {[
-              { emoji: "⚡", title: "Instant activation", desc: "QR delivered to your inbox in seconds after payment" },
-              { emoji: "🌍", title: "205+ countries", desc: "From major cities to remote destinations worldwide" },
-              { emoji: "💳", title: "Flat pricing", desc: "One price, no daily fees, no bill shock" },
-              { emoji: "📱", title: "Dual SIM", desc: "Your regular number stays fully active alongside your eSIM" },
-            ].map(f => (
-              <div key={f.title} className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-5">
-                <span className="text-3xl mb-3 block">{f.emoji}</span>
-                <p className="text-white font-semibold text-sm mb-1">{f.title}</p>
-                <p className="text-white/40 text-xs leading-relaxed">{f.desc}</p>
+          {/* ── Right: Floating plan preview ─────────────── */}
+          <div className="hidden lg:block" data-testid="card-hero-preview">
+            <div className="relative">
+              <div className="absolute inset-0 rounded-3xl opacity-25 pointer-events-none"
+                style={{ background: "radial-gradient(ellipse, #2563eb 0%, transparent 70%)", filter: "blur(48px)" }} />
+              <div className="relative rounded-3xl border border-white/10 bg-black/55 backdrop-blur-2xl overflow-hidden shadow-2xl">
+                <div className="px-6 pt-6 pb-4 border-b border-white/[0.07] flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/35 mb-0.5">Popular Plans</p>
+                    <p className="text-sm text-white/50">Starting from <strong className="text-white/90">$9</strong></p>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-semibold">
+                    <Zap className="w-3 h-3" />
+                    Instant QR
+                  </div>
+                </div>
+                <div className="p-4 space-y-2">
+                  {mockPlans.map((p) => (
+                    <div
+                      key={p.dest}
+                      className="flex items-center justify-between py-3 px-4 rounded-xl bg-white/[0.04] border border-white/[0.07] hover:bg-white/[0.08] hover:border-white/15 transition-all duration-200 cursor-pointer group"
+                      data-testid={`mock-plan-${p.dest.toLowerCase().replace(/\s/g, '-')}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl leading-none">{p.flag}</span>
+                        <div>
+                          <p className="text-sm font-bold text-white leading-tight">{p.dest}</p>
+                          <p className="text-xs text-white/45 mt-0.5">{p.data} · {p.days} days</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-white">{p.price}</p>
+                        <p className="text-[10px] text-white/40 group-hover:text-primary/70 transition-colors duration-200">one-off</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="px-4 pb-5">
+                  <Link href="/destinations">
+                    <button
+                      className="w-full flex items-center justify-center gap-2 h-11 rounded-xl bg-primary font-bold text-white text-sm shadow-lg shadow-primary/25 hover:bg-primary/90 hover:shadow-primary/40 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200"
+                      data-testid="button-hero-card-browse"
+                    >
+                      Browse All Plans
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </Link>
+                </div>
               </div>
-            ))}
+            </div>
           </div>
+
         </div>
       </div>
     </section>
@@ -1878,31 +1871,21 @@ function MobileStickyCTA() {
 // PAGE
 // ─────────────────────────────────────────────
 export default function Home() {
-  useEffect(() => { document.title = "Konex eSIM – Instant Data Plans for 205+ Countries"; }, []);
-
   return (
     <div className="min-h-screen pb-20 sm:pb-0 overflow-x-hidden">
-      {/* B: Primary hero — events carousel */}
       <EventsCarousel />
-      {/* C: Trust stats strip */}
       <StatsStrip />
-      {/* D: Plan finder */}
-      <Reveal><PlanFinderSection /></Reveal>
-      {/* E: Popular destinations */}
-      <Reveal><PopularDestinations /></Reveal>
-      {/* F: Travel bundles */}
-      <Reveal><BundlesSection /></Reveal>
-      {/* G: Smart routing */}
-      <Reveal><SmartRoutingSection /></Reveal>
-      {/* H: How it works */}
+      <HeroSection />
       <Reveal><HowItWorks /></Reveal>
-      {/* I: Device compatibility */}
-      <Reveal><CompatibilitySection /></Reveal>
-      {/* J: Testimonials */}
+      <Reveal><PopularDestinations /></Reveal>
+      <GlobalEventsSection />
       <Reveal><TestimonialsSection /></Reveal>
-      {/* K: Travel smarter explainer */}
-      <Reveal><TravelSmarterSection /></Reveal>
-      {/* L: FAQ */}
+      <Reveal><WhyKonex /></Reveal>
+      <Reveal><WorldCoverageSection /></Reveal>
+      <Reveal><BundlesSection /></Reveal>
+      <Reveal><SmartRoutingSection /></Reveal>
+      <Reveal><CompatibilitySection /></Reveal>
+      <Reveal><FinalCTA /></Reveal>
       <Reveal><FAQSection /></Reveal>
       <Footer />
       <MobileStickyCTA />
