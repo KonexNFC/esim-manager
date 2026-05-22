@@ -1411,15 +1411,15 @@ function TravelPlansFlow({
           <p className="text-sm text-muted-foreground mb-4">
             Tap any cell to select that plan. Greyed cells have no plan available.
           </p>
-          <div className="overflow-x-auto rounded-xl border">
-            <table className="w-full text-sm border-collapse">
+          <div className="overflow-x-auto -mx-0 rounded-xl border">
+            <table className="text-sm border-collapse" style={{ minWidth: "100%" }}>
               <thead>
                 <tr className="bg-muted/50">
-                  <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground border-b border-r min-w-[80px]">
-                    Data \ Days
+                  <th className="text-left px-2 py-2 text-xs font-semibold text-muted-foreground border-b border-r whitespace-nowrap min-w-[68px] sticky left-0 bg-muted/50 z-10">
+                    Data
                   </th>
                   {availBuckets.map(b => (
-                    <th key={b} className="px-3 py-2.5 font-semibold text-center border-b border-r last:border-r-0 min-w-[80px]">
+                    <th key={b} className="px-2 py-2 text-xs font-semibold text-center border-b border-r last:border-r-0 whitespace-nowrap min-w-[58px]">
                       {BUCKET_LABELS[b]}
                     </th>
                   ))}
@@ -1428,23 +1428,23 @@ function TravelPlansFlow({
               <tbody>
                 {matrixRows.map((gb, ri) => (
                   <tr key={gb} className={ri % 2 === 0 ? "bg-background" : "bg-muted/20"}>
-                    <td className="px-3 py-2.5 font-semibold border-r border-b last:border-b-0 whitespace-nowrap">
+                    <td className={`px-2 py-2 text-xs font-semibold border-r border-b last:border-b-0 whitespace-nowrap sticky left-0 z-10 ${ri % 2 === 0 ? "bg-background" : "bg-muted/20"}`}>
                       {gb === 0 ? "Unlimited" : `${gb} GB`}
                     </td>
                     {availBuckets.map(b => {
                       const plan = matrixMap.get(`${gb}::${b}`);
                       return (
-                        <td key={b} className="px-2 py-2 text-center border-r border-b last:border-r-0 last:border-b-0">
+                        <td key={b} className="px-1.5 py-1.5 text-center border-r border-b last:border-r-0 last:border-b-0">
                           {plan ? (
                             <button
                               onClick={() => onSelectPublic(plan)}
-                              className="w-full rounded-lg px-2 py-1.5 font-semibold text-xs bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors"
+                              className="w-full rounded-md px-1.5 py-1.5 font-semibold text-xs bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors whitespace-nowrap"
                               data-testid={`button-matrix-${gb}-${b}`}
                             >
                               {isApprox ? "≈" : ""}{fmt(plan.sellPriceGbp * GBP_TO_USD)}
                             </button>
                           ) : (
-                            <span className="text-muted-foreground/40 text-xs">—</span>
+                            <span className="text-muted-foreground/30 text-xs select-none">—</span>
                           )}
                         </td>
                       );
@@ -1519,7 +1519,7 @@ function TravelPlansFlow({
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-semibold text-sm">{publicPlanTitle(rec)}</span>
                             <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary whitespace-nowrap">
-                              <Zap className="w-2.5 h-2.5" /> Best value
+                              <Zap className="w-2.5 h-2.5" /> {fixedAlt ? "Top pick" : "Best value"}
                             </span>
                           </div>
                           <span className="text-xs text-muted-foreground">
