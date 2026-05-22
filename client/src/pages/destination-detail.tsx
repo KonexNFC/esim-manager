@@ -1474,9 +1474,9 @@ function TravelPlansFlow({
               browseAll.find(p => !p.isUnlimited) ??
               null;
 
-            // Extra browse options (excluding rec + fixedAlt)
+            // Extra browse options (excluding rec + fixedAlt), deduplicated by price
             const excludeIds = new Set([rec?.id, fixedAlt?.id].filter(Boolean) as string[]);
-            const extraOptions = browseAll.filter(p => !excludeIds.has(p.id));
+            const extraOptions = deduplicatePlans(browseAll.filter(p => !excludeIds.has(p.id)));
             const isExpanded = expandedBrowse.has(bucket);
 
             return (
@@ -1596,34 +1596,46 @@ function TravelPlansFlow({
                       </button>
                       {isExpanded && (
                         <div className="px-4 pb-3 space-y-1.5">
-                          {extraOptions.map(p => (
-                            <div
-                              key={p.id}
-                              className="flex items-center justify-between py-2 px-3 rounded-lg border border-border/60 bg-background hover:border-primary/30 transition-colors"
-                              data-testid={`row-extra-${p.id}`}
-                            >
-                              <div className="min-w-0">
-                                <span className="font-medium text-sm">{publicPlanDataLabel(p)}</span>
-                                {p.isUnlimited && (
-                                  <span className="ml-2 text-xs text-muted-foreground">Unlimited</span>
-                                )}
+                          {extraOptions.map(p => {
+                            const roleLabel =
+                              p.recommendationRole === "PREMIUM" ? "Premium" :
+                              p.recommendationRole === "CHEAPER" ? "Budget" : null;
+                            return (
+                              <div
+                                key={p.id}
+                                className="flex items-center justify-between py-2 px-3 rounded-lg border border-border/60 bg-background hover:border-primary/30 transition-colors"
+                                data-testid={`row-extra-${p.id}`}
+                              >
+                                <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium text-sm">{publicPlanTitle(p)}</span>
+                                  {roleLabel && (
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                                      {roleLabel}
+                                    </span>
+                                  )}
+                                  {p.hotspotSupported && (
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
+                                      Hotspot
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                                  <span className="font-semibold text-sm tabular-nums">
+                                    {isApprox ? "≈" : ""}{fmt(p.sellPriceGbp * GBP_TO_USD)}
+                                  </span>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2.5 text-xs"
+                                    onClick={() => onSelectPublic(p)}
+                                    data-testid={`button-extra-select-${p.id}`}
+                                  >
+                                    Select
+                                  </Button>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                                <span className="font-semibold text-sm tabular-nums">
-                                  {isApprox ? "≈" : ""}{fmt(p.sellPriceGbp * GBP_TO_USD)}
-                                </span>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 px-2.5 text-xs"
-                                  onClick={() => onSelectPublic(p)}
-                                  data-testid={`button-extra-select-${p.id}`}
-                                >
-                                  Select
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>
