@@ -127,6 +127,7 @@ export class EsimAccessProvider implements EsimProvider {
     "MF",  // Saint Martin (French part)
     "NA",  // Namibia (eSIM Access doesn't carry it)
     "SJ",  // Svalbard & Jan Mayen
+    "SX",  // Sint Maarten — error 200032 on every sync
     "TF",  // French Southern Territories
     "AQ",  // Antarctica
     "PN",  // Pitcairn
