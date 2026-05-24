@@ -490,21 +490,6 @@ function PlanFinderSection() {
             <p className="text-muted-foreground leading-relaxed mb-7 max-w-md">
               Search any destination and get a QR code delivered to your inbox in seconds. No SIM swap, no queues, no contracts.
             </p>
-            <div className="flex flex-col gap-3">
-              {[
-                { icon: Zap,          text: "QR code in seconds — activate before you fly" },
-                { icon: Banknote,     text: "Flat price, no hidden roaming charges" },
-                { icon: CheckCircle2, text: "No contracts · cancel any time" },
-                { icon: Smartphone,   text: "Your regular number stays fully active" },
-              ].map(({ icon: Icon, text }) => (
-                <div key={text} className="flex items-center gap-3 text-sm">
-                  <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-3.5 h-3.5 text-primary" />
-                  </div>
-                  <span className="text-muted-foreground">{text}</span>
-                </div>
-              ))}
-            </div>
           </div>
 
           {/* Right: plan finder card */}
