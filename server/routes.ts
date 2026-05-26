@@ -304,23 +304,36 @@ export async function registerRoutes(
   });
 
   // POST /api/checkout/paypal/create-order
-  // Body: { normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email }
+  // Body: { normalizedPlanId, countryCode, dataLabel, validityLabel, email }
+  // NOTE: amountUsd in the body is IGNORED — price is always looked up server-side.
   app.post("/api/checkout/paypal/create-order", async (req, res) => {
     try {
       const {
-        normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email,
+        normalizedPlanId, countryCode, dataLabel, validityLabel, email,
         payerName, billingAddress,
       } = req.body;
-      if (!normalizedPlanId || !amountUsd || !email) {
+      if (!normalizedPlanId || !email) {
         return res.status(400).json({ message: "Missing required fields" });
       }
+
+      // ── Server-side price lookup (never trust client-supplied amount) ──────
+      const [np] = await db
+        .select({ retailPriceUsd: normalizedPlans.retailPriceUsd })
+        .from(normalizedPlans)
+        .where(eq(normalizedPlans.id, normalizedPlanId))
+        .limit(1);
+      if (!np) {
+        return res.status(404).json({ message: "Plan not found" });
+      }
+      const FLOOR_USD = 1.00;
+      const serverPrice = Math.max(np.retailPriceUsd, FLOOR_USD);
 
       const { getLocationInfo, normaliseCode } = await import("./services/countryData");
       const info = getLocationInfo(normaliseCode(countryCode ?? ""));
       const description = `${info?.name ?? countryCode} eSIM — ${dataLabel} · ${validityLabel}`;
 
       const { orderId } = await createPayPalOrder({
-        amountUsd: Number(amountUsd),
+        amountUsd: serverPrice,
         description,
         customId: `np:${normalizedPlanId}|cc:${countryCode}|em:${email}`,
         payerName: payerName || undefined,
@@ -395,20 +408,33 @@ export async function registerRoutes(
   });
 
   // POST /api/checkout/paddle/create
-  // Body: { normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email }
+  // Body: { normalizedPlanId, countryCode, dataLabel, validityLabel, email }
+  // NOTE: amountUsd in the body is IGNORED — price is always looked up server-side.
   app.post("/api/checkout/paddle/create", async (req, res) => {
     try {
-      const { normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email } = req.body;
-      if (!normalizedPlanId || !amountUsd || !email) {
+      const { normalizedPlanId, countryCode, dataLabel, validityLabel, email } = req.body;
+      if (!normalizedPlanId || !email) {
         return res.status(400).json({ message: "Missing required fields" });
       }
+
+      // ── Server-side price lookup (never trust client-supplied amount) ──────
+      const [np] = await db
+        .select({ retailPriceUsd: normalizedPlans.retailPriceUsd })
+        .from(normalizedPlans)
+        .where(eq(normalizedPlans.id, normalizedPlanId))
+        .limit(1);
+      if (!np) {
+        return res.status(404).json({ message: "Plan not found" });
+      }
+      const FLOOR_USD = 1.00;
+      const serverPrice = Math.max(np.retailPriceUsd, FLOOR_USD);
 
       const { getLocationInfo, normaliseCode } = await import("./services/countryData");
       const info = getLocationInfo(normaliseCode(countryCode ?? ""));
       const description = `${info?.name ?? countryCode} eSIM — ${dataLabel} · ${validityLabel}`;
 
       const { checkoutUrl, transactionId } = await createPaddleTransaction({
-        amountUsd: Number(amountUsd),
+        amountUsd: serverPrice,
         description,
         email,
         customData: {
@@ -416,7 +442,7 @@ export async function registerRoutes(
           countryCode: countryCode ?? "",
           dataLabel: dataLabel ?? "",
           validityLabel: validityLabel ?? "",
-          amountUsd: String(amountUsd),
+          amountUsd: String(serverPrice),
           email,
         },
       });

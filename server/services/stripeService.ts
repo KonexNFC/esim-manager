@@ -306,10 +306,24 @@ export async function createCountryPlanCheckoutSession(
     w: p.wholesalePriceUsd,
   }));
 
-  // Use the catalogue-computed GBP price passed from the frontend.
-  // This guarantees Stripe charges exactly what was displayed to the user.
-  // Fall back to np.retailPriceUsd (stored during catalogue sync) if not provided.
-  const chargeInGbp = params.sellPriceGbp != null && params.sellPriceGbp > 0;
+  // Use the catalogue-computed GBP price from the frontend, but validate it
+  // against the server-side DB price before trusting it.  A legitimate
+  // catalogue price should be within 50% of np.retailPriceUsd converted to GBP.
+  // If it's lower (potential price manipulation), discard it and charge in USD.
+  const GBP_PER_USD = 0.79;
+  const MIN_FLOOR_GBP = 1.00;
+  const expectedGbp = np.retailPriceUsd * GBP_PER_USD;
+  const clientGbpSafe = params.sellPriceGbp != null
+    && params.sellPriceGbp >= Math.max(expectedGbp * 0.5, MIN_FLOOR_GBP);
+
+  if (params.sellPriceGbp != null && !clientGbpSafe) {
+    console.warn(
+      `[Stripe] Suspicious sellPriceGbp=${params.sellPriceGbp} for plan ${np.id}` +
+      ` (expected ~£${expectedGbp.toFixed(2)}). Falling back to DB price in USD.`,
+    );
+  }
+
+  const chargeInGbp = clientGbpSafe;
   const chargeCurrency = chargeInGbp ? 'gbp' : 'usd';
   const chargeAmount   = chargeInGbp
     ? Math.round(params.sellPriceGbp! * 100)
