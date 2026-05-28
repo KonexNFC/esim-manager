@@ -874,6 +874,70 @@ function HowItWorks() {
             ))}
           </div>
         </div>
+
+        {/* ── Smart Routing sub-section ─────────────────────────────── */}
+        <Reveal>
+          <div className="mt-16 sm:mt-20 pt-10 border-t">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="w-3.5 h-3.5 text-primary" />
+              <p className="text-xs font-bold uppercase tracking-widest text-primary">Powered by Smart Routing</p>
+            </div>
+            <h3 className="font-display text-2xl sm:text-3xl font-bold tracking-tight mb-1">
+              The best price, every time.
+            </h3>
+            <p className="text-muted-foreground text-sm max-w-xl leading-relaxed mb-8">
+              Konex doesn't rely on a single network. Our routing engine continuously weighs cost, reliability,
+              and destination performance across every provider — so you always get the optimal plan.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[
+                {
+                  icon: Network,
+                  title: "Multi-Provider Routing",
+                  description: "Every order is scored across multiple global eSIM networks simultaneously. The engine picks the best combination of price, reliability, and destination coverage — in milliseconds.",
+                  stat: "3+ providers",
+                  statLabel: "evaluated per order",
+                  color: "from-violet-500 to-purple-600",
+                },
+                {
+                  icon: Activity,
+                  title: "Live Health Monitoring",
+                  description: "Providers are continuously monitored with rolling success-rate metrics. If a network degrades, it's automatically deprioritised or paused before it can affect your purchase.",
+                  stat: "< 100 ms",
+                  statLabel: "routing decision time",
+                  color: "from-blue-500 to-cyan-500",
+                },
+                {
+                  icon: Shield,
+                  title: "Automatic Failover",
+                  description: "If a provider fails at the moment of provisioning, the system silently retries the next-best option — so you always receive a working eSIM without ever knowing there was a hiccup.",
+                  stat: "99.9%",
+                  statLabel: "fulfilment success rate",
+                  color: "from-emerald-500 to-teal-500",
+                },
+              ].map((pillar) => (
+                <div
+                  key={pillar.title}
+                  className="bg-card border rounded-2xl p-6 flex flex-col gap-4 card-gradient-hover"
+                >
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${pillar.color} flex items-center justify-center shadow-md`}>
+                    <pillar.icon className="w-4.5 h-4.5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-base mb-1.5">{pillar.title}</h4>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{pillar.description}</p>
+                  </div>
+                  <div className="flex items-baseline gap-2 mt-auto pt-2 border-t">
+                    <span className={`text-xl font-black bg-gradient-to-r ${pillar.color} bg-clip-text text-transparent`}>
+                      {pillar.stat}
+                    </span>
+                    <span className="text-muted-foreground text-xs">{pillar.statLabel}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -1464,120 +1528,6 @@ function TestimonialsSection() {
 }
 
 
-// ─────────────────────────────────────────────
-// 12. POWERED BY SMART ROUTING
-// ─────────────────────────────────────────────
-function SmartRoutingSection() {
-  const pillars = [
-    {
-      icon: Network,
-      title: "Multi-Provider Routing",
-      description:
-        "Every order is scored across multiple global eSIM networks simultaneously. The engine picks the best combination of price, reliability, and destination coverage — in milliseconds.",
-      stat: "3+ providers",
-      statLabel: "evaluated per order",
-      color: "from-violet-500 to-purple-600",
-      glow: "shadow-violet-500/30",
-    },
-    {
-      icon: Activity,
-      title: "Live Health Monitoring",
-      description:
-        "Providers are continuously monitored with rolling success-rate metrics. If a network degrades, it's automatically deprioritised or paused before it can affect your purchase.",
-      stat: "< 100 ms",
-      statLabel: "routing decision time",
-      color: "from-blue-500 to-cyan-500",
-      glow: "shadow-blue-500/30",
-    },
-    {
-      icon: Shield,
-      title: "Automatic Failover",
-      description:
-        "If a provider fails at the moment of provisioning, the system silently retries the next-best option — so you always receive a working eSIM without ever knowing there was a hiccup.",
-      stat: "99.9%",
-      statLabel: "fulfilment success rate",
-      color: "from-emerald-500 to-teal-500",
-      glow: "shadow-emerald-500/30",
-    },
-  ];
-
-  return (
-    <section className="relative py-16 sm:py-24 overflow-hidden border-t bg-[#0a0a0f]">
-      {/* Background grid */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(139,92,246,0.8) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,0.8) 1px, transparent 1px)",
-          backgroundSize: "40px 40px",
-        }}
-      />
-      {/* Radial glow */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div className="w-[600px] h-[400px] rounded-full bg-violet-600/10 blur-3xl" />
-      </div>
-
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6">
-        {/* Header */}
-        <div className="text-center mb-14">
-          <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-4 py-1.5 mb-6">
-            <TrendingUp className="w-3.5 h-3.5 text-violet-400" />
-            <span className="text-xs font-bold tracking-widest uppercase text-violet-300">
-              Powered by Smart Routing
-            </span>
-          </div>
-          <h2 className="font-display text-3xl sm:text-5xl font-bold tracking-tight text-white mb-4">
-            The best price, every time.
-          </h2>
-          <p className="text-white/50 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
-            Konex doesn't rely on a single network. Our proprietary routing engine
-            continuously weighs cost, reliability, and destination performance across
-            every provider — so you always get the optimal plan.
-          </p>
-        </div>
-
-        {/* Pillars */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {pillars.map((pillar) => (
-            <div
-              key={pillar.title}
-              className={`group relative rounded-2xl border border-white/[0.06] bg-white/[0.03] p-7 hover:border-white/[0.12] hover:bg-white/[0.05] transition-all duration-300 hover:shadow-xl ${pillar.glow}`}
-            >
-              {/* Icon */}
-              <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${pillar.color} flex items-center justify-center mb-5 shadow-lg`}>
-                <pillar.icon className="w-5 h-5 text-white" />
-              </div>
-              <h3 className="text-white font-bold text-lg mb-2">{pillar.title}</h3>
-              <p className="text-white/45 text-sm leading-relaxed mb-6">{pillar.description}</p>
-              {/* Stat chip */}
-              <div className="flex items-baseline gap-2">
-                <span className={`text-2xl font-black bg-gradient-to-r ${pillar.color} bg-clip-text text-transparent`}>
-                  {pillar.stat}
-                </span>
-                <span className="text-white/35 text-xs">{pillar.statLabel}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Bottom row — micro stats */}
-        <div className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-          {[
-            { value: "4", label: "Provider networks" },
-            { value: "194+", label: "Countries covered" },
-            { value: "17 K+", label: "Active offers" },
-            { value: "< 60 s", label: "eSIM delivery" },
-          ].map((s) => (
-            <div key={s.label} className="rounded-xl border border-white/[0.06] bg-white/[0.02] py-4 px-3">
-              <p className="text-2xl font-black text-white mb-1">{s.value}</p>
-              <p className="text-white/40 text-xs">{s.label}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 
 // ─────────────────────────────────────────────
@@ -1891,8 +1841,6 @@ export default function Home() {
       <Reveal><PopularDestinations /></Reveal>
       {/* F: Travel bundles */}
       <Reveal><BundlesSection /></Reveal>
-      {/* G: Smart routing */}
-      <Reveal><SmartRoutingSection /></Reveal>
       {/* H: How it works */}
       <Reveal><HowItWorks /></Reveal>
       {/* I: Device compatibility */}
