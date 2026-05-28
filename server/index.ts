@@ -283,4 +283,18 @@ app.use((req, res, next) => {
     { port, host: "0.0.0.0", reusePort: true },
     () => { log(`serving on port ${port}`); }
   );
+
+  // ── DB keepalive: prevents Replit's managed PostgreSQL from freezing ─────────
+  // Replit freezes the production DB after a period of inactivity. A lightweight
+  // SELECT 1 every 4 minutes keeps the connection warm without any meaningful load.
+  const DB_KEEPALIVE_INTERVAL_MS = 4 * 60 * 1000; // 4 minutes
+  setInterval(async () => {
+    try {
+      const { db } = await import("./storage");
+      const { sql: drizzleSql } = await import("drizzle-orm");
+      await db.execute(drizzleSql`SELECT 1`);
+    } catch (err: any) {
+      console.warn("[keepalive] DB ping failed:", err.message);
+    }
+  }, DB_KEEPALIVE_INTERVAL_MS);
 })();
