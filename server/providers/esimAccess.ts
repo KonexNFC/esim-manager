@@ -161,8 +161,8 @@ export class EsimAccessProvider implements EsimProvider {
 
     const all: ProviderPlan[] = [];
     const seen = new Set<string>(); // deduplicate by packageCode+country
-    const CONCURRENCY = 10; // parallel requests per batch
-    const BATCH_DELAY_MS = 150; // ms pause between batches
+    const CONCURRENCY = 5; // parallel requests per batch — balances speed vs eSIM Access rate limits
+    const BATCH_DELAY_MS = 250; // ms pause between batches
 
     for (let i = 0; i < supported.length; i += CONCURRENCY) {
       const batch = supported.slice(i, i + CONCURRENCY);
