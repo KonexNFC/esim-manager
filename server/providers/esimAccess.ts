@@ -89,17 +89,26 @@ export class EsimAccessProvider implements EsimProvider {
     const requestId = crypto.randomUUID().replace(/-/g, "");
     const signature = this.generateSignature(bodyStr, timestamp, requestId);
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "RT-AccessCode": this.accessCode,
-        "RT-RequestID": requestId,
-        "RT-Timestamp": timestamp,
-        "RT-Signature": signature,
-      },
-      body: bodyStr,
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12_000); // 12 s per-request timeout
+
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "RT-AccessCode": this.accessCode,
+          "RT-RequestID": requestId,
+          "RT-Timestamp": timestamp,
+          "RT-Signature": signature,
+        },
+        body: bodyStr,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!res.ok) {
       const text = await res.text();
@@ -152,8 +161,8 @@ export class EsimAccessProvider implements EsimProvider {
 
     const all: ProviderPlan[] = [];
     const seen = new Set<string>(); // deduplicate by packageCode+country
-    const CONCURRENCY = 3; // conservative parallel requests to avoid rate limits
-    const BATCH_DELAY_MS = 500; // pause between batches to respect rate limits
+    const CONCURRENCY = 10; // parallel requests per batch
+    const BATCH_DELAY_MS = 150; // ms pause between batches
 
     for (let i = 0; i < supported.length; i += CONCURRENCY) {
       const batch = supported.slice(i, i + CONCURRENCY);
