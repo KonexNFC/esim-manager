@@ -318,7 +318,7 @@ function EventsCarousel() {
 
   return (
     <section
-      className="relative overflow-hidden min-h-[92vh] sm:min-h-screen flex flex-col"
+      className="relative overflow-hidden min-h-[70vh] flex flex-col"
       data-testid="section-events-carousel"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
@@ -561,7 +561,7 @@ function TravelSmarterSection() {
   const [, navigate] = useLocation();
 
   return (
-    <section className="relative overflow-hidden border-t" data-testid="section-travel-smarter">
+    <section className="relative overflow-hidden" data-testid="section-travel-smarter">
       {/* Dark background */}
       <div className="absolute inset-0">
         <img
@@ -1831,25 +1831,25 @@ export default function Home() {
 
   return (
     <div className="min-h-screen pb-20 sm:pb-0 overflow-x-hidden">
-      {/* B: Primary hero — events carousel */}
-      <EventsCarousel />
-      {/* C: Trust stats strip */}
+      {/* A: Primary hero — Travel smarter */}
+      <TravelSmarterSection />
+      {/* B: Trust stats strip */}
       <StatsStrip />
-      {/* D: Plan finder */}
+      {/* C: Plan finder */}
       <Reveal><PlanFinderSection /></Reveal>
-      {/* E: Popular destinations */}
+      {/* D: Popular destinations */}
       <Reveal><PopularDestinations /></Reveal>
+      {/* E: Events carousel — mid-page feature */}
+      <Reveal><EventsCarousel /></Reveal>
       {/* F: Travel bundles */}
       <Reveal><BundlesSection /></Reveal>
-      {/* H: How it works */}
+      {/* G: How it works */}
       <Reveal><HowItWorks /></Reveal>
-      {/* I: Device compatibility */}
+      {/* H: Device compatibility */}
       <Reveal><CompatibilitySection /></Reveal>
-      {/* J: Testimonials */}
+      {/* I: Testimonials */}
       <Reveal><TestimonialsSection /></Reveal>
-      {/* K: Travel smarter explainer */}
-      <Reveal><TravelSmarterSection /></Reveal>
-      {/* L: FAQ */}
+      {/* J: FAQ */}
       <Reveal><FAQSection /></Reveal>
       <Footer />
       <MobileStickyCTA />
