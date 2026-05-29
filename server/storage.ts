@@ -30,6 +30,13 @@ const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+// Prevent unhandled 'error' events on idle pool clients from crashing the process.
+// pg emits these when the DB server terminates a connection (e.g. admin restart,
+// Replit maintenance). Without this handler Node exits with code 1.
+pool.on('error', (err) => {
+  console.warn('[db-pool] idle client error (non-fatal):', err.message);
+});
+
 export const db = drizzle(pool);
 
 export interface IStorage {

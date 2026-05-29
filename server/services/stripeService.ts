@@ -41,7 +41,20 @@ export async function getOrCreateStripeCustomer(
 
   if (userId) {
     const [user] = await db.select().from(users).where(eq(users.id, userId));
-    if (user?.stripeCustomerId) return user.stripeCustomerId;
+    if (user?.stripeCustomerId) {
+      // Verify the customer still exists in Stripe (handles test→live migrations
+      // and manually deleted customers). If not, fall through and create a new one.
+      try {
+        const existing = await stripe.customers.retrieve(user.stripeCustomerId);
+        if (existing && !('deleted' in existing)) return user.stripeCustomerId;
+      } catch (err: any) {
+        const isGone = err?.code === 'resource_missing' || err?.message?.includes('No such customer');
+        if (!isGone) throw err; // unexpected error — re-throw
+        // Stale customer ID — clear it and create a fresh one below
+        console.warn(`[stripe] Stale customer ID ${user.stripeCustomerId} for user ${userId} — creating new customer`);
+        await db.update(users).set({ stripeCustomerId: null }).where(eq(users.id, userId));
+      }
+    }
   }
 
   const customer = await stripe.customers.create({
