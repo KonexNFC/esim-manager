@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
 import {
   Search, Smartphone, LayoutDashboard, LogIn, ChevronDown,
-  Rocket, CreditCard, Menu, X, ShoppingBag, Globe,
+  Rocket, Menu, X, ShoppingBag, Globe,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { KonexLogo } from "./konex-logo";
@@ -122,12 +122,6 @@ function MobileMenu({ isHome, user, isLoading, scrollTo }: {
                   Check Device
                 </span>
               </Link>
-              <a href="https://konexnfc.com/konex-cards" target="_blank" rel="noopener noreferrer" onClick={close}>
-                <span className={linkClass} data-testid="mobile-link-nfc">
-                  <CreditCard className="w-4 h-4 text-primary" />
-                  NFC Card
-                </span>
-              </a>
               <Link href="/roadmap" onClick={close}>
                 <span className={linkClass} data-testid="mobile-link-roadmap">
                   <Rocket className="w-4 h-4 text-primary" />
@@ -156,12 +150,6 @@ function MobileMenu({ isHome, user, isLoading, scrollTo }: {
                   Check Device
                 </span>
               </Link>
-              <a href="https://konexnfc.com/konex-cards" target="_blank" rel="noopener noreferrer" onClick={close}>
-                <span className={linkClass} data-testid="mobile-link-nfc">
-                  <CreditCard className="w-4 h-4 text-primary" />
-                  NFC Card
-                </span>
-              </a>
               <Link href="/roadmap" onClick={close}>
                 <span className={linkClass} data-testid="mobile-link-roadmap">
                   <Rocket className="w-4 h-4 text-primary" />
@@ -263,16 +251,6 @@ export function Navbar() {
               </button>
             ))}
 
-            <a href="https://konexnfc.com/konex-cards" target="_blank" rel="noopener noreferrer">
-              <button
-                className="hidden lg:flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground rounded-lg hover:bg-white/5 hover:text-foreground transition-colors gap-1.5"
-                data-testid="nav-nfc-card"
-              >
-                <CreditCard className="w-3.5 h-3.5" />
-                NFC Card
-              </button>
-            </a>
-
             <Link href="/roadmap">
               <button
                 className="hidden lg:flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground rounded-lg hover:bg-white/5 hover:text-foreground transition-colors gap-1.5"
@@ -347,16 +325,6 @@ export function Navbar() {
                 Check Device
               </Button>
             </Link>
-            <a href="https://konexnfc.com/konex-cards" target="_blank" rel="noopener noreferrer" className="flex">
-              <Button
-                variant="ghost"
-                size="sm"
-                data-testid="link-nfc-card"
-              >
-                <CreditCard className="w-4 h-4 mr-1.5" />
-                NFC Card
-              </Button>
-            </a>
             <Link href="/roadmap">
               <Button
                 variant={location.startsWith("/roadmap") ? "secondary" : "ghost"}
