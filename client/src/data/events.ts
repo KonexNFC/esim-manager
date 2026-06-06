@@ -743,6 +743,22 @@ export default events;
 
 // ─── Lookup helpers ───────────────────────────────────────────────────────────
 
+/**
+ * Returns true if the event has at least one occurrence still coming up this
+ * calendar year (or later). An event is considered "upcoming" when any of its
+ * monthIndex values is >= the current month number (1-based).
+ *
+ * Examples (current month = June = 6):
+ *   Coachella      [4]      → false  (only April, already passed)
+ *   Canton Fair    [4, 10]  → true   (October is still ahead)
+ *   Oktoberfest    [9, 10]  → true
+ *   CES Las Vegas  [1]      → false  (only January, already passed)
+ */
+export function isEventUpcoming(event: TravelEvent, now = new Date()): boolean {
+  const currentMonth = now.getMonth() + 1; // getMonth() is 0-based
+  return event.monthIndex.some(m => m >= currentMonth);
+}
+
 export function getEventBySlug(slug: string): TravelEvent | undefined {
   return events.find(e => e.slug === slug);
 }

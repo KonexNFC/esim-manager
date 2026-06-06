@@ -9,6 +9,7 @@ import events, {
   CATEGORY_LABELS,
   CATEGORY_EMOJI,
   MONTHS,
+  isEventUpcoming,
   type EventCategory,
   type TravellerType,
 } from "@/data/events";
@@ -184,7 +185,7 @@ export default function EventsPage() {
   const [activeTraveller, setActiveTraveller] = useState<TravellerType | null>(null);
 
   const filtered = useMemo(() => {
-    let result = [...events];
+    let result = events.filter(e => isEventUpcoming(e));
 
     if (search.trim()) {
       const q = search.toLowerCase();
