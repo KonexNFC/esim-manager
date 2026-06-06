@@ -29,7 +29,7 @@ export const GBP_RATE = 0.79;
 const MIN_MARGIN_GBP = 1.5;
 
 /** Minimum gross margin percentage: (sell - cost) / sell × 100 */
-const MIN_MARGIN_PCT = 25;
+const MIN_MARGIN_PCT = 20;
 
 /**
  * Target price bands for the public storefront.

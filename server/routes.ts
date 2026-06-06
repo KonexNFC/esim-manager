@@ -2356,7 +2356,6 @@ export async function registerRoutes(
         // Map trip duration → best-fit duration bucket
         function daysToBucket(d: number): string {
           if (d <= 1)  return "DAY_1";
-          if (d <= 3)  return "DAY_3";
           if (d <= 5)  return "DAY_5";
           if (d <= 7)  return "DAY_7";
           if (d <= 14) return "DAY_14";

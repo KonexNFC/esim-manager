@@ -81,7 +81,7 @@ const ROLE_BADGE: Record<string, { label: string; variant: PlanBadgeVariant }> =
   PREMIUM:     { label: "Premium",    variant: "premium" },
 };
 
-const DURATION_OPTIONS = [1, 2, 3, 4, 5, 6, 7];
+const DURATION_OPTIONS = [1, 5, 7, 14, 30];
 
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
 
@@ -116,10 +116,10 @@ export default function FindPlan() {
     typeof window !== "undefined" ? window.location.search : ""
   );
   const initCountry = searchParams.get("country")?.toUpperCase() || undefined;
-  const initDays = parseInt(searchParams.get("days") ?? "3", 10);
+  const initDays = parseInt(searchParams.get("days") ?? "7", 10);
 
   const [countryCode, setCountryCode] = useState<string | undefined>(initCountry);
-  const [tripDays, setTripDays] = useState(isNaN(initDays) ? 3 : Math.min(7, Math.max(1, initDays)));
+  const [tripDays, setTripDays] = useState(isNaN(initDays) ? 7 : Math.min(30, Math.max(1, initDays)));
   const [shouldFetch, setShouldFetch] = useState(!!initCountry);
 
   const { data, isLoading, isError, error } = useQuery<RecommendResponse>({
@@ -267,10 +267,11 @@ export default function FindPlan() {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                {tripDays <= 1 && "Recommending our 1-day unlimited plan."}
-                {tripDays > 1 && tripDays <= 3 && "Recommending our 3-day plan — ideal for a weekend trip."}
-                {tripDays > 3 && tripDays <= 5 && "Recommending our 5-day plan — great value for a short holiday."}
-                {tripDays > 5 && "Recommending our 7-day plan — best rate per day."}
+                {tripDays === 1  && "Perfect for a day trip or short layover."}
+                {tripDays === 5  && "Great value for a short holiday or business trip."}
+                {tripDays === 7  && "Our most popular plan — best rate per day."}
+                {tripDays === 14 && "Ideal for a two-week holiday or extended stay."}
+                {tripDays === 30 && "Best value for long trips, relocation, or a full month abroad."}
               </p>
             </div>
 
