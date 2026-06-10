@@ -22,7 +22,7 @@ import {
   Signal, Quote, Radio,
   QrCode, MapPin, Banknote, ShieldCheck,
   Package, Timer, ChevronRight,
-  Network, Activity, TrendingUp, Shield,
+  Network, Activity, TrendingUp, Shield, X,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { SiVisa, SiMastercard, SiApplepay, SiPaypal, SiGooglepay, SiVodafone, SiTmobile, SiOrange } from "react-icons/si";
@@ -1796,6 +1796,291 @@ function MobileStickyCTA() {
 }
 
 // ─────────────────────────────────────────────
+// WORLD CUP 2026 ANNOUNCEMENT BAR
+// ─────────────────────────────────────────────
+function WorldCupAnnouncementBar() {
+  const [dismissed, setDismissed] = useState(false);
+  const [, navigate] = useLocation();
+  if (dismissed) return null;
+  return (
+    <div
+      className="relative flex items-center justify-center gap-2 bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 text-white text-xs sm:text-sm font-medium py-2.5 px-10"
+      data-testid="announcement-bar-worldcup"
+    >
+      <span className="text-base leading-none">⚽</span>
+      <span className="text-white/90">
+        World Cup 2026 travel data now available —
+        <span className="font-bold text-white"> USA, Canada &amp; Mexico</span> coverage.
+      </span>
+      <button
+        onClick={() => navigate("/find-plan?country=US")}
+        className="ml-2 underline underline-offset-2 font-bold text-white hover:text-blue-200 transition-colors whitespace-nowrap"
+        data-testid="button-announcement-get-plan"
+      >
+        Get your plan →
+      </button>
+      <button
+        onClick={() => setDismissed(true)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/60 hover:text-white rounded transition-colors"
+        aria-label="Dismiss announcement"
+        data-testid="button-announcement-dismiss"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// WORLD CUP 2026 CAMPAIGN SECTION
+// ─────────────────────────────────────────────
+const WC_PACKAGES = [
+  {
+    id: "match-day",
+    name: "Match Day",
+    data: "3GB",
+    days: 7,
+    badge: null as string | null,
+    desc: "Best for short trips and one-city visits",
+    icon: "⚽",
+    accentFrom: "#2563eb",
+    accentTo: "#3b82f6",
+  },
+  {
+    id: "group-stage",
+    name: "Group Stage",
+    data: "10GB",
+    days: 15,
+    badge: "Popular",
+    desc: "Best for fans attending multiple matches",
+    icon: "🏟️",
+    accentFrom: "#4f46e5",
+    accentTo: "#6366f1",
+  },
+  {
+    id: "full-tournament",
+    name: "Full Tournament",
+    data: "20GB",
+    days: 30,
+    badge: null,
+    desc: "Best for multi-city travel across host countries",
+    icon: "✈️",
+    accentFrom: "#7c3aed",
+    accentTo: "#8b5cf6",
+  },
+  {
+    id: "ultimate-fan",
+    name: "Ultimate Fan",
+    data: "50GB",
+    days: 30,
+    badge: "Creator",
+    desc: "Best for content creators, vloggers and heavy data users",
+    icon: "📲",
+    accentFrom: "#0891b2",
+    accentTo: "#06b6d4",
+  },
+] as const;
+
+const WC_HOST_COUNTRIES = [
+  { code: "US", name: "USA",    flag: "🇺🇸" },
+  { code: "CA", name: "Canada", flag: "🇨🇦" },
+  { code: "MX", name: "Mexico", flag: "🇲🇽" },
+] as const;
+
+const WC_HIGHLIGHTS = [
+  "Coverage across USA, Canada & Mexico",
+  "Install before departure",
+  "Activate when you land",
+  "No physical SIM required",
+  "Instant QR code delivery",
+  "Works on all eSIM-compatible phones",
+] as const;
+
+function WorldCup2026Section() {
+  const [, navigate] = useLocation();
+  const { ref, inView } = useInView(0.1);
+
+  return (
+    <section
+      ref={ref}
+      className="relative overflow-hidden py-16 sm:py-24"
+      data-testid="section-worldcup-2026"
+    >
+      {/* ── Background ─────────────────────────────────────────────── */}
+      <div className="absolute inset-0 bg-[#05101f]">
+        {/* Stadium light sweep — left */}
+        <div
+          className="absolute inset-0 opacity-40"
+          style={{
+            background:
+              "radial-gradient(ellipse 70% 55% at 10% -5%, #1e3a8a55 0%, transparent 65%), " +
+              "radial-gradient(ellipse 60% 70% at 90% -5%, #312e8155 0%, transparent 65%)",
+          }}
+        />
+        {/* Pitch green glow at bottom */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-56 opacity-15"
+          style={{
+            background:
+              "radial-gradient(ellipse 110% 100% at 50% 120%, #166534 0%, transparent 70%)",
+          }}
+        />
+        {/* Subtle animated ring */}
+        <div
+          className="absolute top-[-30%] left-1/2 -translate-x-1/2 w-[900px] h-[900px] rounded-full border border-blue-600/10"
+          style={{ animation: "spin 40s linear infinite" }}
+        />
+        <div
+          className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full border border-indigo-500/10"
+          style={{ animation: "spin 28s linear infinite reverse" }}
+        />
+      </div>
+
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6">
+
+        {/* ── Section label + headline ──────────────────────────────── */}
+        <div className={`text-center mb-10 reveal ${inView ? "in-view" : ""}`}>
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-widest mb-5 text-blue-300 border border-blue-500/30 bg-blue-500/10">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+            World Cup 2026 · Travel Data Bundles
+          </div>
+
+          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-tight mb-4 leading-tight" data-testid="text-worldcup-headline">
+            Stay connected from<br className="hidden sm:block" /> kick-off to final whistle
+          </h2>
+
+          <p className="text-white/50 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
+            Travelling to the USA, Canada, or Mexico for the World Cup?{" "}
+            <span className="text-white/75 font-medium">Get instant eSIM data before you fly.</span>{" "}
+            No roaming shocks. No airport SIM queues. Just scan, install, and connect.
+          </p>
+        </div>
+
+        {/* ── Host country route visual ─────────────────────────────── */}
+        <div className={`flex items-center justify-center gap-3 sm:gap-5 mb-12 reveal reveal-delay-1 ${inView ? "in-view" : ""}`}>
+          {WC_HOST_COUNTRIES.map((c, i) => (
+            <div key={c.code} className="flex items-center gap-3 sm:gap-5">
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-blue-500/40 shadow-lg shadow-blue-500/20 ring-2 ring-blue-500/10">
+                  <img
+                    src={flagUrl(c.code)}
+                    alt={c.name}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+                <span className="text-white/65 text-xs font-semibold tracking-wide">{c.name}</span>
+              </div>
+              {i < WC_HOST_COUNTRIES.length - 1 && (
+                <div className="flex items-center gap-1 pb-4">
+                  <div className="w-6 sm:w-10 h-px bg-gradient-to-r from-blue-500/60 to-blue-400/20" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400/70 animate-pulse" />
+                  <div className="w-6 sm:w-10 h-px bg-gradient-to-r from-blue-400/20 to-blue-500/60" />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* ── Package cards ─────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+          {WC_PACKAGES.map((pkg, i) => (
+            <div
+              key={pkg.id}
+              className={`relative rounded-2xl border bg-white/[0.04] backdrop-blur-sm p-5 hover:bg-white/[0.07] hover:-translate-y-1 transition-all duration-200 cursor-pointer group reveal reveal-delay-${i + 1} ${inView ? "in-view" : ""}`}
+              style={{ borderColor: pkg.accentTo + "45" }}
+              onClick={() => navigate(`/find-plan?country=US`)}
+              data-testid={`card-worldcup-${pkg.id}`}
+            >
+              {/* Badge */}
+              {pkg.badge && (
+                <div
+                  className="absolute -top-2.5 right-4 px-3 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest text-white"
+                  style={{ background: `linear-gradient(135deg, ${pkg.accentFrom}, ${pkg.accentTo})` }}
+                >
+                  {pkg.badge}
+                </div>
+              )}
+
+              {/* Icon */}
+              <div className="text-2xl mb-3 leading-none">{pkg.icon}</div>
+
+              {/* Data + days */}
+              <div className="mb-1 flex items-baseline gap-1.5">
+                <span
+                  className="text-2xl font-bold"
+                  style={{ background: `linear-gradient(135deg, #fff 30%, ${pkg.accentTo})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
+                >
+                  {pkg.data}
+                </span>
+                <span className="text-white/35 text-xs">/ {pkg.days} days</span>
+              </div>
+
+              {/* Name */}
+              <p className="font-bold text-white text-sm mb-2">{pkg.name}</p>
+              <p className="text-white/40 text-xs leading-relaxed">{pkg.desc}</p>
+
+              {/* Footer row */}
+              <div className="mt-4 flex items-center justify-between">
+                <div className="flex gap-0.5">
+                  {(["🇺🇸", "🇨🇦", "🇲🇽"] as const).map(f => (
+                    <span key={f} className="text-sm leading-none">{f}</span>
+                  ))}
+                </div>
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform"
+                  style={{ background: `linear-gradient(135deg, ${pkg.accentFrom}30, ${pkg.accentTo}30)`, border: `1px solid ${pkg.accentTo}50` }}
+                >
+                  <ChevronRight className="w-3 h-3" style={{ color: pkg.accentTo }} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Feature highlights ────────────────────────────────────── */}
+        <div className={`flex flex-wrap justify-center gap-x-5 gap-y-2.5 mb-10 reveal reveal-delay-2 ${inView ? "in-view" : ""}`}>
+          {WC_HIGHLIGHTS.map(item => (
+            <div key={item} className="flex items-center gap-1.5 text-white/50 text-xs sm:text-sm">
+              <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* ── CTAs ─────────────────────────────────────────────────── */}
+        <div className={`flex flex-col sm:flex-row items-center justify-center gap-3 mb-8 reveal reveal-delay-3 ${inView ? "in-view" : ""}`}>
+          <Button
+            onClick={() => navigate("/find-plan?country=US")}
+            className="font-bold h-12 px-8 text-sm text-white border-0 shadow-xl shadow-blue-600/30 hover:shadow-blue-500/40 hover:scale-[1.02] transition-all duration-200"
+            style={{ background: "linear-gradient(135deg, #1d4ed8, #4f46e5)" }}
+            data-testid="button-worldcup-view-plans"
+          >
+            View World Cup Plans
+            <ArrowRight className="ml-2 w-4 h-4" />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => navigate("/compatibility")}
+            className="font-bold h-12 px-8 text-sm border-white/15 text-white/75 bg-transparent hover:bg-white/8 hover:text-white hover:border-white/30 transition-all duration-200"
+            data-testid="button-worldcup-compatibility"
+          >
+            <Smartphone className="mr-2 w-4 h-4" />
+            Check Phone Compatibility
+          </Button>
+        </div>
+
+        {/* ── Legal disclaimer ─────────────────────────────────────── */}
+        <p className="text-center text-white/25 text-[11px] max-w-lg mx-auto leading-relaxed">
+          KONEX is not affiliated with or endorsed by FIFA. Packages are travel connectivity products for fans attending World Cup 2026 events.
+        </p>
+
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────
 // PAGE
 // ─────────────────────────────────────────────
 export default function Home() {
@@ -1803,12 +2088,16 @@ export default function Home() {
 
   return (
     <div className="min-h-screen pb-20 sm:pb-0 overflow-x-hidden">
+      {/* Announcement: World Cup 2026 */}
+      <WorldCupAnnouncementBar />
       {/* A: Primary hero — Travel smarter */}
       <TravelSmarterSection />
       {/* B: Trust stats strip */}
       <StatsStrip />
       {/* C: Plan finder */}
       <Reveal><PlanFinderSection /></Reveal>
+      {/* C2: World Cup 2026 campaign — after hero, before generic destinations */}
+      <WorldCup2026Section />
       {/* D: Popular destinations */}
       <Reveal><PopularDestinations /></Reveal>
       {/* E: Events carousel — mid-page feature */}
