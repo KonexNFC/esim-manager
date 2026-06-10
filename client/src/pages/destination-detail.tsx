@@ -1355,6 +1355,31 @@ function TravelPlansFlow({
   const [viewMode, setViewMode] = useState<"flow" | "matrix">("flow");
   const [expandedBrowse, setExpandedBrowse] = useState<Set<string>>(new Set());
 
+  // ── Price inversion hints ─────────────────────────────────────────────────
+  // When a shorter-duration bucket's recommended plan costs MORE than a
+  // longer-duration bucket's recommended plan, show a "better value" tip.
+  const inversions = useMemo(() => {
+    const map = new Map<string, { nextBucket: string; nextPrice: number; nextLabel: string }>();
+    for (let i = 0; i < availBuckets.length - 1; i++) {
+      const cur = availBuckets[i];
+      const curRec = data.durations[cur]?.recommended;
+      if (!curRec) continue;
+      for (let j = i + 1; j < availBuckets.length; j++) {
+        const next = availBuckets[j];
+        const nextRec = data.durations[next]?.recommended;
+        if (nextRec && nextRec.sellPriceGbp < curRec.sellPriceGbp) {
+          map.set(cur, {
+            nextBucket: next,
+            nextPrice: nextRec.sellPriceGbp,
+            nextLabel: BUCKET_LABELS[next] ?? next,
+          });
+          break;
+        }
+      }
+    }
+    return map;
+  }, [availBuckets, data.durations]);
+
   // ── Build plan matrix: dataKey × bucket → best plan ──────────────────────
   const DATA_ROW_ORDER = [1, 2, 3, 5, 10, 0]; // 0 = unlimited sentinel
   const matrixMap = new Map<string, PublicPlan>(); // key = `${gb}::${bucket}`
@@ -1503,6 +1528,23 @@ function TravelPlansFlow({
                     {days === 1 ? "Daily plan" : `${days}-day validity`}
                   </span>
                 </div>
+
+                {/* Price inversion hint — shown when a longer plan is cheaper */}
+                {inversions.has(bucket) && (() => {
+                  const hint = inversions.get(bucket)!;
+                  return (
+                    <div
+                      className="px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200/50 dark:border-amber-800/40 flex items-start gap-2"
+                      data-testid={`banner-inversion-${bucket}`}
+                    >
+                      <TrendingUp className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-800 dark:text-amber-300 leading-snug">
+                        <span className="font-semibold">Better value tip:</span>{" "}
+                        the {hint.nextLabel} plan costs only {isApprox ? "≈" : ""}{fmt(hint.nextPrice * GBP_TO_USD)} — less than this plan. Consider stepping up.
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 {/* Plan rows */}
                 <div className="divide-y divide-border/40">
