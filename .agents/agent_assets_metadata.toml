@@ -23,3 +23,27 @@ id = "EZY9MDyZzXd-SGjg7Yxgv"
 uri = "file://attached_assets/generated_videos/konex-happy-traveller.mp4"
 type = "video"
 title = "Clip 3 — Happy Traveller (6s)"
+
+[[outputs]]
+id = "BPHavV-KcBkkFAiP5NEou"
+uri = "file://attached_assets/generated_videos/konex-globe-connections.mp4"
+type = "video"
+title = "Clip 1 — Global Connectivity (8s)"
+
+[[outputs]]
+id = "vxHCAnjZ6bu1pF83NDcEc"
+uri = "file://attached_assets/generated_videos/konex-esim-activation.mp4"
+type = "video"
+title = "Clip 2 — eSIM Activation (8s)"
+
+[[outputs]]
+id = "qOUV6R3tljowa7lYjbngM"
+uri = "file://attached_assets/generated_videos/konex-happy-traveller-abroad.mp4"
+type = "video"
+title = "Clip 3 — Happy Traveller Abroad (8s)"
+
+[[outputs]]
+id = "9G9WEnKQQ8knwy4tqxYrC"
+uri = "file://attached_assets/generated_videos/konex-airport-terminal.mp4"
+type = "video"
+title = "Clip 4 — Airport Terminal (8s)"
