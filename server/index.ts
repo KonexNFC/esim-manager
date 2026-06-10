@@ -285,16 +285,28 @@ app.use((req, res, next) => {
   );
 
   // ── DB keepalive: prevents Replit's managed PostgreSQL from freezing ─────────
-  // Replit freezes the production DB after a period of inactivity. A lightweight
-  // SELECT 1 every 4 minutes keeps the connection warm without any meaningful load.
+  // Pings every 4 minutes. If the DB is unreachable 5 pings in a row (~20 min)
+  // the process exits so Replit auto-restarts it with a fresh connection pool.
   const DB_KEEPALIVE_INTERVAL_MS = 4 * 60 * 1000; // 4 minutes
+  const MAX_CONSECUTIVE_FAILURES = 5;
+  let _keepaliveFailures = 0;
+
   setInterval(async () => {
     try {
       const { db } = await import("./storage");
       const { sql: drizzleSql } = await import("drizzle-orm");
       await db.execute(drizzleSql`SELECT 1`);
+      if (_keepaliveFailures > 0) {
+        console.log(`[keepalive] DB reconnected after ${_keepaliveFailures} failed ping(s)`);
+      }
+      _keepaliveFailures = 0;
     } catch (err: any) {
-      console.warn("[keepalive] DB ping failed:", err.message);
+      _keepaliveFailures++;
+      console.warn(`[keepalive] DB ping failed (${_keepaliveFailures}/${MAX_CONSECUTIVE_FAILURES}):`, err.message);
+      if (_keepaliveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        console.error(`[keepalive] DB unreachable for ${MAX_CONSECUTIVE_FAILURES} consecutive pings — forcing restart to clear hung connections`);
+        process.exit(1); // Replit will auto-restart the app
+      }
     }
   }, DB_KEEPALIVE_INTERVAL_MS);
 })();

@@ -271,6 +271,12 @@ async function autoUpdateInternalPlanCosts(): Promise<{ plansUpdated: number; pr
 export async function syncAllProviders(
   triggeredBy: "auto" | "manual" = "auto",
 ): Promise<SyncSummary> {
+  // Guard: skip if a sync is already in progress (e.g. previous run took >30 min)
+  if (_syncRunning && triggeredBy === "auto") {
+    console.warn("[providerSync] Previous sync still running — skipping this scheduled run to avoid overlap");
+    return { status: "skipped", totalOffersUpserted: 0, plansUpdated: 0, durationMs: 0, errors: [] } as any;
+  }
+  _syncRunning = true;
   const startedAt = Date.now();
 
   const [logRow] = await db
@@ -444,6 +450,7 @@ export async function syncAllProviders(
 
   console.log(`[providerSync] Done in ${durationMs}ms — status=${status}, offers=${totalOffersUpserted}, plans=${plansUpdated}`);
 
+  _syncRunning = false;
   return { logId, triggeredBy, durationMs, results, totalOffersUpserted, internalPlansUpdated: plansUpdated, priceChanges: totalPriceChanges, failedProviders, status };
 }
 
@@ -480,6 +487,7 @@ async function ensureSyncIndexes(): Promise<void> {
 }
 
 let _schedulerStarted = false;
+let _syncRunning     = false;
 
 /**
  * Mark any sync runs that were left in "running" state (e.g. from a server

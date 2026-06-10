@@ -28,6 +28,12 @@ export interface AvailableCountry {
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
+  // --- Timeout settings to prevent the server hanging when the DB freezes ---
+  // Without these, a frozen DB causes all pool clients to hang indefinitely,
+  // making the app unresponsive to every request until a manual restart.
+  connectionTimeoutMillis: 10_000,  // fail fast if we can't get a connection in 10s
+  idleTimeoutMillis:       30_000,  // release idle clients after 30s (clears stale conn)
+  max:                     10,      // cap pool size; avoid exhausting DB connections
 });
 
 // Prevent unhandled 'error' events on idle pool clients from crashing the process.
