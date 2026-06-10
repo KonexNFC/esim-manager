@@ -1,8 +1,25 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "PtZFDYEn18zSvh1nkRpjc"
 uri = "file://attached_assets/wimbledon_2026.png"
 type = "image"
 title = "wimbledon centre court tennis"
+
+[[outputs]]
+id = "Pi8u7w5Qn0Y6OHh_4vGGR"
+uri = "file://attached_assets/generated_videos/konex-intro-brand.mp4"
+type = "video"
+title = "Clip 1 — KONEX Brand Intro (6s)"
+
+[[outputs]]
+id = "uYCoZV3hTTcXNTws62u0T"
+uri = "file://attached_assets/generated_videos/konex-airport-travel.mp4"
+type = "video"
+title = "Clip 2 — Airport Travel Scene (6s)"
+
+[[outputs]]
+id = "EZY9MDyZzXd-SGjg7Yxgv"
+uri = "file://attached_assets/generated_videos/konex-happy-traveller.mp4"
+type = "video"
+title = "Clip 3 — Happy Traveller (6s)"
