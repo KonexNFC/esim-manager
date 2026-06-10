@@ -1,0 +1,1 @@
+- [Recommendation engine rules](rec-engine-rules.md) — three hard-won rules for RECOMMENDED/CHEAPER/PREMIUM slot logic; violating any causes confusing plan cards

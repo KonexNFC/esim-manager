@@ -126,10 +126,25 @@ function pickCheaper(
 }
 
 /**
+ * Maximum price ratio that a PREMIUM plan may cost relative to RECOMMENDED.
+ * If the cheapest premium exceeds this multiple, the slot is left empty rather
+ * than showing a wildly expensive option (e.g. £83 Premium vs £22 Best Value).
+ */
+const MAX_PREMIUM_TO_REC_RATIO = 2.5;
+
+/**
  * Pick the PREMIUM offer: a higher-tier option distinct from RECOMMENDED and
- * CHEAPER. Prefers unlimited at or above the recommended price (natural upsell).
- * MAX fixed-data fallback is only used when it costs MORE than the CHEAPER slot
- * (prevents showing two plans at the same price with different labels).
+ * CHEAPER.
+ *
+ * Rules:
+ *   1. Unlimited upsell is only offered when RECOMMENDED is NOT already
+ *      unlimited. Showing two unlimited plans (same data, different provider,
+ *      higher price) provides no tangible upgrade to the user.
+ *   2. Any premium plan must cost ≤ MAX_PREMIUM_TO_REC_RATIO × recommended.
+ *      This prevents absurdly priced "Premium" options (e.g. £83 vs £22 Best
+ *      Value) that would mislead users about relative value.
+ *   3. MAX fixed-data fallback is only used when it costs MORE than the CHEAPER
+ *      slot (prevents two plans at the same price with different labels).
  */
 function pickPremium(
   sorted: NormalizedOffer[],
@@ -140,22 +155,33 @@ function pickPremium(
     [recommended?.id, cheaper?.id].filter(Boolean) as string[],
   );
 
-  // Prefer unlimited at or above recommended price
-  const premium = sorted.find(
-    (o) =>
-      !excludeIds.has(o.id) &&
-      isUnlimited(o) &&
-      (recommended === null || o.sellPriceGbp >= recommended.sellPriceGbp),
-  );
-  if (premium) return premium;
+  const recIsUnlimited = recommended ? isUnlimited(recommended) : false;
+  const maxPremiumPrice = recommended
+    ? recommended.sellPriceGbp * MAX_PREMIUM_TO_REC_RATIO
+    : Infinity;
 
-  // Fall back to a MAX fixed-data plan — only if it costs more than CHEAPER
-  // (prevents the confusing scenario where Premium and Budget show the same price)
+  // Offer an unlimited upsell only when the recommended is NOT already
+  // unlimited (otherwise it's just a more expensive provider with no extra data)
+  if (!recIsUnlimited) {
+    const unlimitedUpsell = sorted.find(
+      (o) =>
+        !excludeIds.has(o.id) &&
+        isUnlimited(o) &&
+        o.sellPriceGbp <= maxPremiumPrice &&
+        (recommended === null || o.sellPriceGbp >= recommended.sellPriceGbp),
+    );
+    if (unlimitedUpsell) return unlimitedUpsell;
+  }
+
+  // Fall back to a MAX fixed-data plan:
+  //   - Must cost more than CHEAPER (no same-price duplicates)
+  //   - Must not exceed MAX_PREMIUM_TO_REC_RATIO × recommended
   return (
     sorted.find(
       (o) =>
         !excludeIds.has(o.id) &&
         o.offerType === OfferType.MAX &&
+        o.sellPriceGbp <= maxPremiumPrice &&
         (cheaper === null || o.sellPriceGbp > cheaper.sellPriceGbp),
     ) ?? null
   );
