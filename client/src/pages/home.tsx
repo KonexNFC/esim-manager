@@ -125,6 +125,20 @@ interface FestivalEvent {
 
 const FESTIVAL_EVENTS: FestivalEvent[] = [
   {
+    id: "worldcup2026",
+    name: "FIFA World Cup 2026",
+    subtitle: "48 nations. 3 countries. 104 matches. The biggest sporting event on the planet — stay connected from kick-off to the Final Whistle.",
+    location: "USA · Canada · Mexico",
+    dates: "Jun 11 – Jul 19, 2026",
+    flags: ["🇺🇸", "🇨🇦", "🇲🇽", "⚽"],
+    countryCode: "US",
+    bgFrom: "#071a0c",
+    bgTo: "#0a1e3d",
+    accent: "#f59e0b",
+    photo: "https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=700&q=80",
+    cta: "Get Match Day eSIM",
+  },
+  {
     id: "glastonbury",
     name: "Glastonbury 2026",
     subtitle: "200,000 music lovers, 100+ stages, and one legendary Somerset farm. Don't lose your crew.",
