@@ -81,7 +81,7 @@ const ROLE_BADGE: Record<string, { label: string; variant: PlanBadgeVariant }> =
   PREMIUM:     { label: "Premium",    variant: "premium" },
 };
 
-const DURATION_OPTIONS = [1, 5, 7, 14, 30];
+const DURATION_OPTIONS = [1, 3, 5, 7, 14, 30];
 
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
 
@@ -268,6 +268,7 @@ export default function FindPlan() {
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 {tripDays === 1  && "Perfect for a day trip or short layover."}
+                {tripDays === 3  && "Great for a long weekend or short city break."}
                 {tripDays === 5  && "Great value for a short holiday or business trip."}
                 {tripDays === 7  && "Our most popular plan — best rate per day."}
                 {tripDays === 14 && "Ideal for a two-week holiday or extended stay."}
