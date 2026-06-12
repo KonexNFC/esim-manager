@@ -1092,17 +1092,31 @@ const bundles = [
     description: "Full coverage across the EU, UK, and beyond. Maps, social, streaming — all without switching SIMs.",
     features: ["28 European countries", "Up to 30-day validity", "4G/5G speeds"],
     price: "From $14",
+    href: "/destinations/EU",
+  },
+  {
+    id: "nigeria-arrival",
+    flag: "🇳🇬",
+    label: "UK Traveller",
+    highlighted: false,
+    title: "Nigeria Arrival eSIM",
+    subtitle: "Land connected · No queues",
+    description: "Buy before you fly, get your QR code instantly, and skip the airport SIM registration entirely.",
+    features: ["Nigeria coverage", "Activates on landing", "No registration needed"],
+    price: "From $6",
+    href: "/nigeria-esim",
   },
   {
     id: "nigeria",
     flag: "🇳🇬🇬🇧",
-    label: "Best Value",
+    label: "Frequent Traveller",
     highlighted: false,
-    title: "UK ↔ Nigeria Pack",
-    subtitle: "Dual-country · Stay connected both ends",
-    description: "Built for the UK–Nigeria corridor. Stay connected on both ends without roaming charges on either.",
+    title: "UK ↔ Nigeria Frequent Traveller",
+    subtitle: "Dual-country · Both ends covered",
+    description: "Built for the UK–Nigeria corridor. Stay connected in both countries on a single eSIM plan.",
     features: ["UK + Nigeria coverage", "5 GB data", "30-day validity"],
     price: "From $16",
+    href: "/nigeria-esim",
   },
   {
     id: "global",
@@ -1114,6 +1128,7 @@ const bundles = [
     description: "One eSIM that works everywhere. Ideal for frequent travellers, business trips, or multi-stop tours.",
     features: ["205+ countries covered", "Unlimited data option", "Multi-trip ready"],
     price: "From $29",
+    href: "/destinations",
   },
 ];
 
@@ -1229,7 +1244,7 @@ function BundlesSection() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {bundles.map((bundle) => (
             <div
               key={bundle.id}
@@ -1255,7 +1270,7 @@ function BundlesSection() {
               </ul>
               <div className="flex items-center justify-between pt-5 border-t border-current/10">
                 <span className="font-display font-bold text-xl">{bundle.price}</span>
-                <Link href="/destinations">
+                <Link href={bundle.href}>
                   <Button
                     size="sm"
                     variant={bundle.highlighted ? "secondary" : "default"}
@@ -1910,6 +1925,62 @@ const WC_HIGHLIGHTS = [
   "Works on all eSIM-compatible phones",
 ] as const;
 
+// ─────────────────────────────────────────────
+// NIGERIA CAMPAIGN CARD
+// ─────────────────────────────────────────────
+function NigeriaCampaignCard() {
+  const [, navigate] = useLocation();
+  return (
+    <section className="px-4 sm:px-6 py-4" data-testid="section-nigeria-campaign">
+      <div className="max-w-7xl mx-auto">
+        <div
+          className="relative rounded-2xl overflow-hidden border border-emerald-500/25 cursor-pointer group"
+          style={{ background: "linear-gradient(135deg, #061a0c 0%, #0d2818 50%, #0a1f14 100%)" }}
+          onClick={() => navigate("/nigeria-esim")}
+          data-testid="card-nigeria-campaign"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === "Enter" && navigate("/nigeria-esim")}
+        >
+          {/* glow */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute right-0 top-0 w-64 h-64 opacity-20 rounded-full -translate-y-1/2 translate-x-1/2"
+              style={{ background: "radial-gradient(circle, #008751 0%, transparent 70%)" }} />
+          </div>
+
+          <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-5">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-2xl flex-shrink-0">
+                🇳🇬
+              </div>
+              <div>
+                <p className="text-white font-bold text-base sm:text-lg leading-snug">
+                  Flying to Nigeria? Get connected before landing.
+                </p>
+                <p className="text-white/50 text-xs sm:text-sm mt-0.5">
+                  Skip the airport SIM queue — buy your eSIM now, scan the QR code, land connected.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <Button
+                size="sm"
+                className="font-bold text-sm whitespace-nowrap border-0 group-hover:scale-105 transition-transform duration-200"
+                style={{ background: "linear-gradient(135deg, #008751, #00a65e)" }}
+                onClick={(e) => { e.stopPropagation(); navigate("/nigeria-esim"); }}
+                data-testid="button-nigeria-campaign-cta"
+              >
+                Get Nigeria eSIM
+                <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function WorldCup2026Section() {
   const [, navigate] = useLocation();
   const { ref, inView } = useInView(0.1);
@@ -2112,6 +2183,8 @@ export default function Home() {
       <Reveal><PlanFinderSection /></Reveal>
       {/* C2: World Cup 2026 campaign — after hero, before generic destinations */}
       <WorldCup2026Section />
+      {/* C3: Nigeria campaign card — prominent conversion banner */}
+      <NigeriaCampaignCard />
       {/* D: Popular destinations */}
       <Reveal><PopularDestinations /></Reveal>
       {/* E: Events carousel — mid-page feature */}

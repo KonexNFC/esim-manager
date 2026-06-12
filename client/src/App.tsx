@@ -29,6 +29,7 @@ import FindPlan from "@/pages/find-plan";
 import NfcCard from "@/pages/nfc-card";
 import Events from "@/pages/events";
 import EventDetail from "@/pages/event-detail";
+import NigeriaEsim from "@/pages/nigeria-esim";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -56,6 +57,7 @@ function Router() {
       <Route path="/nfc-card" component={NfcCard} />
       <Route path="/events" component={Events} />
       <Route path="/events/:slug" component={EventDetail} />
+      <Route path="/nigeria-esim" component={NigeriaEsim} />
       <Route component={NotFound} />
     </Switch>
   );

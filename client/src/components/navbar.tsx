@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
 import {
   Search, Smartphone, LayoutDashboard, LogIn, ChevronDown,
-  Rocket, Menu, X, ShoppingBag, Globe,
+  Rocket, Menu, X, ShoppingBag, Globe, Wifi,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { KonexLogo } from "./konex-logo";
@@ -116,6 +116,12 @@ function MobileMenu({ isHome, user, isLoading, scrollTo }: {
                   Browse Destinations
                 </span>
               </Link>
+              <Link href="/nigeria-esim" onClick={close}>
+                <span className={`${linkClass} text-emerald-600 dark:text-emerald-400 font-semibold`} data-testid="mobile-link-nigeria-esim">
+                  <span className="text-base leading-none">🇳🇬</span>
+                  Nigeria eSIM
+                </span>
+              </Link>
               <Link href="/compatibility" onClick={close}>
                 <span className={linkClass} data-testid="mobile-link-compatibility">
                   <Smartphone className="w-4 h-4 text-primary" />
@@ -142,6 +148,12 @@ function MobileMenu({ isHome, user, isLoading, scrollTo }: {
                 <span className={linkClass} data-testid="mobile-link-browse">
                   <Search className="w-4 h-4 text-primary" />
                   Browse Destinations
+                </span>
+              </Link>
+              <Link href="/nigeria-esim" onClick={close}>
+                <span className={`${linkClass} text-emerald-600 dark:text-emerald-400 font-semibold`} data-testid="mobile-link-nigeria-esim">
+                  <span className="text-base leading-none">🇳🇬</span>
+                  Nigeria eSIM
                 </span>
               </Link>
               <Link href="/compatibility" onClick={close}>
@@ -251,6 +263,16 @@ export function Navbar() {
               </button>
             ))}
 
+            <Link href="/nigeria-esim">
+              <button
+                className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                data-testid="nav-nigeria-esim"
+              >
+                <span className="text-base leading-none">🇳🇬</span>
+                Nigeria eSIM
+              </button>
+            </Link>
+
             <Link href="/roadmap">
               <button
                 className="hidden lg:flex items-center px-3 py-1.5 text-sm font-medium text-muted-foreground rounded-lg hover:bg-white/5 hover:text-foreground transition-colors gap-1.5"
@@ -313,6 +335,17 @@ export function Navbar() {
               >
                 <Search className="w-4 h-4 mr-1.5" />
                 Browse
+              </Button>
+            </Link>
+            <Link href="/nigeria-esim">
+              <Button
+                variant={location.startsWith("/nigeria-esim") ? "secondary" : "ghost"}
+                size="sm"
+                className={location.startsWith("/nigeria-esim") ? "" : "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-600"}
+                data-testid="link-nigeria-esim"
+              >
+                <span className="mr-1 text-sm leading-none">🇳🇬</span>
+                Nigeria eSIM
               </Button>
             </Link>
             <Link href="/compatibility">
