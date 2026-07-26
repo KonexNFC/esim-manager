@@ -200,9 +200,9 @@ export default function CheckoutSuccess() {
       return res.json();
     },
     enabled: !!orderId && pollingEnabled,
-    refetchInterval: (data) => {
-      if (data) {
-        const o = data as OrderData;
+    refetchInterval: (query) => {
+      const o = query.state.data;
+      if (o) {
         if (o.status === "fulfilled" || o.status === "fulfillment_failed") {
           setPollingEnabled(false);
           return false;
@@ -225,9 +225,9 @@ export default function CheckoutSuccess() {
       return res.json();
     },
     enabled: !!sessionId && !orderId && pollingEnabled,
-    refetchInterval: (data) => {
-      if (data) {
-        const o = data as OrderData;
+    refetchInterval: (query) => {
+      const o = query.state.data;
+      if (o) {
         if (o.status === "fulfilled" || o.status === "fulfillment_failed") {
           setPollingEnabled(false);
           return false;

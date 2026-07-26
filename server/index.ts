@@ -229,7 +229,7 @@ app.use((req, res, next) => {
       }
 
       for (const order of stuckOrders) {
-        const ageMs = Date.now() - new Date(order.updatedAt).getTime();
+        const ageMs = Date.now() - new Date(order.updatedAt ?? 0).getTime();
         const ageMin = Math.round(ageMs / 60_000);
 
         // If the order already has an ICCID, a provider purchased it successfully —

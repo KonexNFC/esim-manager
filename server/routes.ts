@@ -165,7 +165,7 @@ export async function registerRoutes(
       return res.status(400).json({ message: "isAdmin must be a boolean" });
     }
     try {
-      const user = await storage.updateUser(req.params.id, { isAdmin });
+      const user = await storage.updateUser(String(req.params.id), { isAdmin });
       if (!user) return res.status(404).json({ message: "User not found" });
       res.json({ id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin });
     } catch {
@@ -244,7 +244,7 @@ export async function registerRoutes(
   // Legacy mock top-up kept for dashboard UI compatibility
   app.post("/api/dashboard/topup/:orderId", requireAuth, async (req, res) => {
     const userId = (req as any).userId;
-    const { orderId } = req.params;
+    const orderId = String(req.params.orderId);
     const { topupType } = req.body;
 
     const topupOptions: Record<string, { label: string; price: number }> = {
@@ -503,13 +503,15 @@ export async function registerRoutes(
       const plan = await storage.getPlan(req.params.planId);
       if (!plan) return res.status(404).json({ message: "Plan not found" });
 
+      const dest = plan.destinationId ? await storage.getDestination(plan.destinationId) : undefined;
+      const planCountryCode = dest?.countryCode ?? "";
       const dataMb = Math.round((plan.dataAmountGb ?? 0) * 1024);
       const [normalizedPlan] = await db
         .select({ id: normalizedPlans.id })
         .from(normalizedPlans)
         .where(
           and(
-            eq(normalizedPlans.regionCode, plan.countryCode),
+            eq(normalizedPlans.regionCode, planCountryCode),
             eq(normalizedPlans.dataMb, dataMb),
             eq(normalizedPlans.validityDays, plan.validityDays),
             eq(normalizedPlans.isActive, true),
@@ -521,7 +523,7 @@ export async function registerRoutes(
         id: plan.id,
         name: plan.name,
         destinationId: plan.destinationId,
-        countryCode: plan.countryCode,
+        countryCode: planCountryCode,
         dataLabel: plan.dataAmount,
         validityLabel: plan.validity,
         dataAmountGb: plan.dataAmountGb,
@@ -599,7 +601,7 @@ export async function registerRoutes(
   app.get("/api/esims/:id", requireAuth, async (req, res) => {
     const userId = (req as any).userId;
     try {
-      const order = await storage.getOrder(req.params.id);
+      const order = await storage.getOrder(String(req.params.id));
       if (!order) return res.status(404).json({ message: "eSIM not found" });
       if (order.userId !== userId) return res.status(403).json({ message: "Not authorized" });
       res.json(order);
@@ -612,12 +614,12 @@ export async function registerRoutes(
   app.get("/api/esims/:id/usage", requireAuth, async (req, res) => {
     const userId = (req as any).userId;
     try {
-      const order = await storage.getOrder(req.params.id);
+      const order = await storage.getOrder(String(req.params.id));
       if (!order) return res.status(404).json({ message: "eSIM not found" });
       if (order.userId !== userId) return res.status(403).json({ message: "Not authorized" });
 
-      await syncEsimUsage(req.params.id);
-      const updated = await storage.getOrder(req.params.id);
+      await syncEsimUsage(String(req.params.id));
+      const updated = await storage.getOrder(String(req.params.id));
       res.json(updated);
     } catch {
       res.status(500).json({ message: "Failed to sync usage" });
@@ -628,7 +630,7 @@ export async function registerRoutes(
   app.get("/api/esims/:id/topups/options", requireAuth, async (req, res) => {
     const userId = (req as any).userId;
     try {
-      const order = await storage.getOrder(req.params.id);
+      const order = await storage.getOrder(String(req.params.id));
       if (!order) return res.status(404).json({ message: "eSIM not found" });
       if (order.userId !== userId) return res.status(403).json({ message: "Not authorized" });
 
@@ -644,7 +646,7 @@ export async function registerRoutes(
   app.post("/api/esims/:id/topups/checkout", requireAuth, async (req, res) => {
     const userId = (req as any).userId;
     try {
-      const order = await storage.getOrder(req.params.id);
+      const order = await storage.getOrder(String(req.params.id));
       if (!order) return res.status(404).json({ message: "eSIM not found" });
       if (order.userId !== userId) return res.status(403).json({ message: "Not authorized" });
 
@@ -926,7 +928,7 @@ export async function registerRoutes(
 
       // Auto-pricing: recompute retail price when pricingMode='auto' or
       // when wholesaleCost changes on an already-auto plan.
-      const existing = await storage.getPlan(req.params.id);
+      const existing = await storage.getPlan(String(req.params.id));
       const effectiveMode = updates.pricingMode ?? existing?.pricingMode ?? 'manual';
       const effectiveCost = updates.wholesaleCost ?? existing?.wholesaleCost ?? 0;
 
@@ -955,7 +957,7 @@ export async function registerRoutes(
         }
       }
 
-      const updated = await storage.updatePlan(req.params.id, updates);
+      const updated = await storage.updatePlan(String(req.params.id), updates);
       if (!updated) return res.status(404).json({ message: "Plan not found" });
       res.json(updated);
     } catch (error) {
@@ -980,7 +982,7 @@ export async function registerRoutes(
 
   app.get("/api/orders/:id", async (req, res) => {
     try {
-      const order = await storage.getOrder(req.params.id);
+      const order = await storage.getOrder(String(req.params.id));
       if (!order) return res.status(404).json({ message: "Order not found" });
       res.json(order);
     } catch (error) {
@@ -995,7 +997,7 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid order data", errors: parsed.error.flatten() });
       }
-      const plan = await storage.getPlan(parsed.data.planId);
+      const plan = await storage.getPlan(parsed.data.planId ?? "");
       if (!plan) {
         return res.status(400).json({ message: "Invalid plan ID" });
       }
@@ -1576,11 +1578,12 @@ export async function registerRoutes(
   app.patch("/api/admin/providers/:key", requireAdmin, async (req, res) => {
     try {
       const { upsertProvider, getProviderByKey } = await import('./services/providerRegistry');
-      const existing = await getProviderByKey(req.params.key);
+      const existing = await getProviderByKey(String(req.params.key));
       if (!existing) return res.status(404).json({ message: "Provider not found" });
       const { enabled, priority, healthStatus, name } = req.body;
       const updated = await upsertProvider({
         ...existing,
+        metadata: existing.metadata as any,
         ...(enabled !== undefined && { enabled }),
         ...(priority !== undefined && { priority }),
         ...(healthStatus !== undefined && { healthStatus }),
@@ -1599,13 +1602,13 @@ export async function registerRoutes(
     try {
       const { getProviderByKey } = await import('./services/providerRegistry');
       const { resumeAutoPausedProvider } = await import('./services/autoProviderPause');
-      const provider = await getProviderByKey(req.params.key);
+      const provider = await getProviderByKey(String(req.params.key));
       if (!provider) return res.status(404).json({ message: "Provider not found" });
       if (!provider.autoPaused) {
         return res.status(400).json({ message: "Provider is not auto-paused" });
       }
-      await resumeAutoPausedProvider(req.params.key);
-      const updated = await getProviderByKey(req.params.key);
+      await resumeAutoPausedProvider(String(req.params.key));
+      const updated = await getProviderByKey(String(req.params.key));
       res.json({ message: `Provider "${req.params.key}" resumed`, provider: updated });
     } catch (err: any) {
       console.error("/api/admin/providers/:key/resume error:", err.message);
@@ -1755,7 +1758,7 @@ export async function registerRoutes(
       const rows = await db
         .select()
         .from(providerAttempts)
-        .where(eq(providerAttempts.orderId, req.params.orderId))
+        .where(eq(providerAttempts.orderId, String(req.params.orderId)))
         .orderBy(sql`${providerAttempts.createdAt} asc`);
       res.json(rows);
     } catch (err: any) {
@@ -1771,7 +1774,7 @@ export async function registerRoutes(
   app.get("/api/admin/orders/:id/routing", requireAdmin, async (req, res) => {
     try {
       const { routingDecisions } = await import("@shared/schema");
-      const order = await storage.getOrder(req.params.id);
+      const order = await storage.getOrder(String(req.params.id));
       if (!order) return res.status(404).json({ message: "Order not found" });
       if (!order.routingDecisionId) {
         return res.status(404).json({ message: "No routing decision recorded for this order" });
@@ -1832,7 +1835,7 @@ export async function registerRoutes(
   // Re-trigger fulfillment for a failed or stuck order without issuing a refund.
 
   app.post("/api/admin/orders/:id/refulfill", requireAdmin, async (req, res) => {
-    const orderId = req.params.id;
+    const orderId = String(req.params.id);
     const forceProviderKey: string | undefined = req.body?.providerKey || undefined;
     const forcePlanCode: string | undefined = req.body?.planCode || undefined;
     try {
@@ -1870,7 +1873,7 @@ export async function registerRoutes(
   // but not captured by the system (e.g. due to a timeout after a successful API call).
   // Updates the order to fulfilled, creates the esims record, and sends the eSIM email.
   app.post("/api/admin/orders/:id/inject-esim", requireAdmin, async (req, res) => {
-    const orderId = req.params.id;
+    const orderId = String(req.params.id);
     try {
       const { iccid, qrCodeUrl, lpaUri, providerEsimId, providerName } = req.body as {
         iccid: string;
@@ -1999,7 +2002,7 @@ export async function registerRoutes(
   // Returns active non-paused provider offers for the order's country,
   // so the admin can pick an alternative plan for manual re-fulfillment.
   app.get("/api/admin/orders/:id/available-plans", requireAdmin, async (req, res) => {
-    const orderId = req.params.id;
+    const orderId = String(req.params.id);
     try {
       const { db } = await import("./storage");
       const { orders, normalizedPlans, providerOffers, providers } = await import("@shared/schema");
@@ -2475,7 +2478,7 @@ export async function registerRoutes(
     // M2M/M2D bulk products are excluded.
     app.get("/api/plans/public/:countryCode", async (req, res) => {
       try {
-        const code = req.params.countryCode.toUpperCase();
+        const code = String(req.params.countryCode).toUpperCase();
         const supplierPlans = await getDbSupplierPlans(code);
         const catalogue = buildPublicCatalogue(code, supplierPlans);
         if (catalogue.availableDurations.length === 0) {
@@ -2585,7 +2588,7 @@ export async function registerRoutes(
     // Should be protected by admin auth in production.
     app.get("/api/plans/internal/:countryCode", requireAdmin, async (req, res) => {
       try {
-        const code = req.params.countryCode.toUpperCase();
+        const code = String(req.params.countryCode).toUpperCase();
         const supplierPlans = await getDbSupplierPlans(code);
         const result = buildInternalCatalogue(code, supplierPlans);
         return res.json(result);
@@ -2601,7 +2604,7 @@ export async function registerRoutes(
     // No auth required — useful for automated QA pipelines.
     app.get("/api/debug/ladder/:countryCode", async (req, res) => {
       try {
-        const code = req.params.countryCode.toUpperCase();
+        const code = String(req.params.countryCode).toUpperCase();
         const supplierPlans = await getDbSupplierPlans(code);
         const report = buildLadderReport(code, supplierPlans);
         return res.json(report);

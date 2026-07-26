@@ -304,7 +304,7 @@ export async function fulfillInitialPurchase(
     if (planData && resolvedNormalizedPlanId) {
       // Admin forced provider override — bypass the dynamic chain entirely.
       if (opts?.forceProviderKey) {
-        dynamicFallbackChain = [{ k: opts.forceProviderKey, c: opts.forcePlanCode ?? '' }];
+        dynamicFallbackChain = [{ r: 1, k: opts.forceProviderKey, c: opts.forcePlanCode ?? '', w: 0 }];
         console.log(`[Fulfillment] Admin force-provider "${opts.forceProviderKey}" planCode="${opts.forcePlanCode ?? 'auto'}" for order ${orderId}`);
       }
 
@@ -335,9 +335,11 @@ export async function fulfillInitialPurchase(
           });
 
           if (adapterReady.length > 0) {
-            dynamicFallbackChain = adapterReady.map(r => ({
-              k: r.provider_key,
-              c: r.provider_plan_code,
+            dynamicFallbackChain = adapterReady.map((row, i) => ({
+              r: i + 1,
+              k: row.provider_key,
+              c: row.provider_plan_code,
+              w: 0,
             }));
 
             // Safety-net: if eSIMGo is configured and not already in the chain,
@@ -345,7 +347,7 @@ export async function fulfillInitialPurchase(
             const alreadyHasEsimGo = dynamicFallbackChain.some(e => e.k.toLowerCase().replace(/[_\-\s]/g, '') === 'esimgo');
             const esimGoAdapter = getProviderAdapterByKey('esimgo');
             if (!alreadyHasEsimGo && esimGoAdapter) {
-              dynamicFallbackChain.push({ k: 'esimgo', c: '' });
+              dynamicFallbackChain.push({ r: dynamicFallbackChain.length + 1, k: 'esimgo', c: '', w: 0 });
               console.log(`[Fulfillment] Appended eSIMGo safety-net to chain for ${orderId}`);
             }
 
@@ -386,7 +388,7 @@ export async function fulfillInitialPurchase(
   // Admin force-provider: apply for legacy planId orders or when the
   // normalizedPlanId branch didn't set a dynamic chain.
   if (opts?.forceProviderKey && (dynamicFallbackChain === null || dynamicFallbackChain.length === 0)) {
-    dynamicFallbackChain = [{ k: opts.forceProviderKey, c: opts.forcePlanCode ?? '' }];
+    dynamicFallbackChain = [{ r: 1, k: opts.forceProviderKey, c: opts.forcePlanCode ?? '', w: 0 }];
     console.log(`[Fulfillment] Admin force-provider "${opts.forceProviderKey}" planCode="${opts.forcePlanCode ?? 'auto'}" (fallback) for order ${orderId}`);
   }
 

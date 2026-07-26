@@ -204,7 +204,7 @@ export function assignRecommendations(
 
   const result: NormalizedOffer[] = [];
 
-  for (const [, group] of groups) {
+  for (const group of groups.values()) {
     const sorted = [...group].sort((a, b) => b.score - a.score);
 
     const recommended = pickRecommended(sorted);

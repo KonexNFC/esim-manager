@@ -9,7 +9,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   ArrowLeft, Wifi, Clock, Globe, Check, Zap, Star,
   Smartphone, BarChart2, ShoppingCart, Lock, ChevronDown,
-  Flame, Gauge, Timer, TrendingUp, Infinity, HardDrive,
+  Flame, Gauge, Timer, TrendingUp, Infinity as InfinityIcon, HardDrive,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -84,7 +84,7 @@ const usageProfiles = [
   { id: "heavy", label: "Heavy", description: "Streaming, hotspot, working remotely", gbPerDay: 2, icon: "~2 GB/day" },
 ];
 
-function DataCalculatorLegacy({ plans, onHighlight }: { plans: Plan[]; onHighlight: (id: number | null) => void }) {
+function DataCalculatorLegacy({ plans, onHighlight }: { plans: Plan[]; onHighlight: (id: string | null) => void }) {
   const { fmt, isApprox } = useCurrency();
   const [usage, setUsage] = useState("moderate");
   const [days, setDays] = useState(7);
@@ -1102,7 +1102,7 @@ function AllPlansTable({
 function LegacyDetail({ destId }: { destId: string }) {
   const { fmt, isApprox } = useCurrency();
   const [, navigate] = useLocation();
-  const [highlightedPlanId, setHighlightedPlanId] = useState<number | null>(null);
+  const [highlightedPlanId, setHighlightedPlanId] = useState<string | null>(null);
 
   const { data: destination, isLoading: destLoading } = useQuery<Destination>({
     queryKey: ["/api/destinations", destId],
@@ -1554,7 +1554,7 @@ function TravelPlansFlow({
                       <div className="flex items-center gap-3 min-w-0">
                         <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${rec.isUnlimited ? "bg-primary/10" : "bg-emerald-50 dark:bg-emerald-950/40"}`}>
                           {rec.isUnlimited
-                            ? <Infinity className="w-4 h-4 text-primary" />
+                            ? <InfinityIcon className="w-4 h-4 text-primary" />
                             : <HardDrive className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
                         </div>
                         <div className="min-w-0">
@@ -1998,8 +1998,8 @@ function PublicCheckoutModal({
         body: JSON.stringify({
           normalizedPlanId: plan.normalizedPlanId || plan.id,
           countryCode,
-          countryName: plan.region || countryCode,
-          region: plan.region || countryCode,
+          countryName: countryCode,
+          region: countryCode,
           dataLabel,
           validityLabel,
           dataAmountGb: plan.dataGb ?? 0,

@@ -8,7 +8,7 @@ const planTemplates = [
   { suffix: "Unlimited", dataAmount: "Unlimited", dataAmountGb: 999, validity: "30 Days", validityDays: 30, priceBase: 24.99, speedInfo: "4G/5G", features: ["Unlimited data", "Instant activation", "No contract", "Hotspot enabled", "5G where available", "Fair usage: 1GB/day high speed"] },
 ];
 
-async function seedPlansForDests(insertedDests: { id: number; countryCode: string; name: string }[], wholesaleCosts: Record<string, number>, priceMultipliers: Record<string, number>) {
+async function seedPlansForDests(insertedDests: { id: string; countryCode: string; name: string }[], wholesaleCosts: Record<string, number>, priceMultipliers: Record<string, number>) {
   const allPlans = insertedDests.flatMap((dest) => {
     const mult = priceMultipliers[dest.countryCode] || 1;
     const wc = wholesaleCosts[dest.countryCode] || 2.0;

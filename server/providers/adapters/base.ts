@@ -12,6 +12,7 @@ export interface EsimProvisionResult {
   dataTotalMb: number;
   dataUsedMb: number;
   dataRemainingMb: number;
+  apn?: string;
 }
 
 export interface EsimStatusResult {
@@ -88,7 +89,7 @@ export interface TopupResult {
 }
 
 export interface ProviderPurchaseParams {
-  planId: string;
+  planId?: string;
   countryCode: string;
   dataAmountGb: number;
   validityDays: number;

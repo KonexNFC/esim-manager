@@ -113,7 +113,7 @@ export function generateSyntheticBundles(
   const grouped = groupByKey(publicOffers);
   const synthetics: NormalizedOffer[] = [];
 
-  for (const [, byBucket] of grouped) {
+  for (const byBucket of grouped.values()) {
     const source = pickBestDay1([...byBucket.values()].flat());
     if (!source) continue; // no DAY_1 available for this supplier/type
 

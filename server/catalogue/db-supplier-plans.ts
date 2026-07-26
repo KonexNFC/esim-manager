@@ -12,7 +12,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../storage";
 import { Category, PlanStatus, SupplierPlan } from "./supplier-plan.types";
 
-interface OfferRow {
+type OfferRow = {
   id: string;
   normalized_plan_id: string;
   provider_key: string;
@@ -22,7 +22,7 @@ interface OfferRow {
   is_unlimited: boolean;
   wholesale_price_usd: number;
   coverage_type: string | null;
-}
+};
 
 /**
  * Load all active provider offers for a country code and return them as

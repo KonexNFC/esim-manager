@@ -4,6 +4,7 @@
 //   - providerSync getAllPackages (catalogue sync)
 
 import type { ProviderPlan, EsimProvider, ProviderOrderResult } from "./types";
+import type { ProviderPurchaseParams } from "./adapters/base";
 import { AiraloAdapter } from "./adapters/airalo";
 
 class AiraloProvider {
@@ -125,7 +126,7 @@ class AiraloProvider {
       dataAmountGb: planDetails.dataAmountGb,
       validityDays: planDetails.validityDays,
       providerRef:  planDetails.providerRef,
-    });
+    } as ProviderPurchaseParams);
     return {
       iccid:         result.iccid,
       qrCodeUrl:     result.qrCodeUrl,
