@@ -43,25 +43,33 @@ const INELIGIBLE_STATUSES = new Set<PlanStatus>([
 /**
  * Map raw supplier validity days to a clean travel duration bucket.
  *
- * Business rules:
- *   1 day        → DAY_1
- *   2–3 days     → DAY_3
- *   4–5 days     → DAY_5
- *   6–7 days     → DAY_7
- *   8–14 days    → DAY_14 (two-week plans)
- *   15–31 days   → DAY_30 (monthly / long-stay plans)
+ * Business rule: a bucket must NEVER overstate validity. Each plan is filed
+ * under the LARGEST bucket whose day count is ≤ the plan's real validity, so
+ * customers may get bonus days but never fewer than the group header claims.
+ *
+ *   1–2 days     → DAY_1
+ *   3–4 days     → DAY_3
+ *   5–6 days     → DAY_5
+ *   7–13 days    → DAY_7  (10-day supplier SKUs grouped down)
+ *   14–29 days   → DAY_14 (two-week plans; 15-day supplier SKUs deliver a bonus day)
+ *   30–31 days   → DAY_30 (monthly / long-stay plans)
  *   > 31 days    → null   (annual / bulk plans — excluded)
+ *
+ * Note: real supplier SKUs are almost exclusively 1 / 3 / 5 / 7 / 10 / 15 / 30
+ * days. The previous mapping filed 15-day plans under DAY_30, which claimed
+ * "30-day validity" for a 15-day product.
  */
 export function normalizeValidityToBucket(
   validityDays: number
 ): DurationBucket | null {
-  if (validityDays === 1) return DurationBucket.DAY_1;
-  if (validityDays >= 2 && validityDays <= 3)  return DurationBucket.DAY_3;
-  if (validityDays >= 4 && validityDays <= 5)  return DurationBucket.DAY_5;
-  if (validityDays >= 6 && validityDays <= 7)  return DurationBucket.DAY_7;
-  if (validityDays >= 8 && validityDays <= 14) return DurationBucket.DAY_14;
-  if (validityDays >= 15 && validityDays <= 31) return DurationBucket.DAY_30;
-  return null;
+  if (validityDays > 31) return null; // annual / bulk plans — excluded
+  if (validityDays >= 30) return DurationBucket.DAY_30;
+  if (validityDays >= 14) return DurationBucket.DAY_14;
+  if (validityDays >= 7)  return DurationBucket.DAY_7;
+  if (validityDays >= 5)  return DurationBucket.DAY_5;
+  if (validityDays >= 3)  return DurationBucket.DAY_3;
+  if (validityDays >= 1)  return DurationBucket.DAY_1;
+  return null; // zero / negative — malformed supplier data
 }
 
 /**
