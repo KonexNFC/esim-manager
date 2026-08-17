@@ -2,4 +2,5 @@
 - [Production DB auto-pause](prod-db-pause.md) — site "down"/empty finder usually means the prod Postgres endpoint auto-paused; unpause in Database pane, don't redeploy
 - [Homepage event staleness](homepage-events-staleness.md) — hero carousel events are hardcoded with fixed dates and go stale; events page dataset is evergreen/self-filtering
 - [Duration bucket honesty](duration-bucket-honesty.md) — "X Days" groups must never overstate plan validity; supplier SKUs are only 1/3/5/7/10/15/30 days
+- [Failed-order recovery](failed-order-recovery.md) — prod writes only via live app API (PATCH /api/orders is unauthenticated!); refunds go direct via live PayPal/Stripe keys; 3 root causes of fulfillment failures
 - [Wholesale price floor](wholesale-price-floor.md) — every checkout must clear cost+20%/$1.90 via the shared floor service; stored retail_price_usd is mostly 0 and never authoritative
