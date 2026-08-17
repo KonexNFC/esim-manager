@@ -57,7 +57,7 @@ export const plans = pgTable("plans", {
 });
 
 // ─── ORDERS ──────────────────────────────────────────
-// status: pending | paid | failed | fulfilling | fulfilled | fulfillment_failed | partially_fulfilled | refunded
+// status: pending | paid | failed | fulfilling | fulfilled | fulfillment_failed | partially_fulfilled | refunded | rejected_below_floor
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   planId: varchar("plan_id").references(() => plans.id),

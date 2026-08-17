@@ -97,9 +97,15 @@ async function handlePaddleTransactionCompleted(data: any) {
       customData.email ??
       data.billing_details?.email ??
       "";
-    const amountUsd: number =
-      parseFloat(data.details?.totals?.subtotal ?? "0") / 100 ||
-      parseFloat(customData.amountUsd ?? "0");
+    // Amount ACTUALLY captured (grand_total/total after all discounts) — never
+    // the subtotal, which ignores promotions. Falls back to checkout metadata
+    // only when Paddle sent no totals at all.
+    const { paddleCapturedUsd } = await import("./services/priceFloor");
+    const capturedUsd = paddleCapturedUsd(
+      data.details?.totals,
+      parseFloat(customData.amountUsd ?? "0") || null,
+    );
+    const amountUsd: number = capturedUsd ?? 0;
 
     const normalizedPlanId: string = customData.normalizedPlanId ?? "";
     const countryCode: string = customData.countryCode ?? "";
@@ -129,6 +135,48 @@ async function handlePaddleTransactionCompleted(data: any) {
     if (email) {
       const [user] = await (db as any).select().from(users).where(eq(users.email, email));
       if (user) resolvedUserId = user.id;
+    }
+
+    // ── Wholesale price floor guard: never fulfill a below-cost payment ────
+    // Validate the amount Paddle actually collected against the worst-case
+    // wholesale cost + minimum margin for this plan.
+    if (normalizedPlanId) {
+      const { getMaxWholesaleUsd, assertChargeMeetsFloor, PriceFloorError } =
+        await import("./services/priceFloor");
+      try {
+        const wholesale = await getMaxWholesaleUsd(normalizedPlanId);
+        if (wholesale == null) {
+          // Offers were disabled/removed after checkout creation — we no
+          // longer know our cost and cannot fulfill. Reject.
+          throw new PriceFloorError(
+            `Paddle transaction ${transactionId}: plan ${normalizedPlanId} has no fulfillable supplier offer.`,
+          );
+        }
+        if (capturedUsd == null) {
+          throw new PriceFloorError(
+            `Paddle transaction ${transactionId}: could not determine captured amount (unknown totals/currency).`,
+          );
+        }
+        assertChargeMeetsFloor(amountUsd, wholesale, `Paddle transaction ${transactionId}`);
+      } catch (floorErr: any) {
+        if (floorErr instanceof PriceFloorError) {
+          console.error(`[Paddle] REJECTED below-floor payment: ${floorErr.message}`);
+          await (db as any).insert(orders).values({
+            planId: null,
+            normalizedPlanId: normalizedPlanId || null,
+            email,
+            userId: resolvedUserId ?? null,
+            status: "rejected_below_floor",
+            totalPrice: amountUsd,
+            currency: "USD",
+            providerName: "paddle",
+            purchaseType: "initial_purchase",
+          });
+          await storage.markPaymentEventProcessed(eventId);
+          return; // do NOT fulfill — order flagged for manual review/refund
+        }
+        throw floorErr;
+      }
     }
 
     const { fulfillInitialPurchase } = await import("./services/fulfillment");

@@ -325,8 +325,29 @@ export async function registerRoutes(
       if (!np) {
         return res.status(404).json({ message: "Plan not found" });
       }
-      const FLOOR_USD = 1.00;
-      const serverPrice = Math.max(np.retailPriceUsd, FLOOR_USD);
+
+      // ── Wholesale price floor: never sell below supplier cost + min margin ─
+      const { resolveSalePriceUsd, PriceFloorError } = await import("./services/priceFloor");
+      let serverPrice: number;
+      try {
+        const resolved = await resolveSalePriceUsd(normalizedPlanId, np.retailPriceUsd);
+        serverPrice = resolved.priceUsd;
+        if (serverPrice !== np.retailPriceUsd) {
+          console.warn(
+            `[paypal/create-order] Stored retail $${np.retailPriceUsd} below floor ` +
+            `$${resolved.floorUsd.toFixed(2)} (wholesale $${resolved.wholesaleUsd.toFixed(2)}) — charging $${serverPrice}`,
+          );
+        }
+      } catch (floorErr: any) {
+        if (floorErr instanceof PriceFloorError) {
+          console.error(`[paypal/create-order] ${floorErr.message}`);
+          return res.status(400).json({
+            message: "This plan is not currently available. Please choose a different plan.",
+            code: "NO_PROVIDERS",
+          });
+        }
+        throw floorErr;
+      }
 
       const { getLocationInfo, normaliseCode } = await import("./services/countryData");
       const info = getLocationInfo(normaliseCode(countryCode ?? ""));
@@ -370,6 +391,47 @@ export async function registerRoutes(
       }
 
       const captured = await capturePayPalOrder(paypalOrderId);
+
+      // ── Wholesale price floor guard: never fulfill a below-cost capture ────
+      // (Defense in depth — create-order already priced at/above floor, but the
+      // captured amount is what PayPal actually charged.)
+      if (normalizedPlanId) {
+        const { getMaxWholesaleUsd, assertChargeMeetsFloor, PriceFloorError } =
+          await import("./services/priceFloor");
+        try {
+          const wholesale = await getMaxWholesaleUsd(normalizedPlanId);
+          if (wholesale == null) {
+            // Offers were disabled/removed after checkout creation — we no
+            // longer know our cost and cannot fulfill. Reject.
+            throw new PriceFloorError(
+              `PayPal capture ${paypalOrderId}: plan ${normalizedPlanId} has no fulfillable supplier offer.`,
+            );
+          }
+          assertChargeMeetsFloor(captured.amountUsd, wholesale, `PayPal capture ${paypalOrderId}`);
+        } catch (floorErr: any) {
+          if (floorErr instanceof PriceFloorError) {
+            console.error(`[paypal/capture-order] REJECTED below-floor payment: ${floorErr.message}`);
+            // Record the payment for reconciliation/refund but do NOT fulfill.
+            await (db as any).insert(orders).values({
+              planId: null,
+              normalizedPlanId: normalizedPlanId || null,
+              email: captured.payerEmail || email,
+              status: "rejected_below_floor",
+              totalPrice: captured.amountUsd,
+              currency: "USD",
+              providerName: "paypal",
+              purchaseType: "initial_purchase",
+              paypalOrderId: paypalOrderId,
+              paypalCaptureId: captured.captureId,
+            });
+            return res.status(409).json({
+              message: "Payment amount did not match the plan price. The order was not fulfilled — please contact support for a refund.",
+              code: "BELOW_PRICE_FLOOR",
+            });
+          }
+          throw floorErr;
+        }
+      }
 
       // Create order record
       const resolvedEmail = captured.payerEmail || email;
@@ -426,8 +488,29 @@ export async function registerRoutes(
       if (!np) {
         return res.status(404).json({ message: "Plan not found" });
       }
-      const FLOOR_USD = 1.00;
-      const serverPrice = Math.max(np.retailPriceUsd, FLOOR_USD);
+
+      // ── Wholesale price floor: never sell below supplier cost + min margin ─
+      const { resolveSalePriceUsd, PriceFloorError } = await import("./services/priceFloor");
+      let serverPrice: number;
+      try {
+        const resolved = await resolveSalePriceUsd(normalizedPlanId, np.retailPriceUsd);
+        serverPrice = resolved.priceUsd;
+        if (serverPrice !== np.retailPriceUsd) {
+          console.warn(
+            `[paddle/create] Stored retail $${np.retailPriceUsd} below floor ` +
+            `$${resolved.floorUsd.toFixed(2)} (wholesale $${resolved.wholesaleUsd.toFixed(2)}) — charging $${serverPrice}`,
+          );
+        }
+      } catch (floorErr: any) {
+        if (floorErr instanceof PriceFloorError) {
+          console.error(`[paddle/create] ${floorErr.message}`);
+          return res.status(400).json({
+            message: "This plan is not currently available. Please choose a different plan.",
+            code: "NO_PROVIDERS",
+          });
+        }
+        throw floorErr;
+      }
 
       const { getLocationInfo, normaliseCode } = await import("./services/countryData");
       const info = getLocationInfo(normaliseCode(countryCode ?? ""));

@@ -12,6 +12,16 @@ import { users, orders, topups, normalizedPlans, plans, settings } from '@shared
 import { eq, and } from 'drizzle-orm';
 import { selectBestProviderForPlan } from './routingEngine';
 import { calculateRetailPrice } from './pricingEngine';
+import {
+  computeFloorUsd,
+  roundUpTo99,
+  assertChargeMeetsFloor,
+  maxChainWholesaleUsd,
+  getMaxWholesaleUsd,
+  evaluateCapturedPayment,
+  GBP_PER_USD as FLOOR_GBP_PER_USD,
+  PriceFloorError,
+} from './priceFloor';
 
 // Read targetMarginPercent from settings, defaulting to 0.50 (50%)
 async function getTargetMarginPercent(): Promise<number> {
@@ -154,7 +164,10 @@ export async function createPlanCheckoutSession(
   let finalPriceUsd = params.price;
   const routingMetadata: Record<string, string> = {};
 
-  try {
+  // FAIL CLOSED: this path requires a normalized plan with live supplier
+  // offers so the wholesale floor can be validated. Without it we cannot know
+  // our cost, so we refuse to create the session (no silent DB-price fallback).
+  {
     const normalizedPlan = await findNormalizedPlanForParams(
       params.countryCode,
       params.dataAmountGb,
@@ -182,6 +195,21 @@ export async function createPlanCheckoutSession(
 
       finalPriceUsd = pricing.retailPriceUsd;
 
+      // ── Wholesale price floor: never sell below cost + minimum margin ──
+      // Floor against the WORST-CASE cost in the fallback chain: fulfillment
+      // may fall back to any provider in it, not just the winner.
+      const worstCaseCost = maxChainWholesaleUsd(
+        routing.fallbackChain.map(p => ({ w: p.wholesalePriceUsd })),
+      ) ?? winner.wholesalePriceUsd;
+      const floorUsd = computeFloorUsd(worstCaseCost);
+      if (finalPriceUsd < floorUsd) {
+        finalPriceUsd = roundUpTo99(floorUsd);
+        console.warn(
+          `[Stripe] Pricing engine price $${pricing.retailPriceUsd} below wholesale floor` +
+          ` $${floorUsd.toFixed(2)} — raised to $${finalPriceUsd}`,
+        );
+      }
+
       // Compact fallback chain for metadata storage
       const compactChain: FallbackEntry[] = routing.fallbackChain.map(p => ({
         r: p.rank,
@@ -207,15 +235,19 @@ export async function createPlanCheckoutSession(
         ` | targetMargin=${minimumMarginPercent}%`,
       );
     } else {
-      // No normalized plan → log and use DB price, which is still server-controlled
-      // Store a rough margin based on DB price if we have a wholesale estimate
-      console.log(
-        `[Stripe] No normalized plan for ${params.countryCode}/${params.dataAmountGb}GB/${params.validityDays}d — using DB price $${params.price}`,
+      // No normalized plan → we cannot determine wholesale cost. Fail closed.
+      throw new PriceFloorError(
+        `Refusing to create checkout session for plan ${params.planId}: no normalized plan ` +
+        `for ${params.countryCode}/${params.dataAmountGb}GB/${params.validityDays}d — wholesale cost unknown.`,
       );
     }
-  } catch (routingErr: any) {
-    // Routing failure is non-fatal: fall back to DB price
-    console.error(`[Stripe] Routing engine error (falling back to DB price): ${routingErr.message}`);
+  }
+
+  // Absolute guard: never create a session with a non-positive charge.
+  if (!(finalPriceUsd > 0)) {
+    throw new PriceFloorError(
+      `Refusing to create checkout session for plan ${params.planId}: price $${finalPriceUsd} is not positive.`,
+    );
   }
 
   // ── Line items ─────────────────────────────────────────────────────────
@@ -319,28 +351,48 @@ export async function createCountryPlanCheckoutSession(
     w: p.wholesalePriceUsd,
   }));
 
-  // Use the catalogue-computed GBP price from the frontend, but validate it
-  // against the server-side DB price before trusting it.  A legitimate
-  // catalogue price should be within 50% of np.retailPriceUsd converted to GBP.
-  // If it's lower (potential price manipulation), discard it and charge in USD.
-  const GBP_PER_USD = 0.79;
-  const MIN_FLOOR_GBP = 1.00;
-  const expectedGbp = np.retailPriceUsd * GBP_PER_USD;
-  const clientGbpSafe = params.sellPriceGbp != null
-    && params.sellPriceGbp >= Math.max(expectedGbp * 0.5, MIN_FLOOR_GBP);
+  // ── Wholesale price floor ────────────────────────────────────────────────
+  // The final charge must always clear the WORST-CASE wholesale cost in the
+  // fallback chain (fulfillment may use any provider in it) plus the minimum
+  // margin. The client-supplied catalogue GBP price is only accepted when it
+  // clears the floor; otherwise we charge a server-computed USD price that does.
+  const worstCaseCost = maxChainWholesaleUsd(
+    routing.fallbackChain.map(p => ({ w: p.wholesalePriceUsd })),
+  ) ?? winner.wholesalePriceUsd;
+  const floorUsd = computeFloorUsd(worstCaseCost);
+  const floorGbp = floorUsd * FLOOR_GBP_PER_USD;
+
+  const clientGbpSafe = params.sellPriceGbp != null && params.sellPriceGbp >= floorGbp;
 
   if (params.sellPriceGbp != null && !clientGbpSafe) {
     console.warn(
-      `[Stripe] Suspicious sellPriceGbp=${params.sellPriceGbp} for plan ${np.id}` +
-      ` (expected ~£${expectedGbp.toFixed(2)}). Falling back to DB price in USD.`,
+      `[Stripe] Rejected sellPriceGbp=£${params.sellPriceGbp} for plan ${np.id}` +
+      ` — below wholesale floor £${floorGbp.toFixed(2)}` +
+      ` (wholesale $${winner.wholesalePriceUsd.toFixed(2)}). Using server USD price.`,
     );
   }
+
+  // Server USD fallback: stored retail if it clears the floor, else floor rounded up
+  const serverUsd = np.retailPriceUsd >= floorUsd
+    ? np.retailPriceUsd
+    : roundUpTo99(floorUsd);
 
   const chargeInGbp = clientGbpSafe;
   const chargeCurrency = chargeInGbp ? 'gbp' : 'usd';
   const chargeAmount   = chargeInGbp
     ? Math.round(params.sellPriceGbp! * 100)
-    : Math.round(np.retailPriceUsd * 100);
+    : Math.round(serverUsd * 100);
+
+  // Final assertion: charge in USD terms must clear the floor. This throws
+  // (aborting session creation) rather than ever creating a below-cost session.
+  const chargeUsdEquivalent = chargeInGbp
+    ? (chargeAmount / 100) / FLOOR_GBP_PER_USD
+    : chargeAmount / 100;
+  assertChargeMeetsFloor(
+    chargeUsdEquivalent,
+    worstCaseCost,
+    `Stripe session for plan ${np.id}`,
+  );
 
   console.log(
     `[Stripe] createCountryPlanCheckoutSession: plan=${np.id}` +
@@ -487,6 +539,10 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
     .where(eq(orders.stripeCheckoutSessionId, session.id));
 
   if (existing.length > 0) {
+    if (existing[0].status === 'rejected_below_floor') {
+      console.warn(`[Stripe] Session ${session.id} previously rejected below price floor — not fulfilling.`);
+      return;
+    }
     console.log(`[Stripe] Order already exists for session ${session.id}`);
     await fulfillInitialPurchase(existing[0].id);
     return;
@@ -531,6 +587,57 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
   let fallbackProvidersJson: any = null;
   if (metadata.fallbackChainJson) {
     try { fallbackProvidersJson = JSON.parse(metadata.fallbackChainJson); } catch { /* ignore */ }
+  }
+
+  // ── Wholesale price floor guard: never fulfill a below-floor payment ─────
+  // The amount ACTUALLY paid (after any promotion codes/discounts) must clear
+  // the full cost-plus-margin floor. Costs are RE-QUERIED live at completion
+  // time: supplier prices may have risen (or providers been reprioritized)
+  // between session creation and payment, so checkout-time metadata is kept
+  // for audit but is not authoritative pricing evidence here.
+  // GBP sessions: convert paid amount to USD before comparing with USD cost.
+  const salePriceUsd = (session.currency || 'usd').toLowerCase() === 'gbp'
+    ? salePrice / FLOOR_GBP_PER_USD
+    : salePrice;
+  let liveMaxUsd: number | null = null;
+  let liveLookupFailed = false;
+  if (metadata.normalizedPlanId) {
+    try {
+      liveMaxUsd = await getMaxWholesaleUsd(metadata.normalizedPlanId);
+    } catch (err: any) {
+      liveLookupFailed = true;
+      console.error(`[Stripe] Live wholesale lookup failed for plan ${metadata.normalizedPlanId}: ${err.message}`);
+    }
+  }
+  const verdict = evaluateCapturedPayment({
+    paidUsd: salePriceUsd,
+    hasNormalizedPlan: !!metadata.normalizedPlanId,
+    liveMaxUsd,
+    liveLookupFailed,
+    chainMaxUsd: maxChainWholesaleUsd(fallbackProvidersJson),
+    metadataCostUsd: providerCost,
+  });
+
+  if (!verdict.ok) {
+    console.error(
+      `[Stripe] REJECTED payment for session ${session.id}: ${verdict.reason} — NOT fulfilling.`,
+    );
+    await db.insert(orders).values({
+      planId: metadata.planId || null,
+      email,
+      userId: resolvedUserId || null,
+      status: 'rejected_below_floor',
+      totalPrice: salePrice,
+      currency: (session.currency || 'usd').toUpperCase(),
+      stripeCheckoutSessionId: session.id,
+      stripePaymentIntentId: session.payment_intent || null,
+      stripeCustomerId: session.customer || null,
+      purchaseType: 'initial_purchase',
+      providerName: providerUsed,
+      normalizedPlanId: metadata.normalizedPlanId || null,
+      wholesaleCostUsd: providerCost > 0 ? providerCost : null,
+    });
+    return; // do NOT fulfill — order flagged for manual review/refund
   }
 
   const [order] = await db.insert(orders).values({
