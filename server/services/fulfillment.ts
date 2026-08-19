@@ -24,8 +24,82 @@ import {
 import { recordFulfillmentOutcome } from './destinationStats';
 import { evaluateProviderForAutoPause } from './autoProviderPause';
 import type { FallbackEntry } from './stripeService';
+import {
+  getAllProviders,
+  getOffersForNormalizedPlan,
+  getProviderOfferEligibility,
+} from './providerRegistry';
+import {
+  canonicalProviderKey,
+  evaluateProviderEligibility,
+  getProviderEligibilityByKey,
+  resolveCanonicalProviderRow,
+} from './providerHealth';
 
 const TRANSIENT_RETRY_DELAY_MS = 1500;
+
+export function dedupeFallbackChainByProvider<T extends { k: string }>(chain: T[]): T[] {
+  const seenKeys = new Set<string>();
+  return chain.filter(entry => {
+    const canonicalKey = canonicalProviderKey(entry.k);
+    if (seenKeys.has(canonicalKey)) return false;
+    seenKeys.add(canonicalKey);
+    return true;
+  });
+}
+
+export function resolveCanonicalProviderCandidates<T extends { key: string }>(
+  rows: T[],
+  preferredProviderKey?: string,
+): { providers: T[]; conflicts: string[] } {
+  const canonicalKeys = preferredProviderKey
+    ? [canonicalProviderKey(preferredProviderKey)]
+    : [...new Set(rows.map(row => canonicalProviderKey(row.key)))];
+  const resolvedProviders: T[] = [];
+  const conflicts: string[] = [];
+
+  for (const key of canonicalKeys) {
+    const resolved = resolveCanonicalProviderRow(rows, key);
+    if (resolved.conflict) {
+      conflicts.push(key);
+    } else if (resolved.provider) {
+      resolvedProviders.push(resolved.provider);
+    }
+  }
+
+  return { providers: resolvedProviders, conflicts };
+}
+
+async function resolveEligibleProviderAdapter(
+  preferredProviderKey?: string,
+): Promise<{ provider: ProviderAdapter; providerKey: string }> {
+  const rows = await getAllProviders();
+  const preferred = preferredProviderKey ? canonicalProviderKey(preferredProviderKey) : null;
+  const resolved = resolveCanonicalProviderCandidates(rows, preferredProviderKey);
+  const candidates = resolved.providers;
+  const exclusionReasons = resolved.conflicts.map(
+    key => `${key}: conflicting legacy provider registry rows must be reconciled`,
+  );
+  for (const row of candidates) {
+    const eligibility = evaluateProviderEligibility(row);
+    if (!eligibility.eligible) {
+      exclusionReasons.push(`${row.key}: ${eligibility.reason}`);
+      continue;
+    }
+    const adapter = getProviderAdapterByKey(row.key);
+    if (!adapter) {
+      exclusionReasons.push(`${row.key}: adapter or credentials unavailable`);
+      continue;
+    }
+    return { provider: adapter, providerKey: canonicalProviderKey(row.key) };
+  }
+
+  throw new Error(
+    preferred
+      ? `Provider "${preferredProviderKey}" is not eligible: ${exclusionReasons.join("; ") || "not registered"}`
+      : `No provider is currently eligible for fulfillment: ${exclusionReasons.join("; ") || "none registered"}`,
+  );
+}
 
 // ─── Generic sync logger ──────────────────────────────────────────────────────
 
@@ -91,31 +165,22 @@ async function fulfillWithFallbackChain(
 
   // Deduplicate: only keep the first entry per provider key so a single-provider
   // chain (e.g. esimaccess × 6) becomes one attempt, not six.
-  const seenKeys = new Set<string>();
-  const deduped = fallbackChain.filter(e => {
-    if (seenKeys.has(e.k)) return false;
-    seenKeys.add(e.k);
-    return true;
-  });
+  const deduped = dedupeFallbackChainByProvider(fallbackChain);
 
   for (let i = 0; i < deduped.length; i++) {
     const entry = deduped[i];
     const isPrimary = i === 0;
 
-    // ── Runtime pause check ────────────────────────────────────────────────
+    // ── Runtime health gate ────────────────────────────────────────────────
     // The chain is built at order-capture time, before any attempts run.
-    // A provider may be auto-paused mid-chain after its first failure.
-    // Re-check the DB before each attempt to skip newly-paused providers.
-    try {
-      const [pRow] = await db.select({ autoPaused: providers.autoPaused })
-        .from(providers).where(eq(providers.key, entry.k)).limit(1);
-      if (pRow?.autoPaused) {
-        console.warn(`[Fulfillment] Provider "${entry.k}" is auto-paused — skipping attempt ${i + 1}`);
-        await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'skipped', 'Provider is auto-paused');
-        recordFulfillmentOutcome({ providerKey: entry.k, destination, outcome: 'skipped', isPrimary }).catch(() => {});
-        continue;
-      }
-    } catch { /* non-fatal: proceed if DB check fails */ }
+    // Re-check all fail-closed eligibility signals before every purchase call.
+    const eligibility = await getProviderOfferEligibility(entry.k, entry.c);
+    if (!eligibility.eligible) {
+      console.warn(`[Fulfillment] Provider "${entry.k}" excluded — ${eligibility.reason}`);
+      await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'skipped', eligibility.reason);
+      recordFulfillmentOutcome({ providerKey: entry.k, destination, outcome: 'skipped', isPrimary }).catch(() => {});
+      continue;
+    }
 
     const provider = getProviderAdapterByKey(entry.k);
 
@@ -202,6 +267,7 @@ export async function fulfillInitialPurchase(
     dataAmountGb: number;
     validityDays: number;
     providerRef?: string;
+    providerKey?: string;
     name: string;
     destination: string;
     region: string;
@@ -222,6 +288,7 @@ export async function fulfillInitialPurchase(
         dataAmountGb: planRow.plan.dataAmountGb,
         validityDays: planRow.plan.validityDays,
         providerRef: planRow.plan.externalPlanCode ?? undefined,
+        providerKey: planRow.plan.provider,
         name: planRow.plan.name,
         destination: planRow.dest?.name ?? '',
         region: planRow.dest?.region ?? '',
@@ -269,6 +336,7 @@ export async function fulfillInitialPurchase(
         dataAmountGb,
         validityDays: offer.validity_days,
         providerRef: offer.provider_plan_code,
+          providerKey: offer.provider_key,
         name: offer.name,
         destination: offer.region_code,
         region: '',
@@ -288,6 +356,7 @@ export async function fulfillInitialPurchase(
           dataAmountGb,
           validityDays: np.validityDays,
           providerRef: undefined, // will be resolved per-provider in dynamic chain
+          providerKey: undefined,
           name: np.name,
           destination: np.regionCode,
           region: '',
@@ -312,23 +381,14 @@ export async function fulfillInitialPurchase(
       // (If selectedProviderKey+fallbackProvidersJson were stored by the routing engine,
       //  those take priority and are used directly at line ~402.)
       if (!opts?.forceProviderKey && !order.selectedProviderKey) {
-        const allOffersRows = await db.execute<{ provider_key: string; provider_plan_code: string }>(sql`
-          SELECT po2.provider_key, po2.provider_plan_code
-          FROM provider_offers po2
-          JOIN providers p ON p.key = po2.provider_key
-          WHERE po2.normalized_plan_id = ${resolvedNormalizedPlanId}
-            AND po2.is_active = true
-            AND p.enabled = true
-            AND p.auto_paused = false
-          ORDER BY p.priority ASC, po2.wholesale_price_usd ASC
-        `);
+        const allOffersRows = await getOffersForNormalizedPlan(resolvedNormalizedPlanId);
 
-        if (allOffersRows.rows.length > 0) {
+        if (allOffersRows.length > 0) {
           // Filter to only providers that have a working adapter with credentials
-          const adapterReady = allOffersRows.rows.filter(r => {
-            const adapter = getProviderAdapterByKey(r.provider_key);
+          const adapterReady = allOffersRows.filter(r => {
+            const adapter = getProviderAdapterByKey(r.providerKey);
             if (!adapter) {
-              console.warn(`[Fulfillment] Excluding "${r.provider_key}" from dynamic chain — no adapter/credentials`);
+              console.warn(`[Fulfillment] Excluding "${r.providerKey}" from dynamic chain — no adapter/credentials`);
               return false;
             }
             return true;
@@ -337,28 +397,19 @@ export async function fulfillInitialPurchase(
           if (adapterReady.length > 0) {
             dynamicFallbackChain = adapterReady.map((row, i) => ({
               r: i + 1,
-              k: row.provider_key,
-              c: row.provider_plan_code,
-              w: 0,
+              k: row.providerKey,
+              c: row.providerPlanCode,
+              w: row.wholesalePriceUsd,
             }));
-
-            // Safety-net: if eSIMGo is configured and not already in the chain,
-            // append a spec-based eSIMGo entry as last resort.
-            const alreadyHasEsimGo = dynamicFallbackChain.some(e => e.k.toLowerCase().replace(/[_\-\s]/g, '') === 'esimgo');
-            const esimGoAdapter = getProviderAdapterByKey('esimgo');
-            if (!alreadyHasEsimGo && esimGoAdapter) {
-              dynamicFallbackChain.push({ r: dynamicFallbackChain.length + 1, k: 'esimgo', c: '', w: 0 });
-              console.log(`[Fulfillment] Appended eSIMGo safety-net to chain for ${orderId}`);
-            }
 
             console.log(`[Fulfillment] Dynamic chain for ${orderId}: ${dynamicFallbackChain.map(e => e.k).join(' → ')}`);
           } else {
-            // All offers belong to providers without adapters/credentials — fall through
-            // to getActiveProvider() with spec-based lookup.
-            console.warn(`[Fulfillment] No adapter-ready providers in dynamic chain for ${orderId} — falling through to active provider`);
-            planData.providerRef = undefined;
-            dynamicFallbackChain = null;
+            console.warn(`[Fulfillment] No adapter-ready eligible providers in dynamic chain for ${orderId}`);
+            dynamicFallbackChain = [];
           }
+        } else {
+          console.warn(`[Fulfillment] No eligible offers in dynamic chain for ${orderId}`);
+          dynamicFallbackChain = [];
         }
       }
     }
@@ -421,18 +472,34 @@ export async function fulfillInitialPurchase(
       result = fulfilled.result;
       resolvedProviderName = fulfilled.providerName;
       resolvedProviderKey = fulfilled.providerKey;
+    } else if (order.normalizedPlanId) {
+      throw new Error('No provider in this order is currently eligible for fulfillment');
     } else {
       // ── Legacy path ─────────────────────────────────────────────────────
-      // No routing data — use the active provider (failover adapter handles transparently).
-      console.log(`[Fulfillment] No routing chain for order ${orderId} — using active provider`);
-      const provider = getActiveProvider();
+      // No routing data — choose only from providers that pass the same live gate.
+      let selected: { provider: ProviderAdapter; providerKey: string };
+      try {
+        selected = await resolveEligibleProviderAdapter(planData.providerKey);
+      } catch (preferredError: any) {
+        console.warn(`[Fulfillment] Legacy preferred provider unavailable: ${preferredError.message}`);
+        selected = await resolveEligibleProviderAdapter();
+      }
+      const { provider, providerKey } = selected;
+      console.log(`[Fulfillment] No routing chain for order ${orderId} — using eligible provider ${providerKey}`);
       // For routing-engine orders (normalizedPlanId set), the providerRef stored in baseParams
       // belongs to whichever provider was selected at checkout (e.g. eSIM Access plan code).
       // Passing that code to a different provider (e.g. Airalo) causes a hard 422/400 error.
       // Clear it here so each provider in the failover chain does a spec-based lookup instead.
-      const legacyParams: typeof baseParams = order.normalizedPlanId
-        ? { ...baseParams, providerRef: undefined }
-        : baseParams;
+      const preferredKey = planData.providerKey ? canonicalProviderKey(planData.providerKey) : null;
+      const legacyParams: typeof baseParams = preferredKey === providerKey
+        ? baseParams
+        : { ...baseParams, providerRef: undefined };
+      if (legacyParams.providerRef) {
+        const offerEligibility = await getProviderOfferEligibility(providerKey, legacyParams.providerRef);
+        if (!offerEligibility.eligible) {
+          throw new Error(`Legacy stored provider offer is not eligible: ${offerEligibility.reason}`);
+        }
+      }
       const startMs = Date.now();
       try {
         result = await provider.purchaseEsim(legacyParams, ctx);
@@ -454,7 +521,7 @@ export async function fulfillInitialPurchase(
         throw err;
       }
       resolvedProviderName = provider.name;
-      resolvedProviderKey = provider.name;
+      resolvedProviderKey = providerKey;
     }
 
     const expiresAt = new Date();
@@ -607,10 +674,11 @@ export async function fulfillTopupPurchase(topupId: string): Promise<void> {
     throw new Error(`Order ${topup.orderId} has no provider eSIM ID — cannot top up`);
   }
 
-  // Top-ups always use the active provider (the one that provisioned the eSIM)
-  const provider = getActiveProvider();
-
+  let topupProviderName = order.providerName ?? "unknown";
   try {
+    // Top-ups must use the original supplier and are blocked if it is unhealthy.
+    const { provider } = await resolveEligibleProviderAdapter(order.providerName ?? undefined);
+    topupProviderName = provider.name;
     const result = await provider.purchaseTopup(order.providerEsimId, topup.optionCode ?? '3gb');
 
     await db.update(topups).set({
@@ -673,7 +741,7 @@ export async function fulfillTopupPurchase(topupId: string): Promise<void> {
   } catch (err: any) {
     console.error(`[Fulfillment] Topup ${topupId} failed:`, err.message);
     await db.update(topups).set({ status: 'failed' }).where(eq(topups.id, topupId));
-    await logSync(order.id, null, 'topup', provider.name,
+    await logSync(order.id, null, 'topup', topupProviderName,
       `purchaseTopup orderId=${order.id}`, err.message, 'error');
     throw err;
   }

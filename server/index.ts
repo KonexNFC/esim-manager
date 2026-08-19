@@ -247,7 +247,16 @@ app.use((req, res, next) => {
 
   const { startProviderSyncScheduler } = await import("./services/providerSync");
   startProviderSyncScheduler();
-  const { startProviderBalanceScheduler } = await import("./services/providerBalance");
+  const { checkAllProviderBalances, startProviderBalanceScheduler } = await import("./services/providerBalance");
+  // Fail closed at boot: establish fresh provider eligibility before accepting
+  // checkout or fulfillment traffic. All probes are safe and non-purchasing.
+  try {
+    const results = await checkAllProviderBalances();
+    const eligible = results.filter(result => result.eligible).map(result => result.providerKey);
+    console.log(`[Provider health] Boot check complete; eligible: ${eligible.join(", ") || "none"}`);
+  } catch (error: any) {
+    console.error("[Provider health] Boot check failed; routing will remain quarantined:", error.message);
+  }
   startProviderBalanceScheduler();
 
   // ── Startup recovery: re-trigger orders stuck in "fulfilling" ─────────────

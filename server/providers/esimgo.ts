@@ -94,6 +94,16 @@ export class EsimGoProvider implements EsimProvider {
     }
   }
 
+  /** Verify authentication and catalogue availability without purchasing. */
+  async checkConnection(): Promise<void> {
+    const response = await this.request<{ bundles?: EsimGoCatalogueItem[] }>(
+      "/catalogue?countries=US",
+    );
+    if (!Array.isArray(response.bundles)) {
+      throw new Error("eSIMGo catalogue probe returned an invalid response");
+    }
+  }
+
   /** Fetch the FULL catalogue (all countries). Returns one ProviderPlan per bundle×country,
    *  plus one extra plan per regional/global bundle keyed by region slug so users can
    *  explicitly search for "Europe", "Global", etc.

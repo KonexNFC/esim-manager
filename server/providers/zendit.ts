@@ -185,16 +185,31 @@ export class ZenditProvider implements EsimProvider {
     const params = new URLSearchParams({ _limit: String(limit), _offset: String(offset) });
     if (country) params.set("country", country.toUpperCase());
 
-    const res = await fetch(`${this.baseUrl}/esim/offers?${params}`, {
-      headers: this.headers,
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12_000);
+    try {
+      const res = await fetch(`${this.baseUrl}/esim/offers?${params}`, {
+        headers: this.headers,
+        signal: controller.signal,
+      });
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`Zendit API ${res.status}: ${body.slice(0, 200)}`);
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`Zendit API ${res.status}: ${body.slice(0, 200)}`);
+      }
+
+      return await res.json() as ZenditOffersResponse;
+    } finally {
+      clearTimeout(timeout);
     }
+  }
 
-    return res.json() as Promise<ZenditOffersResponse>;
+  /** Verify authentication and offer-service availability without purchasing. */
+  async checkConnection(): Promise<void> {
+    const response = await this.fetchOffersPage(1, 0);
+    if (!Array.isArray(response.list)) {
+      throw new Error("Zendit catalogue probe returned an invalid response");
+    }
   }
 
   /**

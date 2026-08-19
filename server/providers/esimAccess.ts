@@ -99,9 +99,8 @@ export class EsimAccessProvider implements EsimProvider {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12_000); // 12 s per-request timeout
 
-    let res: Response;
     try {
-      res = await fetch(url, {
+      const res = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -113,21 +112,37 @@ export class EsimAccessProvider implements EsimProvider {
         body: bodyStr,
         signal: controller.signal,
       });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`eSIM Access API error ${res.status}: ${text}`);
+      }
+
+      const data = await res.json() as any;
+      if (data.success === false) {
+        throw new Error(`eSIM Access error ${data.errorCode}: ${data.errorMsg}`);
+      }
+
+      return data as T;
     } finally {
       clearTimeout(timeout);
     }
+  }
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`eSIM Access API error ${res.status}: ${text}`);
+  /** Verify authentication and package-service availability without purchasing. */
+  async checkConnection(): Promise<void> {
+    const response = await this.request<{
+      success: boolean;
+      obj?: { packageList?: EsimAccessPackage[] };
+    }>("/package/list", {
+      locationCode: "US",
+      type: "BASE",
+      packageCode: "",
+      iccid: "",
+    });
+    if (!Array.isArray(response.obj?.packageList)) {
+      throw new Error("eSIM Access catalogue probe returned an invalid response");
     }
-
-    const data = await res.json() as any;
-    if (data.success === false) {
-      throw new Error(`eSIM Access error ${data.errorCode}: ${data.errorMsg}`);
-    }
-
-    return data as T;
   }
 
   /**

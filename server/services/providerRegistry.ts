@@ -16,12 +16,51 @@ import {
   type NormalizedPlan, type InsertNormalizedPlan,
   type ProviderOffer, type InsertProviderOffer,
 } from "@shared/schema";
+import {
+  canonicalProviderKey,
+  evaluateProviderEligibility,
+  resolveCanonicalProviderRow,
+  type ProviderEligibility,
+} from "./providerHealth";
+
+const PROVIDER_OFFER_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+
+function applyOfferFreshness(
+  eligibility: ProviderEligibility,
+  lastSyncedAt: Date | null,
+  now: Date = new Date(),
+): ProviderEligibility {
+  if (!eligibility.eligible) return eligibility;
+  const syncedAtMs = lastSyncedAt?.getTime() ?? NaN;
+  const offerAgeMs = Number.isFinite(syncedAtMs) ? now.getTime() - syncedAtMs : null;
+  if (offerAgeMs != null && offerAgeMs <= PROVIDER_OFFER_MAX_AGE_MS) return eligibility;
+  return {
+    eligible: false,
+    status: "excluded",
+    healthStatus: eligibility.healthStatus,
+    reason: offerAgeMs == null
+      ? "Provider offer has never completed a catalogue sync"
+      : `Provider offer is stale (${Math.floor(offerAgeMs / 60000)} minutes old)`,
+    codes: ["offer_stale"],
+    checkedAt: eligibility.checkedAt,
+    ageMs: eligibility.ageMs,
+  };
+}
 
 // ─── Provider CRUD ───────────────────────────────────────────────────────────
 
 /** Return all providers ordered by priority (ascending). */
 export async function getAllProviders(): Promise<Provider[]> {
   return db.select().from(providers).orderBy(asc(providers.priority));
+}
+
+/** Return all providers with their current fail-closed routing eligibility. */
+export async function getAllProvidersWithEligibility(): Promise<Array<Provider & { eligibility: ProviderEligibility }>> {
+  const rows = await getAllProviders();
+  return rows.map(provider => ({
+    ...provider,
+    eligibility: evaluateProviderEligibility(provider),
+  }));
 }
 
 /** Return only enabled providers ordered by priority. */
@@ -94,10 +133,23 @@ export async function createNormalizedPlan(data: InsertNormalizedPlan): Promise<
 
 // ─── Provider Offers CRUD ────────────────────────────────────────────────────
 
-/** Return all active offers for a normalized plan, ordered by provider priority. */
+export type ProviderOfferWithEligibility = ProviderOffer & {
+  providerPriority: number;
+  providerEnabled: boolean;
+  providerAutoPaused: boolean;
+  providerHealthStatus: string;
+  eligibility: ProviderEligibility;
+};
+
+/**
+ * Return active offers ordered by provider priority.
+ * Ineligible providers are excluded by default so every caller fails closed.
+ * Routing audit callers may request them explicitly to record exclusion reasons.
+ */
 export async function getOffersForNormalizedPlan(
   normalizedPlanId: string,
-): Promise<(ProviderOffer & { providerPriority: number; providerEnabled: boolean })[]> {
+  options: { includeIneligible?: boolean } = {},
+): Promise<ProviderOfferWithEligibility[]> {
   // Fetch offers + join provider priority in-process (avoids complex ORM join)
   const offers = await db
     .select()
@@ -110,26 +162,122 @@ export async function getOffersForNormalizedPlan(
   if (offers.length === 0) return [];
 
   const providerKeys = Array.from(new Set(offers.map(o => o.providerKey)));
-  const providerRows = await db
-    .select()
-    .from(providers)
-    .where(inArray(providers.key, providerKeys));
-
-  const providerMap = new Map(providerRows.map(p => [p.key, p]));
+  // Provider keys in early data used mixed casing (e.g. esimAccess). The
+  // registry is tiny, so loading all rows makes canonical matching reliable.
+  const providerRows = await db.select().from(providers);
 
   return offers
     .map(offer => {
-      const p = providerMap.get(offer.providerKey);
+      const canonicalKey = canonicalProviderKey(offer.providerKey);
+      const resolved = resolveCanonicalProviderRow(providerRows, canonicalKey);
+      const p = resolved.provider;
+      let eligibility: ProviderEligibility = resolved.conflict
+        ? {
+            eligible: false,
+            status: "excluded",
+            healthStatus: "unknown",
+            reason: "Conflicting legacy provider registry rows must be reconciled",
+            codes: ["provider_registry_conflict"],
+            checkedAt: null,
+            ageMs: null,
+          }
+        : p
+        ? evaluateProviderEligibility(p)
+        : {
+            eligible: false,
+            status: "excluded",
+            healthStatus: "unknown",
+            reason: "Provider is not registered",
+            codes: ["not_registered"],
+            checkedAt: null,
+            ageMs: null,
+          };
+      eligibility = applyOfferFreshness(eligibility, offer.lastSyncedAt);
       return {
         ...offer,
+        providerKey: canonicalKey,
         providerPriority: p?.priority ?? 999,
         providerEnabled: p?.enabled ?? false,
         providerAutoPaused: p?.autoPaused ?? false,
+        providerHealthStatus: p?.healthStatus ?? "unknown",
+        eligibility,
       };
     })
-    // Exclude manually disabled providers AND system-auto-paused providers
-    .filter(o => o.providerEnabled && !o.providerAutoPaused)
+    .filter(offer => options.includeIneligible || offer.eligibility.eligible)
     .sort((a, b) => a.providerPriority - b.providerPriority);
+}
+
+/**
+ * Revalidate a stored provider plan code immediately before fulfillment.
+ * This prevents an old checkout fallback chain from purchasing a removed or
+ * stale catalogue offer even when the provider itself is healthy.
+ */
+export async function getProviderOfferEligibility(
+  providerKey: string,
+  providerPlanCode: string | null | undefined,
+): Promise<ProviderEligibility> {
+  const providerRows = await db.select().from(providers);
+  const canonicalKey = canonicalProviderKey(providerKey);
+  const resolved = resolveCanonicalProviderRow(providerRows, canonicalKey);
+  if (resolved.conflict) {
+    return {
+      eligible: false,
+      status: "excluded",
+      healthStatus: "unknown",
+      reason: "Conflicting legacy provider registry rows must be reconciled",
+      codes: ["provider_registry_conflict"],
+      checkedAt: null,
+      ageMs: null,
+    };
+  }
+  const provider = resolved.provider;
+  if (!provider) {
+    return {
+      eligible: false,
+      status: "excluded",
+      healthStatus: "unknown",
+      reason: "Provider is not registered",
+      codes: ["not_registered"],
+      checkedAt: null,
+      ageMs: null,
+    };
+  }
+
+  const providerEligibility = evaluateProviderEligibility(provider);
+  if (!providerEligibility.eligible || !providerPlanCode) return providerEligibility;
+
+  try {
+    const matches = await db
+      .select()
+      .from(providerOffers)
+      .where(and(
+        eq(providerOffers.providerPlanCode, providerPlanCode),
+        eq(providerOffers.isActive, true),
+      ));
+    const offer = matches.find(row => canonicalProviderKey(row.providerKey) === canonicalKey);
+    if (!offer) {
+      return {
+        eligible: false,
+        status: "excluded",
+        healthStatus: providerEligibility.healthStatus,
+        reason: "Stored provider offer is no longer active in the live catalogue",
+        codes: ["offer_unavailable"],
+        checkedAt: providerEligibility.checkedAt,
+        ageMs: providerEligibility.ageMs,
+      };
+    }
+    return applyOfferFreshness(providerEligibility, offer.lastSyncedAt);
+  } catch (error: any) {
+    return {
+      eligible: false,
+      status: "excluded",
+      healthStatus: providerEligibility.healthStatus,
+      reason: `Stored offer eligibility check failed: ${String(error?.message ?? error).slice(0, 200)}`,
+      codes: ["offer_check_failed"],
+      checkedAt: providerEligibility.checkedAt,
+      ageMs: providerEligibility.ageMs,
+    };
+  }
 }
 
 /** Return all offers for a given provider key. */

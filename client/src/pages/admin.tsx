@@ -1995,10 +1995,10 @@ function RoutingTab() {
     onSuccess: (data: any) => {
       const low = data.results?.filter((result: any) => result.status === "low") ?? [];
       toast({
-        title: "Provider balances checked",
+        title: "Provider health checked",
         description: low.length
           ? `${low.map((result: any) => result.providerKey).join(", ")} need a top-up.`
-          : "No provider wallets are below their alert threshold.",
+          : "Live provider health and wallets were refreshed.",
         variant: low.length ? "destructive" : "default",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/providers"] });
@@ -2108,10 +2108,10 @@ function RoutingTab() {
           <div className="flex items-center gap-3">
             <Server className="w-5 h-5 text-violet-500" />
             <h3 className="font-semibold text-base">Provider Network</h3>
-            {providers && providers.filter((p: any) => p.autoPaused).length > 0 ? (
+            {providers && providers.filter((p: any) => !p.eligibility?.eligible).length > 0 ? (
               <Badge variant="outline" className="border-orange-400 text-orange-600 bg-orange-50 dark:bg-orange-950/30 gap-1">
                 <AlertCircle className="w-3 h-3" />
-                {providers.filter((p: any) => p.autoPaused).length} auto-paused
+                {providers.filter((p: any) => !p.eligibility?.eligible).length} quarantined
               </Badge>
             ) : providers && providers.length > 0 ? (
               <Badge variant="outline" className="border-green-400 text-green-600 bg-green-50 dark:bg-green-950/30 gap-1">
@@ -2129,7 +2129,7 @@ function RoutingTab() {
               data-testid="button-check-provider-balances"
             >
               {balanceCheckMutation.isPending ? <RefreshCw className="w-3 h-3 mr-1.5 animate-spin" /> : <DollarSign className="w-3 h-3 mr-1.5" />}
-              Check balances
+              Check health
             </Button>
             <Button
               size="sm"
@@ -2154,8 +2154,8 @@ function RoutingTab() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground mb-4">
-          Seed registers the known providers (eSIMGo, eSIM Access, Mock). Sync reads all active plans and creates routing data so the engine can pick the cheapest provider at checkout.
-          The system automatically pauses any provider that drops below 80% success rate or fails 3 times in a row.
+          Safe live checks verify credentials, catalogue availability, and wallet funds without buying an eSIM.
+          Disabled, stale, unavailable, empty-wallet, and auto-paused providers are quarantined before checkout and checked again before fulfillment.
         </p>
         {providersLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -2169,8 +2169,9 @@ function RoutingTab() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {providers.map((p) => {
-              const isWarn = p.autoPaused;
-              const isOk = p.enabled && !p.autoPaused;
+              const eligibility = p.eligibility;
+              const isWarn = eligibility?.status === "degraded" || p.autoPaused;
+              const isOk = eligibility?.eligible === true;
               const wallet = p.metadata?.wallet;
               const walletStatus = wallet?.status as string | undefined;
               const walletIsLow = walletStatus === "low";
@@ -2208,8 +2209,8 @@ function RoutingTab() {
                       <p className="text-sm font-semibold leading-tight">{p.name}</p>
                       <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{p.key}</p>
                     </div>
-                    <div className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${
-                      isWarn ? "bg-orange-500" : isOk ? "bg-green-500" : "bg-muted-foreground/40"
+                     <div className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${
+                       isOk ? "bg-green-500" : isWarn ? "bg-orange-500" : "bg-red-500"
                     }`} />
                   </div>
 
@@ -2218,13 +2219,34 @@ function RoutingTab() {
                     <div className="flex items-center gap-1">
                       <HealthBadge status={p.healthStatus} />
                     </div>
+                     <Badge
+                       variant="outline"
+                       className={`text-[10px] py-0 ${
+                         isOk
+                           ? "border-emerald-300 text-emerald-600"
+                           : isWarn
+                             ? "border-orange-300 text-orange-600"
+                             : "border-red-300 text-red-600"
+                       }`}
+                     >
+                       {isOk ? "Eligible" : isWarn ? "Degraded · excluded" : "Excluded"}
+                     </Badge>
                     <span className="text-[10px] text-muted-foreground font-mono">Priority #{p.priority}</span>
                   </div>
 
                   {/* Last check */}
                   <p className="text-[10px] text-muted-foreground mb-3">
-                    Last check: {p.lastHealthCheck ? new Date(p.lastHealthCheck).toLocaleDateString() : "Never"}
+                     Last check: {p.lastHealthCheck ? new Date(p.lastHealthCheck).toLocaleString() : "Never"}
                   </p>
+                   {eligibility?.reason && (
+                     <div className={`mb-3 rounded-lg border px-2.5 py-2 text-[10px] leading-snug ${
+                       isOk
+                         ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-400"
+                         : "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/20 dark:text-red-400"
+                     }`} data-testid={`provider-eligibility-${p.key}`}>
+                       {eligibility.reason}
+                     </div>
+                   )}
                    <div className={`mb-3 rounded-lg border px-2.5 py-2 ${
                      walletIsLow
                        ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20"
@@ -2505,6 +2527,12 @@ function RoutingTab() {
             </div>
             {decisions.slice(0, 50).map((d) => {
               const winnerScores = d.scores?.[d.selectedProviderKey];
+              const excludedProviders = Object.entries(d.scores ?? {})
+                .filter(([, score]: [string, any]) => score?.eligibility?.eligible === false)
+                .map(([providerKey, score]: [string, any]) => ({
+                  providerKey,
+                  reason: score.eligibility.reason,
+                }));
               const confLabel = d.confidenceLabel as string | undefined;
               const confScore = d.confidenceScore as number | undefined;
               const confColor =
@@ -2523,6 +2551,27 @@ function RoutingTab() {
                         {" · "}health <span className="text-foreground">{winnerScores.health_score}</span>
                       </p>
                     )}
+                     <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">
+                       Fresh health check passed
+                     </p>
+                     {excludedProviders.length > 0 && (
+                       <Tooltip>
+                         <TooltipTrigger asChild>
+                           <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5 cursor-help">
+                             {excludedProviders.length} provider{excludedProviders.length === 1 ? "" : "s"} excluded
+                           </p>
+                         </TooltipTrigger>
+                         <TooltipContent className="max-w-sm">
+                           <div className="space-y-1">
+                             {excludedProviders.map(item => (
+                               <p key={item.providerKey} className="text-xs">
+                                 <span className="font-semibold">{item.providerKey}:</span> {item.reason}
+                               </p>
+                             ))}
+                           </div>
+                         </TooltipContent>
+                       </Tooltip>
+                     )}
                   </div>
                   <div>
                     <Badge variant="outline" className="text-[10px] px-1.5">{d.strategy}</Badge>

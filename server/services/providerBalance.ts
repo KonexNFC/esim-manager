@@ -9,6 +9,12 @@ import { esimAccess } from "../providers/esimAccess";
 import { zendit } from "../providers/zendit";
 import { airalo } from "../providers/airalo";
 import { sendProviderWalletLowBalanceAlert } from "./notifications";
+import {
+  deriveProviderHealthSnapshot,
+  evaluateProviderEligibility,
+  type ProviderHealthSnapshot,
+  type ProviderHealthStatus,
+} from "./providerHealth";
 
 export type WalletStatus = "ok" | "low" | "error" | "not_supported" | "not_configured";
 
@@ -22,13 +28,19 @@ export interface ProviderWalletSnapshot {
   lastAlertAt?: string;
 }
 
-type ProviderMetadata = Record<string, unknown> & { wallet?: ProviderWalletSnapshot };
+type ProviderMetadata = Record<string, unknown> & {
+  wallet?: ProviderWalletSnapshot;
+  health?: ProviderHealthSnapshot;
+};
 export interface ProviderBalanceCheckResult {
   providerKey: string;
   status: WalletStatus;
   amount: number | null;
   currency: string | null;
   threshold: number | null;
+  healthStatus: ProviderHealthStatus;
+  eligible: boolean;
+  reason: string;
   error?: string;
 }
 
@@ -65,13 +77,31 @@ async function readProviderBalance(key: string): Promise<
   switch (key.toLowerCase()) {
     case "esimgo":
       if (!esimgo.isConfigured()) return { kind: "not_configured" };
-      return { kind: "balance", ...(await esimgo.getWalletBalance()) };
+      {
+        const [balance] = await Promise.all([
+          esimgo.getWalletBalance(),
+          esimgo.checkConnection(),
+        ]);
+        return { kind: "balance", ...balance };
+      }
     case "esimaccess":
       if (!esimAccess.isConfigured()) return { kind: "not_configured" };
-      return { kind: "balance", ...(await esimAccess.getWalletBalance()) };
+      {
+        const [balance] = await Promise.all([
+          esimAccess.getWalletBalance(),
+          esimAccess.checkConnection(),
+        ]);
+        return { kind: "balance", ...balance };
+      }
     case "zendit":
       if (!zendit.isConfigured()) return { kind: "not_configured" };
-      return { kind: "balance", ...(await zendit.getWalletBalance()) };
+      {
+        const [balance] = await Promise.all([
+          zendit.getWalletBalance(),
+          zendit.checkConnection(),
+        ]);
+        return { kind: "balance", ...balance };
+      }
     case "airalo":
       if (!airalo.isConfigured()) return { kind: "not_configured" };
       await airalo.checkConnection();
@@ -151,9 +181,23 @@ async function checkProviderBalance(
     };
   }
 
+  const health = deriveProviderHealthSnapshot(provider.key, snapshot, now, metadata.health);
+  const updatedMetadata = { ...metadata, wallet: snapshot, health };
+  const eligibility = evaluateProviderEligibility({
+    ...provider,
+    healthStatus: health.status,
+    lastHealthCheck: now,
+    metadata: updatedMetadata,
+    updatedAt: now,
+  }, now);
   await db
     .update(providers)
-    .set({ metadata: { ...metadata, wallet: snapshot }, updatedAt: now })
+    .set({
+      healthStatus: health.status,
+      lastHealthCheck: now,
+      metadata: updatedMetadata,
+      updatedAt: now,
+    })
     .where(eq(providers.key, provider.key));
 
   return {
@@ -162,6 +206,9 @@ async function checkProviderBalance(
     amount: snapshot.amount,
     currency: snapshot.currency,
     threshold: snapshot.threshold,
+    healthStatus: health.status,
+    eligible: eligibility.eligible,
+    reason: eligibility.reason,
     ...(snapshot.error ? { error: snapshot.error } : {}),
   };
 }
@@ -207,7 +254,11 @@ export function startProviderBalanceScheduler(): void {
     try {
       const results = await checkAllProviderBalances();
       const low = results.filter(result => result.status === "low").map(result => result.providerKey);
-      console.log(`[Provider balance] ${source} check complete (${results.length} providers${low.length ? `; low: ${low.join(", ")}` : ""})`);
+      const eligible = results.filter(result => result.eligible).map(result => result.providerKey);
+      console.log(
+        `[Provider health] ${source} check complete (${results.length} providers; eligible: ` +
+        `${eligible.join(", ") || "none"}${low.length ? `; low: ${low.join(", ")}` : ""})`,
+      );
     } catch (error: any) {
       console.error(`[Provider balance] ${source} check failed:`, error.message);
     }
@@ -215,5 +266,5 @@ export function startProviderBalanceScheduler(): void {
 
   setTimeout(() => void run("initial"), 10_000);
   setInterval(() => void run("scheduled"), intervalMs);
-  console.log("[Provider balance] Scheduler registered (first run in 10s, then every 15min)");
+  console.log("[Provider health] Scheduler registered (first run in 10s, then every 15min)");
 }

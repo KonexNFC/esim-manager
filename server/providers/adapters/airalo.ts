@@ -168,9 +168,9 @@ export class AiraloAdapter implements ProviderAdapter {
     return this.pendingTokenReq;
   }
 
-  /** Verify API credentials without placing an order. Airalo exposes no wallet balance endpoint. */
+  /** Verify credentials and catalogue availability without placing an order. */
   async checkConnection(): Promise<void> {
-    await this.getToken();
+    await this.req<AiraloPackagesResponse>('GET', '/packages?limit=1&page=1');
   }
 
   private async req<T>(
@@ -190,16 +190,22 @@ export class AiraloAdapter implements ProviderAdapter {
     };
     if (body) opts.body = JSON.stringify(body);
 
-    const res = await fetch(`${this.baseUrl}${path}`, opts);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12_000);
+    try {
+      const res = await fetch(`${this.baseUrl}${path}`, { ...opts, signal: controller.signal });
 
-    if (!res.ok) {
-      // Token may have been invalidated server-side; force refresh on 401
-      if (res.status === 401) this.cachedToken = null;
-      const txt = await res.text().catch(() => '');
-      throw new Error(`Airalo ${res.status} ${path}: ${txt.slice(0, 300)}`);
+      if (!res.ok) {
+        // Token may have been invalidated server-side; force refresh on 401
+        if (res.status === 401) this.cachedToken = null;
+        const txt = await res.text().catch(() => '');
+        throw new Error(`Airalo ${res.status} ${path}: ${txt.slice(0, 300)}`);
+      }
+
+      return await res.json() as T;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    return res.json() as Promise<T>;
   }
 
   // ── Plans ─────────────────────────────────────────────────────────────────

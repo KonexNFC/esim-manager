@@ -24,7 +24,7 @@ class AiraloProvider {
     return !!(process.env.AIRALO_CLIENT_ID && process.env.AIRALO_CLIENT_SECRET);
   }
 
-  /** Airalo does not expose a prepaid wallet balance, but its token endpoint is safe to probe. */
+  /** Airalo exposes no wallet balance; probe auth and a one-item catalogue read safely. */
   async checkConnection(): Promise<void> {
     const adapter = this.getAdapter();
     if (!adapter) throw new Error("Airalo not configured");

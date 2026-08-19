@@ -14,8 +14,9 @@ import {
 import { createPayPalOrder, capturePayPalOrder } from "./services/paypalService";
 import { createPaddleTransaction } from "./services/paddleService";
 import { syncEsimUsage, syncUserEsims, syncAllActiveEsims, runUsageSyncJob, findEsimsLowOnData, findEsimsExpiringSoon, findExpiredEsimsNeedingRenewal } from "./services/usageSync";
-import { getActiveProvider } from "./providers/adapters";
+import { getActiveProvider, getProviderAdapterByKey } from "./providers/adapters";
 import { calculateMargin } from "./services/marginEngine";
+import { canonicalProviderKey, getProviderEligibilityByKey } from "./services/providerHealth";
 
 // ─── Schemas ─────────────────────────────────────────
 const bestPlanSchema = z.object({
@@ -717,7 +718,13 @@ export async function registerRoutes(
       if (!order) return res.status(404).json({ message: "eSIM not found" });
       if (order.userId !== userId) return res.status(403).json({ message: "Not authorized" });
 
-      const provider = getActiveProvider();
+      const providerKey = canonicalProviderKey(order.providerName ?? order.selectedProviderKey ?? "");
+      const eligibility = await getProviderEligibilityByKey(providerKey);
+      if (!eligibility.eligible) {
+        return res.status(503).json({ message: `Top-ups are temporarily unavailable: ${eligibility.reason}` });
+      }
+      const provider = getProviderAdapterByKey(providerKey);
+      if (!provider) return res.status(503).json({ message: "The original provider is not configured" });
       const options = await provider.getTopupOptions(order.providerEsimId || '');
       res.json(options);
     } catch {
@@ -737,7 +744,13 @@ export async function registerRoutes(
       const parsed = z.object({ optionCode: z.string(), provider: z.enum(["paypal", "paddle"]).default("paypal") }).safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: "optionCode required" });
 
-      const provider = getActiveProvider();
+      const providerKey = canonicalProviderKey(order.providerName ?? order.selectedProviderKey ?? "");
+      const eligibility = await getProviderEligibilityByKey(providerKey);
+      if (!eligibility.eligible) {
+        return res.status(503).json({ message: `Top-ups are temporarily unavailable: ${eligibility.reason}` });
+      }
+      const provider = getProviderAdapterByKey(providerKey);
+      if (!provider) return res.status(503).json({ message: "The original provider is not configured" });
       const options = await provider.getTopupOptions(order.providerEsimId || "");
       const option = options.find(o => o.optionCode === parsed.data.optionCode);
       if (!option) return res.status(400).json({ message: "Invalid top-up option" });
@@ -1634,14 +1647,14 @@ export async function registerRoutes(
   // ── Provider management ─────────────────────────────────────────────────────
   app.get("/api/admin/providers", requireAdmin, async (_req, res) => {
     try {
-      const { getAllProviders } = await import('./services/providerRegistry');
-      res.json(await getAllProviders());
+      const { getAllProvidersWithEligibility } = await import('./services/providerRegistry');
+      res.json(await getAllProvidersWithEligibility());
     } catch (err: any) {
       res.status(500).json({ message: "Failed to fetch providers" });
     }
   });
 
-  // Safe, read-only balance refresh. This endpoint never places a provider order.
+  // Safe, read-only health refresh. This endpoint never places a provider order.
   app.post("/api/admin/providers/balances/check", requireAdmin, async (_req, res) => {
     try {
       const { checkAllProviderBalances } = await import("./services/providerBalance");
@@ -1675,13 +1688,12 @@ export async function registerRoutes(
       const { upsertProvider, getProviderByKey } = await import('./services/providerRegistry');
       const existing = await getProviderByKey(String(req.params.key));
       if (!existing) return res.status(404).json({ message: "Provider not found" });
-      const { enabled, priority, healthStatus, name } = req.body;
+      const { enabled, priority, name } = req.body;
       const updated = await upsertProvider({
         ...existing,
         metadata: existing.metadata as any,
         ...(enabled !== undefined && { enabled }),
         ...(priority !== undefined && { priority }),
-        ...(healthStatus !== undefined && { healthStatus }),
         ...(name !== undefined && { name }),
       });
       res.json(updated);
@@ -1888,8 +1900,24 @@ export async function registerRoutes(
       const scoresMap = decision.scores as Record<string, {
         margin_score: number; health_score: number; success_score: number;
         destination_score: number; blended_score: number; cost_score: number; latency_score: number;
+        eligibility?: {
+          eligible: boolean;
+          status: string;
+          reason: string;
+          codes: string[];
+          checkedAt: string | null;
+        };
       }>;
       const winnerScores = scoresMap[decision.selectedProviderKey] ?? null;
+      const excludedProviders = Object.entries(scoresMap)
+        .filter(([, score]) => score.eligibility?.eligible === false)
+        .map(([providerKey, score]) => ({
+          providerKey,
+          status: score.eligibility?.status ?? "excluded",
+          reason: score.eligibility?.reason ?? "Excluded",
+          codes: score.eligibility?.codes ?? [],
+          checkedAt: score.eligibility?.checkedAt ?? null,
+        }));
 
       // Summarise fallback chain
       const chain = Array.isArray(decision.fallbackChain) ? (decision.fallbackChain as any[]) : [];
@@ -1906,6 +1934,7 @@ export async function registerRoutes(
         // Key metrics for the selected provider
         marginPercent: winnerScores?.margin_score ?? null,
         healthScore: winnerScores?.health_score ?? null,
+         eligibility: winnerScores?.eligibility ?? null,
         destinationSuccessRate: winnerScores?.success_score ?? null,
         destinationScore: winnerScores?.destination_score ?? null,
         blendedScore: winnerScores?.blended_score ?? null,
@@ -1917,6 +1946,7 @@ export async function registerRoutes(
         // Fallback summary
         fallbackCount: fallbackProviders.length,
         fallbackProviders,
+         excludedProviders,
         // Timestamps
         decidedAt: decision.createdAt,
       });

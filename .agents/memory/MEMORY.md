@@ -5,3 +5,4 @@
 - [Failed-order recovery](failed-order-recovery.md) — prod writes only via live app API (PATCH /api/orders is unauthenticated!); refunds go direct via live PayPal/Stripe keys; 3 root causes of fulfillment failures
 - [Provider balance probes](provider-balance-probes.md) — read-only API calls to check each provider's wallet; keys live in .replit env, not Replit secrets
 - [Wholesale price floor](wholesale-price-floor.md) — every checkout must clear cost+20%/$1.90 via the shared floor service; stored retail_price_usd is mostly 0 and never authoritative
+- [Provider health gating](provider-health-gating.md) — eligibility is fail-closed and canonical across checkout, stored fallbacks, legacy fulfillment, and top-ups

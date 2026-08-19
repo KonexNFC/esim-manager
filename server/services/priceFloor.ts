@@ -11,6 +11,7 @@
 
 import { sql } from "drizzle-orm";
 import { db } from "../storage";
+import { getOffersForNormalizedPlan } from "./providerRegistry";
 
 /** Minimum gross margin percentage: (sell - cost) / sell */
 export const MIN_MARGIN_PCT = 20;
@@ -56,21 +57,15 @@ export function roundUpTo99(usd: number): number {
  * NOT be sold at all.
  */
 export async function getMaxWholesaleUsd(normalizedPlanId: string): Promise<number | null> {
-  const result = await db.execute<{ min_wholesale: string | number | null }>(sql`
-    SELECT MAX(po.wholesale_price_usd) AS min_wholesale
-    FROM provider_offers po
-    JOIN providers p ON p.key = po.provider_key
-    WHERE po.normalized_plan_id = ${normalizedPlanId}
-      AND po.is_active = true
-      AND p.enabled = true
-      AND p.auto_paused = false
-      AND po.wholesale_price_usd > 0
-      AND po.provider_key IN (${sql.join(FULFILLABLE_PROVIDERS.map(k => sql`${k}`), sql`, `)})
-  `);
-  const raw = result.rows[0]?.min_wholesale;
-  if (raw == null) return null;
-  const n = typeof raw === "string" ? parseFloat(raw) : raw;
-  return isNaN(n) ? null : n;
+  const offers = await getOffersForNormalizedPlan(normalizedPlanId);
+  const costs = offers
+    .filter(offer =>
+      FULFILLABLE_PROVIDERS.includes(offer.providerKey.toLowerCase()) &&
+      Number.isFinite(offer.wholesalePriceUsd) &&
+      offer.wholesalePriceUsd > 0
+    )
+    .map(offer => offer.wholesalePriceUsd);
+  return costs.length ? Math.max(...costs) : null;
 }
 
 /**

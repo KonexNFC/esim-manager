@@ -30,6 +30,7 @@ import {
 } from "./providerRegistry";
 import { calculateMargin } from "./marginEngine";
 import { getDestinationStats } from "./destinationStats";
+import type { ProviderEligibility } from "./providerHealth";
 
 // ─── Margin protection config ─────────────────────────────────────────────────
 //
@@ -138,6 +139,7 @@ export interface ProviderScores {
   success_score: number;       // rolling fulfilment success rate at this destination
   destination_score: number;   // reliability: (1 − failoverRate), confidence-weighted
   blended_score: number;
+  eligibility: ProviderEligibility;
 }
 
 export interface RankedProvider {
@@ -211,6 +213,7 @@ interface ScoredCandidate {
   wholesalePriceUsd: number;
   providerPriority: number;
   providerHealthStatus: string;
+  eligibility: ProviderEligibility;
   dataOrdersCount: number;       // orders in destination_provider_stats for this provider+region
   belowMarginThreshold: boolean; // true when margin_score < minMarginPercent
   scores: ProviderScores;
@@ -258,9 +261,27 @@ async function scoreCandidates(
   regionCode: string,
   minMarginPercent: number,
   weights: BlendWeights,
-): Promise<ScoredCandidate[]> {
-  const enrichedOffers = await getOffersForNormalizedPlan(normalizedPlanId);
-  if (enrichedOffers.length === 0) return [];
+): Promise<{
+  candidates: ScoredCandidate[];
+  eligibilityByProvider: Record<string, ProviderEligibility>;
+}> {
+  const enrichedOffers = await getOffersForNormalizedPlan(normalizedPlanId, { includeIneligible: true });
+  const eligibilityByProvider: Record<string, ProviderEligibility> = {};
+  for (const offer of enrichedOffers) {
+    const previous = eligibilityByProvider[offer.providerKey];
+    if (!previous || (!previous.eligible && offer.eligibility.eligible)) {
+      eligibilityByProvider[offer.providerKey] = offer.eligibility;
+    }
+  }
+  const eligibleOfferMap = new Map<string, typeof enrichedOffers[number]>();
+  for (const offer of enrichedOffers.filter(offer => offer.eligibility.eligible)) {
+    const previous = eligibleOfferMap.get(offer.providerKey);
+    if (!previous || offer.wholesalePriceUsd < previous.wholesalePriceUsd) {
+      eligibleOfferMap.set(offer.providerKey, offer);
+    }
+  }
+  const eligibleOffers = [...eligibleOfferMap.values()];
+  if (eligibleOffers.length === 0) return { candidates: [], eligibilityByProvider };
 
   // Gather provider metadata for each offer
   const candidatesRaw: Array<{
@@ -269,9 +290,10 @@ async function scoreCandidates(
     wholesalePriceUsd: number;
     providerPriority: number;
     providerHealthStatus: string;
+    eligibility: ProviderEligibility;
   }> = [];
 
-  for (const offer of enrichedOffers) {
+  for (const offer of eligibleOffers) {
     const provider = await getProviderByKey(offer.providerKey);
     candidatesRaw.push({
       providerKey: offer.providerKey,
@@ -279,6 +301,7 @@ async function scoreCandidates(
       wholesalePriceUsd: offer.wholesalePriceUsd,
       providerPriority: offer.providerPriority,
       providerHealthStatus: provider?.healthStatus ?? "unknown",
+      eligibility: offer.eligibility,
     });
   }
 
@@ -293,7 +316,7 @@ async function scoreCandidates(
     candidatesRaw.map(c => buildDestinationScores(c.providerKey, regionCode)),
   );
 
-  return candidatesRaw.map((c, i) => {
+  const candidates: ScoredCandidate[] = candidatesRaw.map((c, i) => {
     // cost_score: inverted normalised 0–100 (lower cost = higher score)
     const cost_score =
       priceRange === 0
@@ -334,9 +357,11 @@ async function scoreCandidates(
         success_score,
         destination_score,
         blended_score: Math.round(blended * 10) / 10,
+        eligibility: c.eligibility,
       },
     };
   });
+  return { candidates, eligibilityByProvider };
 }
 
 // ─── Strategy sorters ─────────────────────────────────────────────────────────
@@ -601,7 +626,7 @@ export async function selectBestProviderForPlan(
   const weights = ROUTING_MODE_WEIGHTS[routingMode];
 
   // 3. Score all enabled, active candidates (destination stats + health dampening applied)
-  const candidates = await scoreCandidates(
+  const { candidates, eligibilityByProvider } = await scoreCandidates(
     normalizedPlanId,
     plan.retailPriceUsd,
     plan.regionCode,
@@ -609,8 +634,13 @@ export async function selectBestProviderForPlan(
     weights,
   );
   if (candidates.length === 0) {
+    const exclusions = Object.entries(eligibilityByProvider)
+      .filter(([, eligibility]) => !eligibility.eligible)
+      .map(([providerKey, eligibility]) => `${providerKey}: ${eligibility.reason}`)
+      .join("; ");
     throw new Error(
-      `[routingEngine] No enabled active offers found for plan "${plan.name}" (${normalizedPlanId})`,
+      `[routingEngine] No eligible active offers found for plan "${plan.name}" (${normalizedPlanId})` +
+      (exclusions ? ` — ${exclusions}` : ""),
     );
   }
 
@@ -688,12 +718,29 @@ export async function selectBestProviderForPlan(
 
   // 7. Winner is rank-1 (unchanged from before — fallback chain extension never affects this)
   const winner = ranked[0];
-  const decisionReason = buildReason(strategy, winner, ranked, plan.regionCode);
+  const excludedEntries = Object.entries(eligibilityByProvider)
+    .filter(([, eligibility]) => !eligibility.eligible);
+  const exclusionSummary = excludedEntries.length
+    ? ` Excluded ${excludedEntries.map(([key, eligibility]) => `${key} (${eligibility.reason})`).join(", ")}.`
+    : "";
+  const decisionReason = buildReason(strategy, winner, ranked, plan.regionCode) + exclusionSummary;
 
   // 8. Build scores map (all candidates incl. below-threshold, for full audit trail)
   const scoresMap: Record<string, ProviderScores> = {};
   for (const c of candidates) {
     scoresMap[c.providerKey] = c.scores;
+  }
+  for (const [providerKey, eligibility] of excludedEntries) {
+    scoresMap[providerKey] = {
+      cost_score: 0,
+      margin_score: 0,
+      health_score: 0,
+      latency_score: 0,
+      success_score: 0,
+      destination_score: 0,
+      blended_score: 0,
+      eligibility,
+    };
   }
 
   // 9. Compute confidence for this decision
