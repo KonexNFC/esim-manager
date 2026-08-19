@@ -55,6 +55,13 @@ interface EsimAccessQueryResponse {
   };
 }
 
+interface EsimAccessBalanceResponse {
+  success: boolean;
+  errorCode: string | null;
+  errorMsg: string | null;
+  obj?: { balance?: number | string };
+}
+
 export class EsimAccessProvider implements EsimProvider {
   name = "esimAccess";
   private accessCode: string | undefined;
@@ -366,6 +373,16 @@ export class EsimAccessProvider implements EsimProvider {
     } catch {
       return "unknown";
     }
+  }
+
+  /** eSIM Access returns its USD wallet in 1/10,000 dollar units. */
+  async getWalletBalance(): Promise<{ amount: number; currency: string }> {
+    const response = await this.request<EsimAccessBalanceResponse>("/balance/query");
+    const rawBalance = Number(response.obj?.balance);
+    if (!Number.isFinite(rawBalance)) {
+      throw new Error("eSIM Access balance response did not include a valid balance");
+    }
+    return { amount: rawBalance / 10_000, currency: "USD" };
   }
 }
 

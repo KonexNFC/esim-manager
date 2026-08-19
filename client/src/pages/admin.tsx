@@ -1990,6 +1990,22 @@ function RoutingTab() {
     onError: () => toast({ title: "Provider sync failed", variant: "destructive" }),
   });
 
+  const balanceCheckMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/providers/balances/check", {}).then((r: any) => r.json()),
+    onSuccess: (data: any) => {
+      const low = data.results?.filter((result: any) => result.status === "low") ?? [];
+      toast({
+        title: "Provider balances checked",
+        description: low.length
+          ? `${low.map((result: any) => result.providerKey).join(", ")} need a top-up.`
+          : "No provider wallets are below their alert threshold.",
+        variant: low.length ? "destructive" : "default",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/providers"] });
+    },
+    onError: () => toast({ title: "Balance check failed", variant: "destructive" }),
+  });
+
   const [testProvider, setTestProvider]   = useState("airalo");
   const [testCountry,  setTestCountry]    = useState("US");
   const [testResult,   setTestResult]     = useState<any>(null);
@@ -2108,6 +2124,16 @@ function RoutingTab() {
             <Button
               size="sm"
               variant="outline"
+              onClick={() => balanceCheckMutation.mutate()}
+              disabled={balanceCheckMutation.isPending}
+              data-testid="button-check-provider-balances"
+            >
+              {balanceCheckMutation.isPending ? <RefreshCw className="w-3 h-3 mr-1.5 animate-spin" /> : <DollarSign className="w-3 h-3 mr-1.5" />}
+              Check balances
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
               onClick={() => seedMutation.mutate()}
               disabled={seedMutation.isPending}
               data-testid="button-seed-providers"
@@ -2145,6 +2171,25 @@ function RoutingTab() {
             {providers.map((p) => {
               const isWarn = p.autoPaused;
               const isOk = p.enabled && !p.autoPaused;
+              const wallet = p.metadata?.wallet;
+              const walletStatus = wallet?.status as string | undefined;
+              const walletIsLow = walletStatus === "low";
+              const formatWalletAmount = (amount: number, currency: string) => {
+                try {
+                  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(amount);
+                } catch {
+                  return `${amount.toFixed(2)} ${currency}`;
+                }
+              };
+              const walletLabel = wallet?.amount != null && wallet?.currency
+                ? formatWalletAmount(wallet.amount, wallet.currency)
+                : walletStatus === "not_supported"
+                  ? "Not available"
+                  : walletStatus === "not_configured"
+                    ? "Not configured"
+                    : walletStatus === "error"
+                      ? "Check failed"
+                      : "Not checked";
               return (
                 <div
                   key={p.key}
@@ -2180,6 +2225,29 @@ function RoutingTab() {
                   <p className="text-[10px] text-muted-foreground mb-3">
                     Last check: {p.lastHealthCheck ? new Date(p.lastHealthCheck).toLocaleDateString() : "Never"}
                   </p>
+                   <div className={`mb-3 rounded-lg border px-2.5 py-2 ${
+                     walletIsLow
+                       ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20"
+                       : walletStatus === "error"
+                         ? "border-orange-200 bg-orange-50 dark:border-orange-900 dark:bg-orange-950/20"
+                         : "border-border bg-muted/30"
+                   }`} data-testid={`provider-wallet-${p.key}`}>
+                     <div className="flex items-center justify-between gap-2">
+                       <span className="text-[10px] text-muted-foreground">Wallet balance</span>
+                       <span className={`text-xs font-semibold ${
+                         walletIsLow ? "text-red-600 dark:text-red-400" : walletStatus === "ok" ? "text-emerald-600 dark:text-emerald-400" : ""
+                       }`}>{walletLabel}</span>
+                     </div>
+                     {walletIsLow && (
+                       <p className="mt-1 text-[10px] text-red-600 dark:text-red-400">
+                         Below {formatWalletAmount(wallet.threshold, wallet.currency)} alert threshold
+                       </p>
+                     )}
+                     {wallet?.checkedAt && (
+                       <p className="mt-1 text-[9px] text-muted-foreground">Checked {new Date(wallet.checkedAt).toLocaleString()}</p>
+                     )}
+                     {wallet?.error && <p className="mt-1 text-[9px] text-orange-600 dark:text-orange-400 truncate" title={wallet.error}>{wallet.error}</p>}
+                   </div>
 
                   {/* Auto-pause reason */}
                   {p.autoPaused && (

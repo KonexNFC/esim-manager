@@ -327,6 +327,36 @@ export class ZenditProvider implements EsimProvider {
       return "unknown";
     }
   }
+
+  /** Read the Zendit prepaid balance without placing an eSIM order. */
+  async getWalletBalance(): Promise<{ amount: number; currency: string }> {
+    if (!this.apiKey) throw new Error("Zendit provider not configured");
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12_000);
+    try {
+      const res = await fetch(`${this.baseUrl}/balance`, {
+        headers: this.headers,
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        throw new Error(`Zendit balance API ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      }
+      const data = await res.json() as {
+        availableBalance?: number | string;
+        currency?: string;
+        currencyDivisor?: number;
+      };
+      const rawBalance = Number(data.availableBalance);
+      const divisor = Number(data.currencyDivisor ?? 100);
+      if (!Number.isFinite(rawBalance) || !Number.isFinite(divisor) || divisor <= 0) {
+        throw new Error("Zendit balance response did not include a valid balance");
+      }
+      return { amount: rawBalance / divisor, currency: data.currency || "GBP" };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 export const zendit = new ZenditProvider();

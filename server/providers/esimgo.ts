@@ -44,6 +44,13 @@ interface EsimGoOrderResponse {
   assigned: boolean;
 }
 
+interface EsimGoOrganisationResponse {
+  organisations?: Array<{
+    balance?: number | string;
+    currency?: string;
+  }>;
+}
+
 export class EsimGoProvider implements EsimProvider {
   name = "esimgo";
   private apiKey: string | undefined;
@@ -60,22 +67,31 @@ export class EsimGoProvider implements EsimProvider {
     if (!this.apiKey) throw new Error("eSIMGo provider not configured");
 
     const url = `${BASE_URL}${path}`;
-    const res = await fetch(url, {
-      ...options,
-      headers: {
-        "X-API-Key": this.apiKey,
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12_000);
+    try {
+      const res = await fetch(url, {
+        ...options,
+        headers: {
+          "X-API-Key": this.apiKey,
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+          ...options.headers,
+        },
+        signal: options.signal ?? controller.signal,
+      });
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`eSIMGo API error ${res.status}: ${text}`);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`eSIMGo API error ${res.status}: ${text}`);
+      }
+
+      return await res.json() as T;
+    } finally {
+      // Keep the timeout active while consuming the body as well as while
+      // opening the connection. Some upstreams send headers before stalling.
+      clearTimeout(timeout);
     }
-
-    return res.json() as Promise<T>;
   }
 
   /** Fetch the FULL catalogue (all countries). Returns one ProviderPlan per bundle×country,
@@ -281,6 +297,17 @@ export class EsimGoProvider implements EsimProvider {
     } catch {
       return "unknown";
     }
+  }
+
+  /** Read the prepaid wallet without creating an order. */
+  async getWalletBalance(): Promise<{ amount: number; currency: string }> {
+    const response = await this.request<EsimGoOrganisationResponse>("/organisation");
+    const organisation = response.organisations?.[0];
+    const amount = Number(organisation?.balance);
+    if (!Number.isFinite(amount)) {
+      throw new Error("eSIMGo balance response did not include a valid balance");
+    }
+    return { amount, currency: organisation?.currency || "USD" };
   }
 }
 

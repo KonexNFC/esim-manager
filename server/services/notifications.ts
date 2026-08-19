@@ -77,6 +77,13 @@ export interface OrderStatusUpdateData {
   message?: string;
 }
 
+export interface ProviderWalletLowBalanceData {
+  providerName: string;
+  balance: number;
+  currency: string;
+  threshold: number;
+}
+
 // ─── Send helper ─────────────────────────────────────────────────────────────
 
 async function sendViaSendGrid(to: string, from: string, subject: string, html: string): Promise<void> {
@@ -99,14 +106,15 @@ async function sendViaResend(to: string, from: string, subject: string, html: st
   }
 }
 
-async function sendEmail(to: string, subject: string, html: string): Promise<void> {
+/** Returns true only when an email provider accepted the message. */
+async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   const FROM = process.env.EMAIL_FROM_ADDRESS || 'Konex eSIM <noreply@konexesim.com>';
 
   // Try SendGrid first, then Resend, then log
   try {
     await sendViaSendGrid(to, FROM, subject, html);
     console.log(`[Email/SendGrid] Sent "${subject}" to ${to}`);
-    return;
+    return true;
   } catch (sgErr: any) {
     console.warn(`[Email] SendGrid failed (${sgErr.message}), trying Resend…`);
   }
@@ -114,12 +122,13 @@ async function sendEmail(to: string, subject: string, html: string): Promise<voi
   try {
     await sendViaResend(to, FROM, subject, html);
     console.log(`[Email/Resend] Sent "${subject}" to ${to}`);
-    return;
+    return true;
   } catch (resendErr: any) {
     console.warn(`[Email] Resend failed (${resendErr.message}), falling back to console log`);
   }
 
   console.log(`[Email] FALLBACK — To: ${to} | Subject: ${subject}`);
+  return false;
 }
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
@@ -493,6 +502,42 @@ export async function sendFulfillmentFailedEmail(data: FulfillmentFailedData): P
 
   sendEmail(ADMIN_EMAIL, `[KONEX ALERT] Fulfillment failed — order #${shortId}`, lightLayout(adminContent, 'Fulfillment Alert'))
     .catch(() => {});
+}
+
+// ─── Provider Wallet Alert ────────────────────────────────────────────────────
+
+export async function sendProviderWalletLowBalanceAlert(data: ProviderWalletLowBalanceData): Promise<void> {
+  const amount = new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: data.currency,
+  }).format(data.balance);
+  const threshold = new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: data.currency,
+  }).format(data.threshold);
+  const content = `
+    <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111;">⚠️ Provider wallet running low</h2>
+    <p style="margin:0 0 24px;font-size:15px;color:#555;">
+      <strong>${esc(data.providerName)}</strong> has only <strong>${esc(amount)}</strong> of prepaid credit remaining.
+      New eSIM orders can fail if the wallet reaches zero.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      ${lightInfoRow("Provider", esc(data.providerName))}
+      ${lightInfoRow("Available balance", esc(amount))}
+      ${lightInfoRow("Alert threshold", esc(threshold))}
+    </table>
+    ${primaryButton(`${BASE_URL}/admin`, "Open Provider Dashboard")}
+    <p style="margin:20px 0 0;font-size:12px;color:#888;">This alert is limited to one email per provider every 24 hours while the balance remains low.</p>
+  `;
+
+  const delivered = await sendEmail(
+    ADMIN_EMAIL,
+    `[KONEX ALERT] ${data.providerName} wallet low — ${amount} remaining`,
+    lightLayout(content, "Provider Wallet Low"),
+  );
+  if (!delivered) {
+    throw new Error("No email provider accepted the provider wallet alert");
+  }
 }
 
 // ─── Top-up Confirmation ─────────────────────────────────────────────────────

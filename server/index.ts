@@ -247,6 +247,8 @@ app.use((req, res, next) => {
 
   const { startProviderSyncScheduler } = await import("./services/providerSync");
   startProviderSyncScheduler();
+  const { startProviderBalanceScheduler } = await import("./services/providerBalance");
+  startProviderBalanceScheduler();
 
   // ── Startup recovery: re-trigger orders stuck in "fulfilling" ─────────────
   // These are orders where capture succeeded but the async fulfillment task

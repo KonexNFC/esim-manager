@@ -136,28 +136,41 @@ export class AiraloAdapter implements ProviderAdapter {
       body.append('client_secret', this.clientSecret);
       body.append('grant_type',    'client_credentials');
 
-      const res = await fetch(`${this.baseUrl}/token`, {
-        method:  'POST',
-        headers: { 'Accept': 'application/json' },
-        body,
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12_000);
+      try {
+        const res = await fetch(`${this.baseUrl}/token`, {
+          method:  'POST',
+          headers: { 'Accept': 'application/json' },
+          body,
+          signal: controller.signal,
+        });
 
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        throw new Error(`Airalo auth failed ${res.status}: ${txt.slice(0, 200)}`);
+        if (!res.ok) {
+          const txt = await res.text().catch(() => '');
+          throw new Error(`Airalo auth failed ${res.status}: ${txt.slice(0, 200)}`);
+        }
+
+        const json = await res.json() as AiraloTokenResponse;
+        this.cachedToken = json.data.access_token;
+        // Expire 60 s before the real expiry so we never send a stale token
+        this.tokenExpiry = now + (json.data.expires_in - 60) * 1_000;
+
+        return this.cachedToken!;
+      } finally {
+        // Do not clear the timeout until the token response body is parsed.
+        clearTimeout(timeout);
       }
-
-      const json = await res.json() as AiraloTokenResponse;
-      this.cachedToken = json.data.access_token;
-      // Expire 60 s before the real expiry so we never send a stale token
-      this.tokenExpiry = now + (json.data.expires_in - 60) * 1_000;
-
-      return this.cachedToken!;
     })().finally(() => {
       this.pendingTokenReq = null;
     });
 
     return this.pendingTokenReq;
+  }
+
+  /** Verify API credentials without placing an order. Airalo exposes no wallet balance endpoint. */
+  async checkConnection(): Promise<void> {
+    await this.getToken();
   }
 
   private async req<T>(

@@ -1641,6 +1641,18 @@ export async function registerRoutes(
     }
   });
 
+  // Safe, read-only balance refresh. This endpoint never places a provider order.
+  app.post("/api/admin/providers/balances/check", requireAdmin, async (_req, res) => {
+    try {
+      const { checkAllProviderBalances } = await import("./services/providerBalance");
+      const results = await checkAllProviderBalances();
+      res.json({ results });
+    } catch (err: any) {
+      console.error("/api/admin/providers/balances/check error:", err.message);
+      res.status(500).json({ message: "Failed to check provider balances" });
+    }
+  });
+
   app.post("/api/admin/providers/seed", requireAdmin, async (_req, res) => {
     try {
       const { upsertProvider } = await import('./services/providerRegistry');
