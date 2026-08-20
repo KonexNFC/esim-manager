@@ -29,7 +29,7 @@ app.post(
       const { getUncachableStripeClient } = await import("./stripeClient");
       const stripe = await getUncachableStripeClient();
 
-      const event = JSON.parse(rawBody);
+      let event: any;
       const sig = req.headers["stripe-signature"] as string;
       const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -314,10 +314,6 @@ app.use((req, res, next) => {
   await registerRoutes(httpServer, app);
 
   const { startProviderSyncScheduler } = await import("./services/providerSync");
-
-  const { startProviderBalanceScheduler } = await import("./services/providerBalance");
-
-  const { startProviderBalanceScheduler } = await import("./services/providerBalance");
   startProviderSyncScheduler();
   const { startProviderBalanceScheduler } = await import("./services/providerBalance");
   // Health is persisted and evaluated fail-closed when unknown, stale, or down.
