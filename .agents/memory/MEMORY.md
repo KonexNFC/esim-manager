@@ -7,3 +7,4 @@
 - [Wholesale price floor](wholesale-price-floor.md) — every checkout must clear cost+20%/$1.90 via the shared floor service; stored retail_price_usd is mostly 0 and never authoritative
 - [Provider health gating](provider-health-gating.md) — eligibility is fail-closed and canonical across checkout, stored fallbacks, legacy fulfillment, and top-ups
 - [Refund state lifecycle](refund-state-lifecycle.md) — rejected captured payments may be refund-pending; neither pending nor completed refunds may ever fulfill
+- [Non-blocking production startup](non-blocking-production-startup.md) — open the HTTP listener before database seeding or supplier probes; dependency waits cause Autoscale health-check outages

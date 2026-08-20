@@ -9,6 +9,15 @@ import { storage } from "./storage";
 const app = express();
 const httpServer = createServer(app);
 
+// This endpoint deliberately avoids the database and supplier APIs so platform
+// monitoring can distinguish process health from a downstream dependency issue.
+app.get("/api/health", (_req, res) => {
+  res.status(200).json({
+    status: "ok",
+    uptimeSeconds: Math.floor(process.uptime()),
+  });
+});
+
 // ─── Stripe webhook (raw body required — must be before express.json()) ────────
 app.post(
   "/api/webhooks/stripe",
@@ -242,21 +251,14 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  await seedDatabase().catch(err => console.error("Seed error:", err));
   await registerRoutes(httpServer, app);
 
   const { startProviderSyncScheduler } = await import("./services/providerSync");
   startProviderSyncScheduler();
-  const { checkAllProviderBalances, startProviderBalanceScheduler } = await import("./services/providerBalance");
-  // Fail closed at boot: establish fresh provider eligibility before accepting
-  // checkout or fulfillment traffic. All probes are safe and non-purchasing.
-  try {
-    const results = await checkAllProviderBalances();
-    const eligible = results.filter(result => result.eligible).map(result => result.providerKey);
-    console.log(`[Provider health] Boot check complete; eligible: ${eligible.join(", ") || "none"}`);
-  } catch (error: any) {
-    console.error("[Provider health] Boot check failed; routing will remain quarantined:", error.message);
-  }
+  const { startProviderBalanceScheduler } = await import("./services/providerBalance");
+  // Health is persisted and evaluated fail-closed when unknown, stale, or down.
+  // Refresh it in the background so slow supplier APIs cannot block the HTTP
+  // listener during an Autoscale cold start.
   startProviderBalanceScheduler();
 
   // ── Startup recovery: re-trigger orders stuck in "fulfilling" ─────────────
@@ -340,7 +342,13 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(
     { port, host: "0.0.0.0", reusePort: true },
-    () => { log(`serving on port ${port}`); }
+    () => {
+      log(`serving on port ${port}`);
+      // Seeding is idempotent and not required to serve the static app or health
+      // endpoint. Keeping it off the critical startup path prevents a paused or
+      // slow database from making the entire deployment fail its uptime check.
+      void seedDatabase().catch(err => console.error("Seed error:", err));
+    }
   );
 
   // ── DB keepalive: prevents Replit's managed PostgreSQL from freezing ─────────
