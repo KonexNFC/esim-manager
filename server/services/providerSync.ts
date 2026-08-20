@@ -100,22 +100,46 @@ async function processProviderPlans(
   }
 
   // ── Step 3: Bulk INSERT missing normalized plans ──
+  // Compute the cheapest wholesale cost per spec from this provider's offer data
+  // so new plans get a reasonable starting retail price (35% target margin).
+  // Without this, new plans default to retailPriceUsd=0 which causes the routing
+  // engine to compute margin=0 on every candidate, collapsing confidence scores to ~47.
+  const DEFAULT_TARGET_MARGIN = 0.35; // 35% gross margin → retail = cost / 0.65
+  const cheapestWholesalePerSpec = new Map<string, number>();
+  for (const plan of validPlans) {
+    const regionCode = plan.countryCode.toUpperCase();
+    const dataMb = planToMb(plan);
+    const key = `${regionCode}|${dataMb}|${plan.validityDays}`;
+    const current = cheapestWholesalePerSpec.get(key);
+    if (current === undefined || plan.wholesaleCost < current) {
+      cheapestWholesalePerSpec.set(key, plan.wholesaleCost);
+    }
+  }
+
   const missing = specs.filter(s => !normalizedPlanCache.has(`${s.regionCode}|${s.dataMb}|${s.validityDays}`));
   if (missing.length > 0) {
     for (let i = 0; i < missing.length; i += CHUNK) {
       const chunk = missing.slice(i, i + CHUNK);
       const inserted = await db
         .insert(normalizedPlans)
-        .values(chunk.map(s => ({
-          regionCode: s.regionCode,
-          dataMb: s.dataMb,
-          validityDays: s.validityDays,
-          name: formatPlanName(s.regionCode, s.dataMb, s.validityDays),
-          isUnlimited: s.dataMb >= 999999,
-          planType: "data" as const,
-          retailPriceUsd: 0,
-          isActive: true,
-        })))
+        .values(chunk.map(s => {
+          const cheapestWholesale = cheapestWholesalePerSpec.get(`${s.regionCode}|${s.dataMb}|${s.validityDays}`) ?? 0;
+          // Compute a baseline retail price so margin scoring is realistic from day one.
+          // Admins can override this via the plan editor; this is a sensible starting point.
+          const retailPriceUsd = cheapestWholesale > 0
+            ? Math.round((cheapestWholesale / (1 - DEFAULT_TARGET_MARGIN)) * 100) / 100
+            : 0;
+          return {
+            regionCode: s.regionCode,
+            dataMb: s.dataMb,
+            validityDays: s.validityDays,
+            name: formatPlanName(s.regionCode, s.dataMb, s.validityDays),
+            isUnlimited: s.dataMb >= 999999,
+            planType: "data" as const,
+            retailPriceUsd,
+            isActive: true,
+          };
+        }))
         .onConflictDoNothing()
         .returning({ id: normalizedPlans.id, regionCode: normalizedPlans.regionCode, dataMb: normalizedPlans.dataMb, validityDays: normalizedPlans.validityDays });
       for (const row of inserted) {
@@ -199,6 +223,49 @@ async function processProviderPlans(
   }
 
   return { offersUpserted, priceChanges };
+}
+
+/**
+ * Backfill retailPriceUsd for normalized plans that were created with the old
+ * default of 0. Uses the cheapest active provider offer for each plan and applies
+ * a 35% target gross margin so the routing engine can compute meaningful margin
+ * scores immediately after a sync.
+ *
+ * Plans that already have a real price (> 0) are left untouched so admin-set
+ * prices are never silently overwritten.
+ */
+async function backfillNormalizedPlanRetailPrices(): Promise<{ plansUpdated: number }> {
+  const DEFAULT_TARGET_MARGIN = 0.35;
+
+  // Find all normalized plans with missing/zero retail price that have at least one active offer
+  const rows = await db.execute<{ id: string; min_wholesale: number }>(sql`
+    SELECT np.id, MIN(po.wholesale_price_usd) AS min_wholesale
+    FROM normalized_plans np
+    JOIN provider_offers po ON po.normalized_plan_id = np.id
+    WHERE po.is_active = true
+      AND (np.retail_price_usd IS NULL OR np.retail_price_usd <= 0)
+    GROUP BY np.id
+  `);
+
+  if (rows.rows.length === 0) return { plansUpdated: 0 };
+
+  let plansUpdated = 0;
+  const CHUNK = 500;
+  for (let i = 0; i < rows.rows.length; i += CHUNK) {
+    const chunk = rows.rows.slice(i, i + CHUNK);
+    for (const row of chunk) {
+      const cheapest = Number(row.min_wholesale);
+      if (cheapest <= 0) continue;
+      const retailPriceUsd = Math.round((cheapest / (1 - DEFAULT_TARGET_MARGIN)) * 100) / 100;
+      await db
+        .update(normalizedPlans)
+        .set({ retailPriceUsd, updatedAt: new Date() })
+        .where(and(eq(normalizedPlans.id, row.id), sql`(retail_price_usd IS NULL OR retail_price_usd <= 0)`));
+      plansUpdated++;
+    }
+  }
+
+  return { plansUpdated };
 }
 
 /** For each internal plan, find the cheapest matching providerOffer and update plan cost+provider. */
@@ -414,6 +481,14 @@ export async function syncAllProviders(
   } else {
     console.log("[providerSync] Airalo: not configured (AIRALO_CLIENT_ID/SECRET missing) — skipped");
     results.push({ providerKey: "airalo", success: false, plansFound: 0, offersUpserted: 0, error: "Not configured" });
+  }
+
+  // ── Backfill retail prices for normalized plans that have retailPriceUsd=0 ──
+  // This fixes plans created before the providerSync fix landed, so the routing
+  // engine immediately sees realistic margin scores without waiting for re-sync.
+  const { plansUpdated: retroPriced } = await backfillNormalizedPlanRetailPrices();
+  if (retroPriced > 0) {
+    console.log(`[providerSync] Backfilled retail prices for ${retroPriced} normalized plan(s) that had retailPriceUsd=0`);
   }
 
   // ── Auto-update internal plan costs ───────────────────────────────────────

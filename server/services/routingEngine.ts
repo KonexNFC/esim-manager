@@ -20,7 +20,7 @@
 //            fallbackChain, strategy, scores, decisionReason }
 // Persists result to routing_decisions table.
 
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { db } from "../storage";
 import { routingDecisions, settings } from "@shared/schema";
 import {
@@ -431,7 +431,8 @@ function calculateConfidence(winner: ScoredCandidate): { score: number; label: C
   const { scores, providerHealthStatus, dataOrdersCount } = winner;
 
   // 1. Health factor — direct provider health signal
-  //    healthy=100, unknown=50, degraded=20, down=0
+  //    healthy=100, unknown=70, degraded=30, down=0
+  //    (uses the same healthScore() mapping as the routing blended score)
   const healthFactor = healthScore(providerHealthStatus);
 
   // 2. Data availability factor — confidence in destination stats
@@ -625,10 +626,31 @@ export async function selectBestProviderForPlan(
   ]);
   const weights = ROUTING_MODE_WEIGHTS[routingMode];
 
+  // 2b. Guard: if the normalized plan has no retail price set, compute a fallback so
+  //     margin scoring produces meaningful values instead of collapsing to 0%.
+  //     retailPriceUsd=0 causes calculateMargin() to return 0, which drives
+  //     margin_score=0, marginFactor=0, and confidence down to ~47 (low).
+  //     Root cause: providerSync sets retailPriceUsd=0 on insert for new plans.
+  //     This guard provides a safety net for plans that slipped through before the fix.
+  let retailPriceUsd = plan.retailPriceUsd;
+  if (retailPriceUsd <= 0) {
+    const offers = await getOffersForNormalizedPlan(normalizedPlanId);
+    if (offers.length > 0) {
+      const cheapestWholesale = Math.min(...offers.map(o => o.wholesalePriceUsd));
+      const DEFAULT_MARGIN = 0.35; // 35% gross margin target
+      retailPriceUsd = Math.round((cheapestWholesale / (1 - DEFAULT_MARGIN)) * 100) / 100;
+      console.warn(
+        `[routingEngine] Plan "${plan.name}" (${normalizedPlanId}) has retailPriceUsd=0 — ` +
+        `using computed fallback $${retailPriceUsd} (${DEFAULT_MARGIN * 100}% margin target). ` +
+        `Run a provider sync or set a retail price to fix this permanently.`,
+      );
+    }
+  }
+
   // 3. Score all enabled, active candidates (destination stats + health dampening applied)
   const { candidates, eligibilityByProvider } = await scoreCandidates(
     normalizedPlanId,
-    plan.retailPriceUsd,
+    retailPriceUsd,
     plan.regionCode,
     minMarginPercent,
     weights,
@@ -791,12 +813,12 @@ export async function selectBestProviderForPlan(
 
 // ─── History / analytics helpers ─────────────────────────────────────────────
 
-/** Return the N most recent routing decisions (default 50). */
+/** Return the N most recent routing decisions (default 50), newest first. */
 export async function getRecentRoutingDecisions(limit = 50) {
   return db
     .select()
     .from(routingDecisions)
-    .orderBy(routingDecisions.createdAt)
+    .orderBy(desc(routingDecisions.createdAt))
     .limit(limit);
 }
 
