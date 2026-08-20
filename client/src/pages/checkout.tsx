@@ -36,6 +36,7 @@ interface PlanMeta {
   currency: string;
   coverage: string;
   normalizedPlanId: string | null;
+  quote: { token: string; amount: number; currency: "USD"; expiresAt: string };
 }
 
 interface CheckoutConfig {
@@ -63,15 +64,6 @@ const checkoutSchema = z.object({
 
 type CheckoutFormData = z.infer<typeof checkoutSchema>;
 type CheckoutStep = "details" | "upsell" | "pay";
-
-// ─── Upsell options ───────────────────────────────────────────────────────────
-
-const upsellOptions = [
-  { id: "1gb",       label: "+1 GB",        desc: "Light top-up",   price: 3  },
-  { id: "3gb",       label: "+3 GB",        desc: "Extra buffer",   price: 7,  tag: "Popular" },
-  { id: "5gb",       label: "+5 GB",        desc: "Heavy use",      price: 11 },
-  { id: "unlimited", label: "Go Unlimited", desc: "No data limits", price: 15, tag: "Best value" },
-];
 
 // ─── PayPal SDK loader ────────────────────────────────────────────────────────
 
@@ -110,7 +102,6 @@ export default function Checkout() {
 
   const [step, setStep]                   = useState<CheckoutStep>("details");
   const [formData, setFormData]           = useState<CheckoutFormData | null>(null);
-  const [selectedUpsell, setSelectedUpsell] = useState<string | null>(null);
   const [paypalReady, setPaypalReady]     = useState(false);
   const [paypalError, setPaypalError]     = useState("");
   const [paddleLoading, setPaddleLoading] = useState(false);
@@ -154,14 +145,15 @@ export default function Checkout() {
   // ── Derived values ────────────────────────────────────────────────────────
 
   const { fmt, isApprox, currency } = useCurrency();
-  const upsellPrice  = upsellOptions.find(u => u.id === selectedUpsell)?.price ?? 0;
-  const totalPriceUsd = plan ? parseFloat((plan.priceUsd + upsellPrice).toFixed(2)) : 0;
+  // Add-ons are not an independently fulfillable checkout item. Never add a
+  // client-side amount to a signed plan quote.
+  const totalPriceUsd = plan?.quote.amount ?? 0;
   const resolvedEmail = formData?.email ?? "";
 
   // ── PayPal button mounting ────────────────────────────────────────────────
 
   useEffect(() => {
-    if (step !== "pay" || !checkoutConfig?.paypal.enabled || !plan) return;
+    if (step !== "pay" || !checkoutConfig?.paypal.enabled || !plan?.quote) return;
     const { clientId } = checkoutConfig.paypal;
 
     let cancelled = false;
@@ -185,11 +177,10 @@ export default function Checkout() {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                normalizedPlanId: plan.normalizedPlanId ?? plan.id,
+                quoteToken: plan.quote.token,
                 countryCode: plan.countryCode,
                 dataLabel: plan.dataLabel,
                 validityLabel: plan.validityLabel,
-                amountUsd: totalPriceUsd,
                 email: resolvedEmail,
                 payerName: fd.name || undefined,
                 billingAddress: fd.addressLine1 ? {
@@ -212,11 +203,7 @@ export default function Checkout() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 paypalOrderId: paypalData.orderID,
-                normalizedPlanId: plan.normalizedPlanId ?? plan.id,
-                countryCode: plan.countryCode,
-                dataLabel: plan.dataLabel,
-                validityLabel: plan.validityLabel,
-                amountUsd: totalPriceUsd,
+                quoteToken: plan.quote.token,
                 email: resolvedEmail,
               }),
             });
@@ -242,18 +229,17 @@ export default function Checkout() {
   // ── Paddle handler ────────────────────────────────────────────────────────
 
   const handlePaddle = async () => {
-    if (!plan) return;
+    if (!plan?.quote) return;
     setPaddleLoading(true);
     try {
       const res = await fetch("/api/checkout/paddle/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          normalizedPlanId: plan.normalizedPlanId ?? plan.id,
+          quoteToken: plan.quote.token,
           countryCode: plan.countryCode,
           dataLabel: plan.dataLabel,
           validityLabel: plan.validityLabel,
-          amountUsd: totalPriceUsd,
           email: resolvedEmail,
         }),
       });
@@ -270,21 +256,19 @@ export default function Checkout() {
   // ── Stripe handler ────────────────────────────────────────────────────────
 
   const handleStripe = async () => {
-    if (!plan) return;
+    if (!plan?.quote) return;
     setStripeLoading(true);
     try {
       const res = await fetch("/api/checkout/stripe/create-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          normalizedPlanId: plan.normalizedPlanId ?? plan.id,
+          quoteToken: plan.quote.token,
           countryCode: plan.countryCode,
           countryName: plan.coverage || plan.countryCode,
           region: plan.coverage || plan.countryCode,
           dataLabel: plan.dataLabel,
           validityLabel: plan.validityLabel,
-          dataAmountGb: plan.dataAmountGb,
-          validityDays: plan.validityDays,
           email: resolvedEmail,
           userId: user?.id,
           userName: formData?.name || user?.name,
@@ -510,58 +494,19 @@ export default function Checkout() {
             </Card>
           )}
 
-          {/* Step 2: Upsell */}
+          {/* Step 2: checkout confirmation. Top-ups are fulfilled separately
+              after activation, never added to a one-plan checkout quote. */}
           {step === "upsell" && (
             <Card className="p-6">
               <div className="flex items-center justify-between mb-1">
                 <h2 className="font-semibold text-lg flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-primary" />
-                  Add More Data?
+                  <CheckCircle2 className="w-5 h-5 text-primary" />
+                  Confirm your plan
                 </h2>
-                <Badge variant="secondary" className="text-xs">Optional</Badge>
               </div>
               <p className="text-sm text-muted-foreground mb-6">
-                Top up before you go — cheaper than buying again mid-trip.
+                The amount below is your complete plan price. Additional data can be purchased from your eSIM after activation.
               </p>
-
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                {upsellOptions.map((opt) => (
-                  <button
-                    key={opt.id}
-                    onClick={() => setSelectedUpsell(selectedUpsell === opt.id ? null : opt.id)}
-                    className={`relative p-4 rounded-xl border text-left transition-all ${
-                      selectedUpsell === opt.id
-                        ? "border-primary bg-primary/5 ring-1 ring-primary"
-                        : "border-border bg-card hover:border-primary/40"
-                    }`}
-                    data-testid={`upsell-option-${opt.id}`}
-                  >
-                    {opt.tag && (
-                      <span className="absolute -top-2 left-3 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
-                        {opt.tag}
-                      </span>
-                    )}
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Plus className="w-3.5 h-3.5 text-primary" />
-                      <span className="font-bold text-sm">{opt.label}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-2">{opt.desc}</p>
-                    <p className="font-semibold text-sm">+{isApprox ? "≈ " : ""}{fmt(opt.price)}</p>
-                  </button>
-                ))}
-              </div>
-
-              {selectedUpsell && (
-                <div className="rounded-lg bg-primary/5 border border-primary/20 px-4 py-3 flex items-center justify-between mb-5" data-testid="upsell-selected-summary">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-primary" />
-                    <span className="text-sm font-medium">
-                      {upsellOptions.find(u => u.id === selectedUpsell)?.label} added
-                    </span>
-                  </div>
-                  <span className="text-sm font-bold">+{isApprox ? "≈ " : ""}{fmt(upsellPrice)}</span>
-                </div>
-              )}
 
               <div className="space-y-3">
                 <Button
@@ -571,15 +516,8 @@ export default function Checkout() {
                   data-testid="button-complete-purchase"
                 >
                   <Lock className="w-4 h-4 mr-2" />
-                  Continue to Payment — {isApprox ? "≈ " : ""}{fmt(totalPriceUsd)}
+                  Continue to Payment — US${totalPriceUsd.toFixed(2)}
                 </Button>
-                <button
-                  onClick={() => { setSelectedUpsell(null); proceedToPay(); }}
-                  className="w-full text-center text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
-                  data-testid="button-skip-upsell"
-                >
-                  No thanks, pay {isApprox ? "≈ " : ""}{fmt(plan.priceUsd)} only
-                </button>
               </div>
             </Card>
           )}
@@ -610,7 +548,7 @@ export default function Checkout() {
                         className="w-full"
                         size="lg"
                         onClick={handleStripe}
-                        disabled={stripeLoading}
+                        disabled={stripeLoading || !plan.quote}
                         data-testid="button-stripe-checkout"
                       >
                         {stripeLoading ? (
@@ -626,7 +564,7 @@ export default function Checkout() {
                               <SiApplepay className="h-5 w-auto" />
                               <SiGooglepay className="h-5 w-auto" />
                             </div>
-                            Pay {isApprox ? "≈ " : ""}{fmt(totalPriceUsd)}
+                            Pay US${totalPriceUsd.toFixed(2)}
                           </>
                         )}
                       </Button>
@@ -670,7 +608,7 @@ export default function Checkout() {
                         variant="outline"
                         size="lg"
                         onClick={handlePaddle}
-                        disabled={paddleLoading}
+                        disabled={paddleLoading || !plan.quote}
                         data-testid="button-paddle-checkout"
                       >
                         {paddleLoading ? (
@@ -681,7 +619,7 @@ export default function Checkout() {
                         ) : (
                           <>
                             <Lock className="w-4 h-4 mr-2" />
-                            Pay {isApprox ? "≈ " : ""}{fmt(totalPriceUsd)} via Paddle
+                            Pay US${totalPriceUsd.toFixed(2)} via Paddle
                           </>
                         )}
                       </Button>
@@ -754,31 +692,20 @@ export default function Checkout() {
             <div className="space-y-2 mb-4">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Base plan</span>
-                <span>{isApprox ? "≈ " : ""}{fmt(plan.priceUsd)}</span>
+                <span>US${plan.quote.amount.toFixed(2)}</span>
               </div>
-              {selectedUpsell && (
-                <div className="flex items-center justify-between text-sm" data-testid="text-upsell-line">
-                  <span className="text-muted-foreground">{upsellOptions.find(u => u.id === selectedUpsell)?.label}</span>
-                  <span>+{isApprox ? "≈ " : ""}{fmt(upsellPrice)}</span>
-                </div>
-              )}
             </div>
 
             <div className="flex items-center justify-between mb-2 pt-2 border-t">
               <span className="font-semibold">Total</span>
               <div className="text-right">
-                <span className="text-xl font-bold" data-testid="text-total-price">{isApprox ? "≈ " : ""}{fmt(totalPriceUsd)}</span>
-                {isApprox && (
-                  <p className="text-[11px] text-muted-foreground">${totalPriceUsd.toFixed(2)} USD</p>
-                )}
+                <span className="text-xl font-bold" data-testid="text-total-price">US${totalPriceUsd.toFixed(2)}</span>
               </div>
             </div>
-            {isApprox && (
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1 mb-4">
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1 mb-4">
                 <Lock className="w-3 h-3 flex-shrink-0" />
-                Checkout is processed in USD · {currency.code} shown for reference
+                Checkout is processed in USD
               </p>
-            )}
 
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">What happens next</p>

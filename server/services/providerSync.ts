@@ -27,6 +27,7 @@ import { esimAccess } from "../providers/esimAccess";
 import { zendit } from "../providers/zendit";
 import { airalo } from "../providers/airalo";
 import { quantizeDataMb, formatPlanName } from "./planNormalizer";
+import { computeFloorUsd, roundUpTo99 } from "./priceFloor";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -226,25 +227,24 @@ async function processProviderPlans(
 }
 
 /**
- * Backfill retailPriceUsd for normalized plans that were created with the old
- * default of 0. Uses the cheapest active provider offer for each plan and applies
- * a 35% target gross margin so the routing engine can compute meaningful margin
- * scores immediately after a sync.
- *
- * Plans that already have a real price (> 0) are left untouched so admin-set
- * prices are never silently overwritten.
+ * Keep stored normalized-plan retail prices non-zero and above every currently
+ * eligible offer's safety floor. Quotes price a selected supplier offer, while
+ * this stored value remains a safe maintained baseline for routing/admin views.
+ * Existing higher admin prices are never lowered during sync.
  */
 async function backfillNormalizedPlanRetailPrices(): Promise<{ plansUpdated: number }> {
-  const DEFAULT_TARGET_MARGIN = 0.35;
-
-  // Find all normalized plans with missing/zero retail price that have at least one active offer
-  const rows = await db.execute<{ id: string; min_wholesale: number }>(sql`
-    SELECT np.id, MIN(po.wholesale_price_usd) AS min_wholesale
+  const rows = await db.execute<{ id: string; retail_price_usd: number; max_wholesale: number }>(sql`
+    SELECT np.id, np.retail_price_usd, MAX(po.wholesale_price_usd) AS max_wholesale
     FROM normalized_plans np
     JOIN provider_offers po ON po.normalized_plan_id = np.id
-    WHERE po.is_active = true
-      AND (np.retail_price_usd IS NULL OR np.retail_price_usd <= 0)
-    GROUP BY np.id
+    JOIN providers p ON p.key = po.provider_key
+    WHERE np.is_active = true
+      AND po.is_active = true
+      AND po.wholesale_price_usd > 0
+      AND p.enabled = true
+      AND p.auto_paused = false
+      AND po.provider_key IN ('esimgo', 'esimaccess', 'zendit', 'airalo', 'mock')
+    GROUP BY np.id, np.retail_price_usd
   `);
 
   if (rows.rows.length === 0) return { plansUpdated: 0 };
@@ -254,13 +254,18 @@ async function backfillNormalizedPlanRetailPrices(): Promise<{ plansUpdated: num
   for (let i = 0; i < rows.rows.length; i += CHUNK) {
     const chunk = rows.rows.slice(i, i + CHUNK);
     for (const row of chunk) {
-      const cheapest = Number(row.min_wholesale);
-      if (cheapest <= 0) continue;
-      const retailPriceUsd = Math.round((cheapest / (1 - DEFAULT_TARGET_MARGIN)) * 100) / 100;
+      const worstCase = Number(row.max_wholesale);
+      if (worstCase <= 0) continue;
+      const retailPriceUsd = roundUpTo99(computeFloorUsd(worstCase));
+      const storedRetail = Number(row.retail_price_usd) || 0;
+      if (storedRetail >= retailPriceUsd) continue;
       await db
         .update(normalizedPlans)
         .set({ retailPriceUsd, updatedAt: new Date() })
-        .where(and(eq(normalizedPlans.id, row.id), sql`(retail_price_usd IS NULL OR retail_price_usd <= 0)`));
+        .where(and(
+          eq(normalizedPlans.id, row.id),
+          sql`(retail_price_usd IS NULL OR retail_price_usd < ${retailPriceUsd})`,
+        ));
       plansUpdated++;
     }
   }

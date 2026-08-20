@@ -4,6 +4,7 @@ import { orders, type Order } from "@shared/schema";
 import { getUncachableStripeClient } from "../stripeClient";
 import { sendPaymentRefundedEmail } from "./notifications";
 import { refundPayPalCapture } from "./paypalService";
+import { refundPaddleTransaction } from "./paddleService";
 
 type RejectedPaymentOrder = Pick<
   Order,
@@ -14,6 +15,7 @@ type RejectedPaymentOrder = Pick<
   | "currency"
   | "stripePaymentIntentId"
   | "paypalCaptureId"
+  | "paddleTransactionId"
 >;
 
 export type RejectedPaymentRefundResult = "refunded" | "refund_pending" | "already_refunded";
@@ -46,8 +48,11 @@ export async function refundRejectedPayment(
   } else if (order.paypalCaptureId) {
     const refund = await refundPayPalCapture(order.paypalCaptureId);
     refundPending = refund.status === "PENDING";
+  } else if (order.paddleTransactionId) {
+    const refund = await refundPaddleTransaction(order.paddleTransactionId);
+    refundPending = refund.pending;
   } else {
-    throw new Error(`Rejected order ${order.id} has no Stripe payment intent or PayPal capture ID`);
+    throw new Error(`Rejected order ${order.id} has no payment identifier for refund`);
   }
 
   // A webhook/browser retry may have completed the same idempotent refund while

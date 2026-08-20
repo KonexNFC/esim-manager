@@ -14,6 +14,14 @@ import {
 import { createPayPalOrder, capturePayPalOrder } from "./services/paypalService";
 import { refundRejectedPayment } from "./services/rejectedPaymentRefund";
 import { createPaddleTransaction } from "./services/paddleService";
+import {
+  createCheckoutQuoteForNormalizedPlan,
+  createCheckoutQuoteForOffer,
+  quoteCharge,
+  toPublicCheckoutQuote,
+  validateCheckoutQuoteForPayment,
+  quoteMatchesCapture,
+} from "./services/checkoutQuote";
 import { syncEsimUsage, syncUserEsims, syncAllActiveEsims, runUsageSyncJob, findEsimsLowOnData, findEsimsExpiringSoon, findExpiredEsimsNeedingRenewal } from "./services/usageSync";
 import { getActiveProvider, getProviderAdapterByKey } from "./providers/adapters";
 import { calculateMargin } from "./services/marginEngine";
@@ -305,78 +313,68 @@ export async function registerRoutes(
     });
   });
 
+  // POST /api/checkout/quote
+  // The storefront calls this before opening payment. It binds a price to the
+  // exact selected provider_offers row rather than broadening to every mapping
+  // on the normalized plan.
+  app.post("/api/checkout/quote", async (req, res) => {
+    try {
+      const providerOfferId = typeof req.body?.providerOfferId === "string" ? req.body.providerOfferId : "";
+      if (!providerOfferId) return res.status(400).json({ message: "Missing selected offer" });
+      const quote = await createCheckoutQuoteForOffer(providerOfferId);
+      return res.json(toPublicCheckoutQuote(quote));
+    } catch (err: any) {
+      const { PriceFloorError } = await import("./services/priceFloor");
+      if (err instanceof PriceFloorError) {
+        return res.status(409).json({ message: "This plan is not currently available. Please refresh and choose another plan.", code: "QUOTE_UNAVAILABLE" });
+      }
+      console.error("[checkout/quote]", err.message);
+      return res.status(500).json({ message: "Unable to price this plan right now" });
+    }
+  });
+
   // POST /api/checkout/paypal/create-order
-  // Body: { normalizedPlanId, countryCode, dataLabel, validityLabel, email }
-  // NOTE: amountUsd in the body is IGNORED — price is always looked up server-side.
+  // Body: { quoteToken, countryCode, dataLabel, validityLabel, email }
   app.post("/api/checkout/paypal/create-order", async (req, res) => {
     try {
       const {
-        normalizedPlanId, countryCode, dataLabel, validityLabel, email,
+        quoteToken, countryCode, dataLabel, validityLabel, email,
         payerName, billingAddress,
       } = req.body;
-      if (!normalizedPlanId || !email) {
+      if (!quoteToken || !email) {
         return res.status(400).json({ message: "Missing required fields" });
       }
-
-      // ── Server-side price lookup (never trust client-supplied amount) ──────
-      const [np] = await db
-        .select({ retailPriceUsd: normalizedPlans.retailPriceUsd })
-        .from(normalizedPlans)
-        .where(eq(normalizedPlans.id, normalizedPlanId))
-        .limit(1);
-      if (!np) {
-        return res.status(404).json({ message: "Plan not found" });
-      }
-
-      // ── Wholesale price floor: never sell below supplier cost + min margin ─
-      const { resolveSalePriceUsd, PriceFloorError } = await import("./services/priceFloor");
-      let serverPrice: number;
-      try {
-        const resolved = await resolveSalePriceUsd(normalizedPlanId, np.retailPriceUsd);
-        serverPrice = resolved.priceUsd;
-        if (serverPrice !== np.retailPriceUsd) {
-          console.warn(
-            `[paypal/create-order] Stored retail $${np.retailPriceUsd} below floor ` +
-            `$${resolved.floorUsd.toFixed(2)} (wholesale $${resolved.wholesaleUsd.toFixed(2)}) — charging $${serverPrice}`,
-          );
-        }
-      } catch (floorErr: any) {
-        if (floorErr instanceof PriceFloorError) {
-          console.error(`[paypal/create-order] ${floorErr.message}`);
-          return res.status(400).json({
-            message: "This plan is not currently available. Please choose a different plan.",
-            code: "NO_PROVIDERS",
-          });
-        }
-        throw floorErr;
-      }
+      const quote = await validateCheckoutQuoteForPayment(quoteToken);
+      const charge = quoteCharge(quote);
 
       const { getLocationInfo, normaliseCode } = await import("./services/countryData");
       const info = getLocationInfo(normaliseCode(countryCode ?? ""));
       const description = `${info?.name ?? countryCode} eSIM — ${dataLabel} · ${validityLabel}`;
 
       const { orderId } = await createPayPalOrder({
-        amountUsd: serverPrice,
+        amountUsd: charge.amount,
         description,
-        customId: `np:${normalizedPlanId}|cc:${countryCode}|em:${email}`,
+        customId: `quote:${quote.id}`,
         payerName: payerName || undefined,
         payerEmail: email,
         billingAddress: billingAddress || undefined,
       });
 
-      res.json({ orderId });
+      res.json({ orderId, amount: charge.amount, currency: charge.currency });
     } catch (err: any) {
       console.error("[paypal/create-order]", err.message);
-      res.status(500).json({ message: err.message || "Failed to create PayPal order" });
+      const { PriceFloorError } = await import("./services/priceFloor");
+      res.status(err instanceof PriceFloorError ? 409 : 500).json({ message: err.message || "Failed to create PayPal order" });
     }
   });
 
   // POST /api/checkout/paypal/capture-order
-  // Body: { paypalOrderId, normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email }
+  // Body: { paypalOrderId, quoteToken, email }
   app.post("/api/checkout/paypal/capture-order", async (req, res) => {
     try {
-      const { paypalOrderId, normalizedPlanId, countryCode, dataLabel, validityLabel, amountUsd, email } = req.body;
-      if (!paypalOrderId || !email) return res.status(400).json({ message: "Missing paypalOrderId or email" });
+      const { paypalOrderId, quoteToken, email } = req.body;
+      if (!paypalOrderId || !quoteToken || !email) return res.status(400).json({ message: "Missing paypalOrderId, quote, or email" });
+      const quote = await validateCheckoutQuoteForPayment(quoteToken);
 
       const { db } = await import("./storage");
       const { orders } = await import("@shared/schema");
@@ -402,22 +400,46 @@ export async function registerRoutes(
       }
 
       const captured = await capturePayPalOrder(paypalOrderId);
+      if (
+        captured.customId !== `quote:${quote.id}` ||
+        !quoteMatchesCapture(quote, Math.round(captured.amountUsd * 100), "USD")
+      ) {
+        console.error(`[paypal/capture-order] REJECTED quote mismatch for ${paypalOrderId}`);
+        const [rejectedOrder] = await (db as any).insert(orders).values({
+          planId: null,
+          normalizedPlanId: quote.normalizedPlanId,
+          email: captured.payerEmail || email,
+          status: "rejected_below_floor",
+          totalPrice: captured.amountUsd,
+          currency: "USD",
+          providerName: "paypal",
+          purchaseType: "initial_purchase",
+          paypalOrderId,
+          paypalCaptureId: captured.captureId,
+          selectedProviderKey: quote.fallbackChain[0]?.k ?? null,
+          fallbackProvidersJson: quote.fallbackChain,
+          wholesaleCostUsd: quote.fallbackChain[0]?.w ?? null,
+        }).returning();
+        const refundStatus = await refundRejectedPayment(rejectedOrder);
+        return res.status(409).json({
+          message: refundStatus === "refund_pending"
+            ? "This payment did not match its approved price and its refund is being processed."
+            : "This payment did not match its approved price and has been automatically refunded.",
+          code: "QUOTE_MISMATCH",
+        });
+      }
 
       // ── Wholesale price floor guard: never fulfill a below-cost capture ────
       // (Defense in depth — create-order already priced at/above floor, but the
-      // captured amount is what PayPal actually charged.)
-      if (normalizedPlanId) {
-        const { getMaxWholesaleUsd, assertChargeMeetsFloor, PriceFloorError } =
+      // captured amount is what PayPal actually charged.) The validated quote
+      // locks one concrete offer; do not broaden this check to unrelated SKUs
+      // in the same normalized group.
+      if (quote.normalizedPlanId) {
+        const { assertChargeMeetsFloor, PriceFloorError } =
           await import("./services/priceFloor");
         try {
-          const wholesale = await getMaxWholesaleUsd(normalizedPlanId);
-          if (wholesale == null) {
-            // Offers were disabled/removed after checkout creation — we no
-            // longer know our cost and cannot fulfill. Reject.
-            throw new PriceFloorError(
-              `PayPal capture ${paypalOrderId}: plan ${normalizedPlanId} has no fulfillable supplier offer.`,
-            );
-          }
+          const wholesale = quote.fallbackChain[0]?.w;
+          if (wholesale == null) throw new PriceFloorError("Approved quote has no selected wholesale evidence.");
           assertChargeMeetsFloor(captured.amountUsd, wholesale, `PayPal capture ${paypalOrderId}`);
         } catch (floorErr: any) {
           if (floorErr instanceof PriceFloorError) {
@@ -426,7 +448,7 @@ export async function registerRoutes(
             // can safely resume an interrupted refund without re-capturing.
             const [rejectedOrder] = await (db as any).insert(orders).values({
               planId: null,
-              normalizedPlanId: normalizedPlanId || null,
+              normalizedPlanId: quote.normalizedPlanId,
               email: captured.payerEmail || email,
               status: "rejected_below_floor",
               totalPrice: captured.amountUsd,
@@ -435,6 +457,9 @@ export async function registerRoutes(
               purchaseType: "initial_purchase",
               paypalOrderId: paypalOrderId,
               paypalCaptureId: captured.captureId,
+              selectedProviderKey: quote.fallbackChain[0]?.k ?? null,
+              fallbackProvidersJson: quote.fallbackChain,
+              wholesaleCostUsd: quote.fallbackChain[0]?.w ?? null,
             }).returning();
             const refundStatus = await refundRejectedPayment(rejectedOrder);
             return res.status(409).json({
@@ -459,7 +484,7 @@ export async function registerRoutes(
 
       const [order] = await (db as any).insert(orders).values({
         planId: null,
-        normalizedPlanId: normalizedPlanId || null,
+        normalizedPlanId: quote.normalizedPlanId,
         email: resolvedEmail,
         userId: resolvedUserId ?? null,
         status: "paid",
@@ -469,6 +494,9 @@ export async function registerRoutes(
         purchaseType: "initial_purchase",
         paypalOrderId: paypalOrderId,
         paypalCaptureId: captured.captureId,
+        selectedProviderKey: quote.fallbackChain[0]?.k ?? null,
+        fallbackProvidersJson: quote.fallbackChain,
+        wholesaleCostUsd: quote.fallbackChain[0]?.w ?? null,
       }).returning();
 
       // Fulfill asynchronously — don't block response
@@ -480,111 +508,84 @@ export async function registerRoutes(
       res.json({ success: true, orderId: order.id });
     } catch (err: any) {
       console.error("[paypal/capture-order]", err.message);
-      res.status(500).json({ message: err.message || "Failed to capture PayPal order" });
+      const { PriceFloorError } = await import("./services/priceFloor");
+      res.status(err instanceof PriceFloorError ? 409 : 500).json({ message: err.message || "Failed to capture PayPal order" });
     }
   });
 
   // POST /api/checkout/paddle/create
-  // Body: { normalizedPlanId, countryCode, dataLabel, validityLabel, email }
-  // NOTE: amountUsd in the body is IGNORED — price is always looked up server-side.
+  // Body: { quoteToken, countryCode, dataLabel, validityLabel, email }
   app.post("/api/checkout/paddle/create", async (req, res) => {
     try {
-      const { normalizedPlanId, countryCode, dataLabel, validityLabel, email } = req.body;
-      if (!normalizedPlanId || !email) {
+      const { quoteToken, countryCode, dataLabel, validityLabel, email } = req.body;
+      if (!quoteToken || !email) {
         return res.status(400).json({ message: "Missing required fields" });
       }
-
-      // ── Server-side price lookup (never trust client-supplied amount) ──────
-      const [np] = await db
-        .select({ retailPriceUsd: normalizedPlans.retailPriceUsd })
-        .from(normalizedPlans)
-        .where(eq(normalizedPlans.id, normalizedPlanId))
-        .limit(1);
-      if (!np) {
-        return res.status(404).json({ message: "Plan not found" });
-      }
-
-      // ── Wholesale price floor: never sell below supplier cost + min margin ─
-      const { resolveSalePriceUsd, PriceFloorError } = await import("./services/priceFloor");
-      let serverPrice: number;
-      try {
-        const resolved = await resolveSalePriceUsd(normalizedPlanId, np.retailPriceUsd);
-        serverPrice = resolved.priceUsd;
-        if (serverPrice !== np.retailPriceUsd) {
-          console.warn(
-            `[paddle/create] Stored retail $${np.retailPriceUsd} below floor ` +
-            `$${resolved.floorUsd.toFixed(2)} (wholesale $${resolved.wholesaleUsd.toFixed(2)}) — charging $${serverPrice}`,
-          );
-        }
-      } catch (floorErr: any) {
-        if (floorErr instanceof PriceFloorError) {
-          console.error(`[paddle/create] ${floorErr.message}`);
-          return res.status(400).json({
-            message: "This plan is not currently available. Please choose a different plan.",
-            code: "NO_PROVIDERS",
-          });
-        }
-        throw floorErr;
-      }
+      const quote = await validateCheckoutQuoteForPayment(quoteToken);
+      const charge = quoteCharge(quote);
 
       const { getLocationInfo, normaliseCode } = await import("./services/countryData");
       const info = getLocationInfo(normaliseCode(countryCode ?? ""));
       const description = `${info?.name ?? countryCode} eSIM — ${dataLabel} · ${validityLabel}`;
 
       const { checkoutUrl, transactionId } = await createPaddleTransaction({
-        amountUsd: serverPrice,
+        amount: charge.amount,
+        currency: charge.currency,
         description,
         email,
         customData: {
-          normalizedPlanId: normalizedPlanId ?? "",
+          normalizedPlanId: quote.normalizedPlanId,
           countryCode: countryCode ?? "",
           dataLabel: dataLabel ?? "",
           validityLabel: validityLabel ?? "",
-          amountUsd: String(serverPrice),
+          quoteToken,
+          quoteAmountMinor: String(charge.amountMinor),
+          quoteCurrency: charge.currency,
+          fallbackChainJson: JSON.stringify(quote.fallbackChain),
+          selectedProviderKey: quote.fallbackChain[0]?.k ?? "",
+          wholesaleCostUsd: String(quote.fallbackChain[0]?.w ?? ""),
           email,
         },
       });
 
-      res.json({ checkoutUrl, transactionId });
+      res.json({ checkoutUrl, transactionId, amount: charge.amount, currency: charge.currency });
     } catch (err: any) {
       console.error("[paddle/create]", err.message);
-      res.status(500).json({ message: err.message || "Failed to create Paddle checkout" });
+      const { PriceFloorError } = await import("./services/priceFloor");
+      res.status(err instanceof PriceFloorError ? 409 : 500).json({ message: err.message || "Failed to create Paddle checkout" });
     }
   });
 
   // POST /api/checkout/stripe/create-session
-  // Body: { normalizedPlanId, countryCode, countryName, region, dataLabel, validityLabel, dataAmountGb, validityDays, email, userId?, userName? }
+  // Body: { quoteToken, countryCode, countryName, region, dataLabel, validityLabel, email, userId?, userName? }
   app.post("/api/checkout/stripe/create-session", async (req, res) => {
     try {
       const {
-        normalizedPlanId, countryCode, countryName, region,
-        dataLabel, validityLabel, dataAmountGb, validityDays,
-        email, userId, userName, sellPriceGbp,
+        quoteToken, countryCode, countryName, region,
+        dataLabel, validityLabel, email, userId, userName,
       } = req.body;
-      if (!normalizedPlanId || !email || !countryCode) {
+      if (!quoteToken || !email || !countryCode) {
         return res.status(400).json({ message: "Missing required fields" });
       }
+      const quote = await validateCheckoutQuoteForPayment(quoteToken);
       const { createCountryPlanCheckoutSession } = await import('./services/stripeService');
       const { url } = await createCountryPlanCheckoutSession({
-        normalizedPlanId,
+        quote,
         countryCode,
         countryName: countryName || countryCode,
         region: region || countryCode,
         dataLabel: dataLabel || '',
         validityLabel: validityLabel || '',
-        dataAmountGb: parseFloat(dataAmountGb) || 0,
-        validityDays: parseInt(validityDays) || 0,
         email,
         userId: userId || undefined,
         userName: userName || undefined,
-        sellPriceGbp: sellPriceGbp ? parseFloat(sellPriceGbp) : undefined,
       });
       res.json({ sessionUrl: url });
     } catch (err: any) {
       console.error("[stripe/create-session]", err.message);
       const msg = err.message || "Failed to create Stripe checkout";
       // No providers available for this plan — return 400 (not 500) with a helpful message
-      if (msg.includes('No enabled active offers') || msg.includes('no candidates')) {
+      if (msg.includes('No enabled active offers') || msg.includes('no candidates') || msg.includes('quote')) {
         return res.status(400).json({
           message: "This plan is not currently available. Please choose a different plan.",
           code: "NO_PROVIDERS",
@@ -617,6 +618,14 @@ export async function registerRoutes(
         )
         .limit(1);
 
+      if (!normalizedPlan) {
+        return res.status(409).json({
+          message: "This plan is not currently available. Please choose another plan.",
+          code: "QUOTE_UNAVAILABLE",
+        });
+      }
+      const quote = await createCheckoutQuoteForNormalizedPlan(normalizedPlan.id);
+
       return res.json({
         id: plan.id,
         name: plan.name,
@@ -626,10 +635,11 @@ export async function registerRoutes(
         validityLabel: plan.validity,
         dataAmountGb: plan.dataAmountGb,
         validityDays: plan.validityDays,
-        priceUsd: plan.price,
-        currency: plan.currency ?? "USD",
+        priceUsd: quote.amountMinor / 100,
+        currency: quote.currency,
         coverage: plan.coverage,
-        normalizedPlanId: normalizedPlan?.id ?? null,
+        normalizedPlanId: normalizedPlan.id,
+        quote: toPublicCheckoutQuote(quote),
       });
     } catch (err: any) {
       console.error("[plan-meta]", err.message);
@@ -774,7 +784,8 @@ export async function registerRoutes(
 
       if (parsed.data.provider === "paddle") {
         const { checkoutUrl, transactionId } = await createPaddleTransaction({
-          amountUsd: option.price,
+          amount: option.price,
+          currency: "USD",
           description,
           email,
           customData: { purchaseType: "topup", orderId: order.id, optionCode: option.optionCode, email },
@@ -2620,10 +2631,52 @@ export async function registerRoutes(
         const code = String(req.params.countryCode).toUpperCase();
         const supplierPlans = await getDbSupplierPlans(code);
         const catalogue = buildPublicCatalogue(code, supplierPlans);
-        if (catalogue.availableDurations.length === 0) {
+        // Price every visible native offer before returning it. Synthetic bundles
+        // cannot be fulfilled as one supplier SKU, so they are omitted rather
+        // than advertising an offer that cannot receive a safe quote.
+        const quotedDurations = await Promise.all(
+          Object.entries(catalogue.durations).map(async ([bucket, slot]) => {
+            if (!slot) return [bucket, slot] as const;
+            const quoteOffer = async (offer: any) => {
+              if (!offer || offer.isSynthetic) return null;
+              try {
+                const quote = await createCheckoutQuoteForOffer(offer.id);
+                return { ...offer, quote: toPublicCheckoutQuote(quote) };
+              } catch {
+                return null;
+              }
+            };
+            const [recommended, cheaper, premium, browseAll] = await Promise.all([
+              quoteOffer(slot.recommended),
+              quoteOffer(slot.cheaper),
+              quoteOffer(slot.premium),
+              Promise.all(slot.browseAll.map(quoteOffer)),
+            ]);
+            return [bucket, {
+              ...slot,
+              recommended,
+              cheaper,
+              premium,
+              browseAll: browseAll.filter(Boolean),
+            }] as const;
+          }),
+        );
+        const durations = Object.fromEntries(quotedDurations);
+        const availableDurations = catalogue.availableDurations.filter(bucket => {
+          const slot = durations[bucket];
+          return !!slot && !!(slot.recommended || slot.cheaper || slot.premium || slot.browseAll?.length);
+        });
+        if (availableDurations.length === 0) {
           return res.status(404).json({ message: `No public plans found for ${code}` });
         }
-        return res.json(catalogue);
+        return res.json({
+          ...catalogue,
+          availableDurations,
+          defaultDuration: availableDurations.includes(catalogue.defaultDuration)
+            ? catalogue.defaultDuration
+            : availableDurations[0],
+          durations,
+        });
       } catch (err: any) {
         console.error("/api/plans/public error:", err.message);
         return res.status(500).json({ message: "Failed to build catalogue" });

@@ -12,7 +12,8 @@ const BASE_URL =
     : "http://localhost:5000");
 
 export async function createPaddleTransaction(params: {
-  amountUsd: number;
+  amount: number;
+  currency: string;
   description: string;
   email?: string;
   customData: Record<string, string>;
@@ -31,8 +32,8 @@ export async function createPaddleTransaction(params: {
         {
           price: {
             description: params.description,
-            amount: String(Math.round(params.amountUsd * 100)),
-            currency_code: "USD",
+            amount: String(Math.round(params.amount * 100)),
+            currency_code: params.currency.toUpperCase(),
             product: {
               name: params.description,
               tax_category: "standard",
@@ -57,6 +58,29 @@ export async function createPaddleTransaction(params: {
   if (!checkoutUrl) throw new Error("Paddle did not return a checkout URL");
 
   return { checkoutUrl, transactionId: data.data?.id ?? "" };
+}
+
+/** Request a full refund for a completed Paddle Billing transaction. Paddle
+ * treats a repeated refund request for the same transaction idempotently. */
+export async function refundPaddleTransaction(transactionId: string): Promise<{ pending: boolean }> {
+  const apiKey = process.env.PADDLE_API_KEY;
+  if (!apiKey) throw new Error("PADDLE_API_KEY not configured");
+  if (!transactionId) throw new Error("Missing Paddle transaction ID for refund");
+
+  const res = await fetch(`${PADDLE_BASE}/transactions/${encodeURIComponent(transactionId)}/refund`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({}),
+  });
+  const data: any = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(`Paddle refund failed: ${JSON.stringify(data?.error ?? data)}`);
+  }
+  const status = String(data.data?.status ?? "").toLowerCase();
+  return { pending: status !== "completed" && status !== "succeeded" };
 }
 
 export function verifyPaddleWebhook(

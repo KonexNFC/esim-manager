@@ -29,7 +29,7 @@ app.post(
       const { getUncachableStripeClient } = await import("./stripeClient");
       const stripe = await getUncachableStripeClient();
 
-      let event: any;
+      const event = JSON.parse(rawBody);
       const sig = req.headers["stripe-signature"] as string;
       const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -40,9 +40,12 @@ app.post(
           console.warn("[Stripe] Webhook signature verification failed:", err.message);
           return;
         }
-      } else {
+      } else if (process.env.NODE_ENV !== "production") {
         // No secret configured — parse payload directly (dev mode)
         event = JSON.parse((req.body as Buffer).toString("utf-8"));
+      } else {
+        console.error("[Stripe] Ignoring production webhook without a configured signing secret and signature");
+        return;
       }
 
       console.log(`[Stripe] Webhook event: ${event.type}`);
@@ -73,8 +76,12 @@ app.post(
       const event = JSON.parse(rawBody);
       const signature = (req.headers["paddle-signature"] as string) ?? "";
 
-      // Verify signature in production
-      if (process.env.NODE_ENV === "production" && process.env.PADDLE_WEBHOOK_SECRET) {
+       // Production payment events must always be signed.
+       if (process.env.NODE_ENV === "production") {
+         if (!process.env.PADDLE_WEBHOOK_SECRET) {
+           console.error("[Paddle] Ignoring production webhook without a configured signing secret");
+           return;
+         }
         const { verifyPaddleWebhook } = await import("./services/paddleService");
         if (!verifyPaddleWebhook(rawBody, signature)) {
           console.warn("[Paddle] Webhook signature verification failed");
@@ -107,16 +114,15 @@ async function handlePaddleTransactionCompleted(data: any) {
       data.billing_details?.email ??
       "";
     // Amount ACTUALLY captured (grand_total/total after all discounts) — never
-    // the subtotal, which ignores promotions. Falls back to checkout metadata
-    // only when Paddle sent no totals at all.
+    // a client value or quote metadata fallback.
     const { paddleCapturedUsd } = await import("./services/priceFloor");
     const capturedUsd = paddleCapturedUsd(
       data.details?.totals,
-      parseFloat(customData.amountUsd ?? "0") || null,
+      null,
     );
     const amountUsd: number = capturedUsd ?? 0;
 
-    const normalizedPlanId: string = customData.normalizedPlanId ?? "";
+    let normalizedPlanId: string = customData.normalizedPlanId ?? "";
     const countryCode: string = customData.countryCode ?? "";
 
     // Idempotency check
@@ -135,10 +141,48 @@ async function handlePaddleTransactionCompleted(data: any) {
       }).catch(() => {});
     }
 
+    // Verify the exact signed quote and its current selected-offer mapping before
+    // fulfillment. Paddle must report a real USD grand total; metadata cannot
+    // substitute for captured evidence.
+    let quoteFailure: string | null = null;
+    let quote: any = null;
+    try {
+      const { validateCheckoutQuoteForPayment, quoteMatchesCapture } = await import("./services/checkoutQuote");
+      quote = await validateCheckoutQuoteForPayment(customData.quoteToken);
+      const capturedCurrency = String(
+        data.currency_code ??
+        data.details?.totals?.currency_code ??
+        data.details?.totals?.currency ??
+        "",
+      );
+      if (!quoteMatchesCapture(quote, Math.round(amountUsd * 100), capturedCurrency)) {
+        quoteFailure = "Paddle captured an amount or currency that does not match the approved quote.";
+      }
+      if (normalizedPlanId && normalizedPlanId !== quote.normalizedPlanId) {
+        quoteFailure = "Paddle checkout plan does not match the approved quote.";
+      }
+      normalizedPlanId = quote.normalizedPlanId;
+    } catch (err: any) {
+      quoteFailure = err.message || "Checkout quote is invalid or expired.";
+    }
+
     // Create order record
     const { db } = await import("./storage");
     const { orders, users } = await import("@shared/schema");
     const { eq } = await import("drizzle-orm");
+
+    // Resume a refund after a transient failure instead of creating a duplicate
+    // rejected order when Paddle retries this same completed transaction.
+    const [existingOrder] = await (db as any).select().from(orders)
+      .where(eq(orders.paddleTransactionId, transactionId));
+    if (existingOrder) {
+      if (existingOrder.status === "rejected_below_floor") {
+        const { refundRejectedPayment } = await import("./services/rejectedPaymentRefund");
+        await refundRejectedPayment(existingOrder);
+      }
+      await storage.markPaymentEventProcessed(eventId);
+      return;
+    }
 
     let resolvedUserId: string | undefined;
     if (email) {
@@ -146,19 +190,38 @@ async function handlePaddleTransactionCompleted(data: any) {
       if (user) resolvedUserId = user.id;
     }
 
+    const rejectAndRefundPaddlePayment = async () => {
+      const [rejected] = await (db as any).insert(orders).values({
+        planId: null,
+        normalizedPlanId: normalizedPlanId || null,
+        email,
+        userId: resolvedUserId ?? null,
+        status: "rejected_below_floor",
+        totalPrice: amountUsd,
+        currency: "USD",
+        providerName: "paddle",
+        purchaseType: "initial_purchase",
+        paddleTransactionId: transactionId,
+        selectedProviderKey: quote?.fallbackChain?.[0]?.k ?? null,
+        fallbackProvidersJson: quote?.fallbackChain ?? null,
+        wholesaleCostUsd: quote?.fallbackChain?.[0]?.w ?? null,
+      }).returning();
+      const { refundRejectedPayment } = await import("./services/rejectedPaymentRefund");
+      await refundRejectedPayment(rejected);
+      await storage.markPaymentEventProcessed(eventId);
+    };
+
     // ── Wholesale price floor guard: never fulfill a below-cost payment ────
-    // Validate the amount Paddle actually collected against the worst-case
-    // wholesale cost + minimum margin for this plan.
-    if (normalizedPlanId) {
-      const { getMaxWholesaleUsd, assertChargeMeetsFloor, PriceFloorError } =
+    // Quote validation above has rechecked one concrete supplier SKU. Do not
+    // broaden this to unrelated offers in the normalized group.
+    if (normalizedPlanId && !quoteFailure) {
+      const { assertChargeMeetsFloor, PriceFloorError } =
         await import("./services/priceFloor");
       try {
-        const wholesale = await getMaxWholesaleUsd(normalizedPlanId);
+        const wholesale = quote?.fallbackChain?.[0]?.w;
         if (wholesale == null) {
-          // Offers were disabled/removed after checkout creation — we no
-          // longer know our cost and cannot fulfill. Reject.
           throw new PriceFloorError(
-            `Paddle transaction ${transactionId}: plan ${normalizedPlanId} has no fulfillable supplier offer.`,
+            `Paddle transaction ${transactionId}: approved quote has no selected wholesale evidence.`,
           );
         }
         if (capturedUsd == null) {
@@ -170,22 +233,17 @@ async function handlePaddleTransactionCompleted(data: any) {
       } catch (floorErr: any) {
         if (floorErr instanceof PriceFloorError) {
           console.error(`[Paddle] REJECTED below-floor payment: ${floorErr.message}`);
-          await (db as any).insert(orders).values({
-            planId: null,
-            normalizedPlanId: normalizedPlanId || null,
-            email,
-            userId: resolvedUserId ?? null,
-            status: "rejected_below_floor",
-            totalPrice: amountUsd,
-            currency: "USD",
-            providerName: "paddle",
-            purchaseType: "initial_purchase",
-          });
-          await storage.markPaymentEventProcessed(eventId);
-          return; // do NOT fulfill — order flagged for manual review/refund
+          await rejectAndRefundPaddlePayment();
+          return;
         }
         throw floorErr;
       }
+    }
+
+    if (quoteFailure) {
+      console.error(`[Paddle] REJECTED quote mismatch: ${quoteFailure}`);
+      await rejectAndRefundPaddlePayment();
+      return;
     }
 
     const { fulfillInitialPurchase } = await import("./services/fulfillment");
@@ -198,10 +256,12 @@ async function handlePaddleTransactionCompleted(data: any) {
       status: "paid",
       totalPrice: amountUsd,
       currency: "USD",
-      providerName: customData.providerKey ?? "paddle",
+      providerName: "paddle",
       purchaseType: "initial_purchase",
-      selectedProviderKey: customData.providerKey ?? null,
-      wholesaleCostUsd: customData.wholesaleCostUsd ? parseFloat(customData.wholesaleCostUsd) : null,
+      paddleTransactionId: transactionId,
+      selectedProviderKey: quote?.fallbackChain?.[0]?.k ?? customData.selectedProviderKey ?? null,
+      fallbackProvidersJson: quote?.fallbackChain ?? null,
+      wholesaleCostUsd: quote?.fallbackChain?.[0]?.w ?? null,
     }).returning();
 
     await storage.markPaymentEventProcessed(eventId);
@@ -254,6 +314,10 @@ app.use((req, res, next) => {
   await registerRoutes(httpServer, app);
 
   const { startProviderSyncScheduler } = await import("./services/providerSync");
+
+  const { startProviderBalanceScheduler } = await import("./services/providerBalance");
+
+  const { startProviderBalanceScheduler } = await import("./services/providerBalance");
   startProviderSyncScheduler();
   const { startProviderBalanceScheduler } = await import("./services/providerBalance");
   // Health is persisted and evaluated fail-closed when unknown, stale, or down.

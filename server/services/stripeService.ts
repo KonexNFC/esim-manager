@@ -23,6 +23,12 @@ import {
   PriceFloorError,
 } from './priceFloor';
 import { refundRejectedPayment } from './rejectedPaymentRefund';
+import {
+  quoteCharge,
+  quoteMatchesCapture,
+  validateCheckoutQuoteOfferSnapshot,
+  type CheckoutQuote,
+} from './checkoutQuote';
 
 // Read targetMarginPercent from settings, defaulting to 0.50 (50%)
 async function getTargetMarginPercent(): Promise<number> {
@@ -315,18 +321,15 @@ export async function createPlanCheckoutSession(
 // ─── Country-plan checkout (uses normalizedPlanId directly) ──────────────────
 
 export interface CountryPlanCheckoutParams {
-  normalizedPlanId: string;
+  quote: CheckoutQuote;
   countryCode: string;
   countryName: string;
   region: string;
   dataLabel: string;
   validityLabel: string;
-  dataAmountGb: number;
-  validityDays: number;
   email: string;
   userId?: string;
   userName?: string;
-  sellPriceGbp?: number; // catalogue-computed price; if provided, charged directly in GBP
 }
 
 export async function createCountryPlanCheckoutSession(
@@ -334,71 +337,18 @@ export async function createCountryPlanCheckoutSession(
 ): Promise<{ url: string; sessionId: string }> {
   const stripe = await getUncachableStripeClient();
   const customerId = await getOrCreateStripeCustomer(params.email, params.userId, params.userName);
+  const quote = params.quote;
+  const charge = quoteCharge(quote);
 
-  // Load the normalized plan to confirm it exists and get data
-  const [np] = await db.select().from(normalizedPlans).where(eq(normalizedPlans.id, params.normalizedPlanId));
-  if (!np) throw new Error(`Normalized plan ${params.normalizedPlanId} not found`);
-
-  // Run routing engine for provider selection (fulfillment), not for pricing
-  const [routing] = await Promise.all([
-    selectBestProviderForPlan(np.id, 'blended_score'),
-  ]);
-  const winner = routing.fallbackChain[0];
-
-  const compactChain: FallbackEntry[] = routing.fallbackChain.map(p => ({
-    r: p.rank,
-    k: p.providerKey,
-    c: p.providerPlanCode,
-    w: p.wholesalePriceUsd,
-  }));
-
-  // ── Wholesale price floor ────────────────────────────────────────────────
-  // The final charge must always clear the WORST-CASE wholesale cost in the
-  // fallback chain (fulfillment may use any provider in it) plus the minimum
-  // margin. The client-supplied catalogue GBP price is only accepted when it
-  // clears the floor; otherwise we charge a server-computed USD price that does.
-  const worstCaseCost = maxChainWholesaleUsd(
-    routing.fallbackChain.map(p => ({ w: p.wholesalePriceUsd })),
-  ) ?? winner.wholesalePriceUsd;
-  const floorUsd = computeFloorUsd(worstCaseCost);
-  const floorGbp = floorUsd * FLOOR_GBP_PER_USD;
-
-  const clientGbpSafe = params.sellPriceGbp != null && params.sellPriceGbp >= floorGbp;
-
-  if (params.sellPriceGbp != null && !clientGbpSafe) {
-    console.warn(
-      `[Stripe] Rejected sellPriceGbp=£${params.sellPriceGbp} for plan ${np.id}` +
-      ` — below wholesale floor £${floorGbp.toFixed(2)}` +
-      ` (wholesale $${winner.wholesalePriceUsd.toFixed(2)}). Using server USD price.`,
-    );
-  }
-
-  // Server USD fallback: stored retail if it clears the floor, else floor rounded up
-  const serverUsd = np.retailPriceUsd >= floorUsd
-    ? np.retailPriceUsd
-    : roundUpTo99(floorUsd);
-
-  const chargeInGbp = clientGbpSafe;
-  const chargeCurrency = chargeInGbp ? 'gbp' : 'usd';
-  const chargeAmount   = chargeInGbp
-    ? Math.round(params.sellPriceGbp! * 100)
-    : Math.round(serverUsd * 100);
-
-  // Final assertion: charge in USD terms must clear the floor. This throws
-  // (aborting session creation) rather than ever creating a below-cost session.
-  const chargeUsdEquivalent = chargeInGbp
-    ? (chargeAmount / 100) / FLOOR_GBP_PER_USD
-    : chargeAmount / 100;
-  assertChargeMeetsFloor(
-    chargeUsdEquivalent,
-    worstCaseCost,
-    `Stripe session for plan ${np.id}`,
-  );
+  // The route has already verified that the signed quote still maps to active
+  // supplier offers. Load the plan only for product metadata.
+  const [np] = await db.select().from(normalizedPlans).where(eq(normalizedPlans.id, quote.normalizedPlanId));
+  if (!np) throw new Error(`Normalized plan ${quote.normalizedPlanId} not found`);
 
   console.log(
-    `[Stripe] createCountryPlanCheckoutSession: plan=${np.id}` +
-    ` charge=${chargeCurrency.toUpperCase()} ${(chargeAmount / 100).toFixed(2)}` +
-    ` provider=${routing.selectedProviderKey}`,
+    `[Stripe] createCountryPlanCheckoutSession: quote=${quote.id} plan=${np.id}` +
+    ` charge=${charge.currency} ${charge.amount.toFixed(2)}` +
+    ` provider=${quote.fallbackChain[0]?.k ?? "none"}`,
   );
 
   const productName = `${params.countryName} eSIM — ${params.dataLabel} · ${params.validityLabel}`;
@@ -409,8 +359,8 @@ export async function createCountryPlanCheckoutSession(
     line_items: [
       {
         price_data: {
-          currency: chargeCurrency,
-          unit_amount: chargeAmount,
+          currency: charge.currency.toLowerCase(),
+          unit_amount: charge.amountMinor,
           product_data: {
             name: productName,
             description: `Konex eSIM plan for ${params.countryName}. ${params.dataLabel} data valid for ${params.validityLabel}.`,
@@ -429,6 +379,7 @@ export async function createCountryPlanCheckoutSession(
     success_url: `${BASE_URL}/checkout-success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${BASE_URL}/destinations/${params.countryCode}`,
     customer_email: customerId ? undefined : params.email,
+    expires_at: Math.floor(quote.expiresAt / 1000),
     metadata: {
       planId: '',   // no legacy planId for normalized-plan purchases
       email: params.email,
@@ -436,22 +387,24 @@ export async function createCountryPlanCheckoutSession(
       userName: params.userName || '',
       destination: params.countryName,
       region: params.region,
-      dataAmountGb: String(params.dataAmountGb),
-      validityDays: String(params.validityDays),
+       dataAmountGb: String(np.isUnlimited ? 0 : np.dataMb / 1024),
+       validityDays: String(np.validityDays),
       purchaseType: 'initial_purchase',
       normalizedPlanId: np.id,
-      routingDecisionId: routing.decisionId,
-      selectedProviderKey: routing.selectedProviderKey,
-      selectedProviderPlanCode: routing.selectedProviderPlanCode,
-      fallbackChainJson: chainJson(compactChain),
-      wholesaleCostUsd: winner.wholesalePriceUsd.toFixed(4),
-      marginPercent: chargeAmount > 0
-        ? (((chargeAmount / 100) - winner.wholesalePriceUsd) / (chargeAmount / 100) * 100).toFixed(2)
+       checkoutQuoteId: quote.id,
+       checkoutQuoteAmountMinor: String(charge.amountMinor),
+       checkoutQuoteCurrency: charge.currency,
+       checkoutSelectedOfferId: quote.selectedOfferId,
+       selectedProviderKey: quote.fallbackChain[0]?.k ?? '',
+       selectedProviderPlanCode: quote.fallbackChain[0]?.c ?? '',
+       fallbackChainJson: chainJson(quote.fallbackChain),
+       wholesaleCostUsd: String(quote.fallbackChain[0]?.w ?? ''),
+       marginPercent: charge.amount > 0
+        ? ((charge.amount - (quote.fallbackChain[0]?.w ?? 0)) / charge.amount * 100).toFixed(2)
         : '0',
-      confidenceScore: String(routing.confidenceScore),
-      confidenceLabel: routing.confidenceLabel,
     },
-    allow_promotion_codes: true,
+    // Discounts would make the captured amount diverge from the approved quote.
+    allow_promotion_codes: false,
   });
 
   return { url: session.url!, sessionId: session.id };
@@ -595,31 +548,49 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
     try { fallbackProvidersJson = JSON.parse(metadata.fallbackChainJson); } catch { /* ignore */ }
   }
 
+  // A hosted payment must still map to the same selected supplier offer and
+  // exactly the signed price at completion. Do not silently reroute to a
+  // broader normalized plan if a supplier sync changed after Checkout opened.
+  let quoteFailure: string | null = null;
+  if (metadata.checkoutQuoteId) {
+    try {
+      await validateCheckoutQuoteOfferSnapshot({
+        normalizedPlanId: metadata.normalizedPlanId,
+        selectedOfferId: metadata.checkoutSelectedOfferId,
+        fallbackChain: fallbackProvidersJson,
+      });
+      if (
+        !quoteMatchesCapture(
+          {
+            amountMinor: Number(metadata.checkoutQuoteAmountMinor),
+            currency: metadata.checkoutQuoteCurrency,
+          },
+          session.amount_total ?? 0,
+          session.currency ?? "",
+        )
+      ) {
+        quoteFailure = "Captured amount or currency differs from the approved checkout quote.";
+      }
+    } catch (error: any) {
+      quoteFailure = error.message || "Checkout quote expired or changed before payment completed.";
+    }
+  }
+
   // ── Wholesale price floor guard: never fulfill a below-floor payment ─────
-  // The amount ACTUALLY paid (after any promotion codes/discounts) must clear
-  // the full cost-plus-margin floor. Costs are RE-QUERIED live at completion
-  // time: supplier prices may have risen (or providers been reprioritized)
-  // between session creation and payment, so checkout-time metadata is kept
-  // for audit but is not authoritative pricing evidence here.
-  // GBP sessions: convert paid amount to USD before comparing with USD cost.
+  // The amount ACTUALLY paid must clear the selected offer's floor. The quote
+  // snapshot above has already revalidated the live selected supplier mapping;
+  // never broaden this to unrelated offers in the normalized group.
   const salePriceUsd = (session.currency || 'usd').toLowerCase() === 'gbp'
     ? salePrice / FLOOR_GBP_PER_USD
     : salePrice;
-  let liveMaxUsd: number | null = null;
-  let liveLookupFailed = false;
-  if (metadata.normalizedPlanId) {
-    try {
-      liveMaxUsd = await getMaxWholesaleUsd(metadata.normalizedPlanId);
-    } catch (err: any) {
-      liveLookupFailed = true;
-      console.error(`[Stripe] Live wholesale lookup failed for plan ${metadata.normalizedPlanId}: ${err.message}`);
-    }
-  }
-  const verdict = evaluateCapturedPayment({
+  const quotedWholesaleUsd = maxChainWholesaleUsd(fallbackProvidersJson);
+  const verdict = quoteFailure
+    ? { ok: false, reason: quoteFailure }
+    : evaluateCapturedPayment({
     paidUsd: salePriceUsd,
     hasNormalizedPlan: !!metadata.normalizedPlanId,
-    liveMaxUsd,
-    liveLookupFailed,
+    liveMaxUsd: quotedWholesaleUsd,
+    liveLookupFailed: quotedWholesaleUsd == null,
     chainMaxUsd: maxChainWholesaleUsd(fallbackProvidersJson),
     metadataCostUsd: providerCost,
   });

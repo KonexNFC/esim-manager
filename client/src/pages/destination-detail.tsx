@@ -934,6 +934,12 @@ interface PublicPlan {
   recommendationRole: string;
   score: number;
   inTargetBand: boolean;
+  quote?: {
+    token: string;
+    amount: number;
+    currency: "USD";
+    expiresAt: string;
+  };
 }
 
 interface DurationData {
@@ -959,8 +965,6 @@ const BUCKET_LABELS: Record<string, string> = {
 const BUCKET_DAYS: Record<string, number> = {
   DAY_1: 1, DAY_3: 3, DAY_5: 5, DAY_7: 7, DAY_14: 14, DAY_30: 30,
 };
-
-const GBP_TO_USD = 1 / 0.79;
 
 // ─── All plans comparison table (legacy use) ──────────────────────────────────
 
@@ -1235,6 +1239,14 @@ function publicPlanTitle(plan: PublicPlan): string {
   return gb >= 1 ? `${Math.round(gb * 10) / 10} GB Data` : `${Math.round(gb * 1024)} MB Data`;
 }
 
+function quoteAmount(plan: PublicPlan): number {
+  return plan.quote?.amount ?? 0;
+}
+
+function quotePrice(plan: PublicPlan): string {
+  return `US$${quoteAmount(plan).toFixed(2)}`;
+}
+
 function travelCopy(plan: PublicPlan, durationDays: number): string {
   if (plan.isUnlimited) {
     if (durationDays <= 1) return "Full-speed data all day — maps, streaming, video calls, no limits.";
@@ -1267,8 +1279,8 @@ function deduplicatePlans(plans: PublicPlan[]): PublicPlan[] {
   const seen = new Map<string, PublicPlan>();
   for (const p of plans) {
     const key = p.isUnlimited
-      ? `unlimited::${p.sellPriceGbp.toFixed(2)}`
-      : `fixed::${(p.dataGb ?? 0).toFixed(3)}::${p.sellPriceGbp.toFixed(2)}`;
+      ? `unlimited::${quoteAmount(p).toFixed(2)}`
+      : `fixed::${(p.dataGb ?? 0).toFixed(3)}::${quoteAmount(p).toFixed(2)}`;
     if (!seen.has(key)) seen.set(key, p);
   }
   return Array.from(seen.values());
@@ -1285,9 +1297,9 @@ function PublicBrowseAll({
 }) {
   if (plans.length === 0) return null;
 
-  const allUnlimited = plans.filter(p => p.isUnlimited).sort((a, b) => a.sellPriceGbp - b.sellPriceGbp);
+  const allUnlimited = plans.filter(p => p.isUnlimited).sort((a, b) => quoteAmount(a) - quoteAmount(b));
   const allFixed = plans.filter(p => !p.isUnlimited && (p.dataGb ?? 0) >= 0.5)
-    .sort((a, b) => (a.dataGb ?? 0) - (b.dataGb ?? 0) || a.sellPriceGbp - b.sellPriceGbp);
+    .sort((a, b) => (a.dataGb ?? 0) - (b.dataGb ?? 0) || quoteAmount(a) - quoteAmount(b));
 
   const unlimited = deduplicatePlans(allUnlimited);
   const fixed = deduplicatePlans(allFixed);
@@ -1311,7 +1323,7 @@ function PublicBrowseAll({
                 </span>
               </div>
               <div className="flex items-center gap-2.5 flex-shrink-0 ml-3">
-                <span className="font-bold text-sm">{fmt(p.sellPriceGbp * GBP_TO_USD)}</span>
+                <span className="font-bold text-sm">{quotePrice(p)}</span>
                 <Button
                   size="sm"
                   variant="outline"
@@ -1367,10 +1379,10 @@ function TravelPlansFlow({
       for (let j = i + 1; j < availBuckets.length; j++) {
         const next = availBuckets[j];
         const nextRec = data.durations[next]?.recommended;
-        if (nextRec && nextRec.sellPriceGbp < curRec.sellPriceGbp) {
+        if (nextRec && quoteAmount(nextRec) < quoteAmount(curRec)) {
           map.set(cur, {
             nextBucket: next,
-            nextPrice: nextRec.sellPriceGbp,
+            nextPrice: quoteAmount(nextRec),
             nextLabel: BUCKET_LABELS[next] ?? next,
           });
           break;
@@ -1396,7 +1408,7 @@ function TravelPlansFlow({
       const gb = plan.isUnlimited ? 0 : Math.round((plan.dataGb ?? 0) * 10) / 10;
       const key = `${gb}::${bucket}`;
       const existing = matrixMap.get(key);
-      if (!existing || plan.sellPriceGbp < existing.sellPriceGbp) {
+      if (!existing || quoteAmount(plan) < quoteAmount(existing)) {
         matrixMap.set(key, plan);
       }
     }
@@ -1466,7 +1478,7 @@ function TravelPlansFlow({
                               className="w-full rounded-md px-1.5 py-1.5 font-semibold text-xs bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors whitespace-nowrap"
                               data-testid={`button-matrix-${gb}-${b}`}
                             >
-                              {isApprox ? "≈" : ""}{fmt(plan.sellPriceGbp * GBP_TO_USD)}
+                              {quotePrice(plan)}
                             </button>
                           ) : (
                             <span className="text-muted-foreground/30 text-xs select-none">—</span>
@@ -1540,7 +1552,7 @@ function TravelPlansFlow({
                       <TrendingUp className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
                       <p className="text-xs text-amber-800 dark:text-amber-300 leading-snug">
                         <span className="font-semibold">Better value tip:</span>{" "}
-                        the {hint.nextLabel} plan costs only {isApprox ? "≈" : ""}{fmt(hint.nextPrice * GBP_TO_USD)} — less than this plan. Consider stepping up.
+                        the {hint.nextLabel} plan costs only US${hint.nextPrice.toFixed(2)} — less than this plan. Consider stepping up.
                       </p>
                     </div>
                   );
@@ -1565,13 +1577,13 @@ function TravelPlansFlow({
                             </span>
                           </div>
                           <span className="text-xs text-muted-foreground">
-                            {isApprox ? "≈ " : ""}£{(rec.sellPriceGbp / days).toFixed(2)}/day
+                            US${(quoteAmount(rec) / days).toFixed(2)}/day
                           </span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2.5 flex-shrink-0">
                         <span className="font-bold text-base tabular-nums">
-                          {isApprox ? "≈" : ""}{fmt(rec.sellPriceGbp * GBP_TO_USD)}
+                          {quotePrice(rec)}
                         </span>
                         <Button
                           size="sm"
@@ -1599,13 +1611,13 @@ function TravelPlansFlow({
                         <div className="min-w-0">
                           <span className="font-medium text-sm text-foreground">{publicPlanTitle(fixedAlt)}</span>
                           <div className="text-xs text-muted-foreground">
-                            Fixed data · {isApprox ? "≈ " : ""}£{(fixedAlt.sellPriceGbp / days).toFixed(2)}/day
+                            Fixed data · US${(quoteAmount(fixedAlt) / days).toFixed(2)}/day
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2.5 flex-shrink-0">
                         <span className="font-semibold text-sm tabular-nums text-muted-foreground">
-                          {isApprox ? "≈" : ""}{fmt(fixedAlt.sellPriceGbp * GBP_TO_USD)}
+                          {quotePrice(fixedAlt)}
                         </span>
                         <Button
                           size="sm"
@@ -1663,7 +1675,7 @@ function TravelPlansFlow({
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0 ml-3">
                                   <span className="font-semibold text-sm tabular-nums">
-                                    {isApprox ? "≈" : ""}{fmt(p.sellPriceGbp * GBP_TO_USD)}
+                                    {quotePrice(p)}
                                   </span>
                                   <Button
                                     size="sm"
@@ -1866,11 +1878,17 @@ function PublicCheckoutModal({
   const [paypalError, setPaypalError] = useState("");
   const paypalContainerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const { fmt, isApprox, currency } = useCurrency();
 
   const { data: me } = useQuery<{ id: string; email: string; name: string } | null>({
     queryKey: ["/api/auth/me"],
   });
+  // Retain the exact quote displayed on the selected plan card. A replacement
+  // quote is never fetched silently; the customer must explicitly refresh it.
+  const [quote, setQuote] = useState<NonNullable<PublicPlan["quote"]> | null>(plan.quote ?? null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(
+    plan.quote ? null : "This plan is no longer available.",
+  );
 
   const { data: checkoutConfig } = useQuery<{
     paypal: { enabled: boolean; clientId: string; sandbox: boolean };
@@ -1881,8 +1899,28 @@ function PublicCheckoutModal({
   const bucketDays = parseInt(plan.bucket.replace("DAY_", ""), 10);
   const dataLabel = publicPlanDataLabel(plan);
   const validityLabel = `${bucketDays} ${bucketDays === 1 ? "Day" : "Days"}`;
-  const priceUsd = parseFloat((plan.sellPriceGbp * GBP_TO_USD).toFixed(2));
   const resolvedEmail = me?.email || email;
+
+  const refreshQuote = async () => {
+    setQuoteLoading(true);
+    try {
+      const res = await fetch("/api/checkout/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerOfferId: plan.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "This plan is no longer available");
+      setQuote(data);
+      setQuoteError(null);
+      setPaypalError("");
+    } catch (err: any) {
+      setQuote(null);
+      setQuoteError(err.message || "This plan is no longer available.");
+    } finally {
+      setQuoteLoading(false);
+    }
+  };
 
   const isEmailValid = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
@@ -1898,7 +1936,7 @@ function PublicCheckoutModal({
 
   // Mount PayPal buttons when step = "pay" and SDK is available
   useEffect(() => {
-    if (step !== "pay" || !checkoutConfig?.paypal.enabled) return;
+    if (step !== "pay" || !checkoutConfig?.paypal.enabled || !quote) return;
     const { clientId, sandbox } = checkoutConfig.paypal;
 
     let cancelled = false;
@@ -1919,16 +1957,18 @@ function PublicCheckoutModal({
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                normalizedPlanId: plan.id,
+                quoteToken: quote.token,
                 countryCode,
                 dataLabel,
                 validityLabel,
-                amountUsd: priceUsd,
                 email: resolvedEmail,
               }),
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.message || "Failed to create order");
+            if (!res.ok) {
+              setQuoteError(data.message || "This quote is no longer available. Refresh the price to continue.");
+              throw new Error(data.message || "Failed to create order");
+            }
             return data.orderId;
           },
           onApprove: async (paypalData: any) => {
@@ -1937,16 +1977,15 @@ function PublicCheckoutModal({
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 paypalOrderId: paypalData.orderID,
-                normalizedPlanId: plan.id,
-                countryCode,
-                dataLabel,
-                validityLabel,
-                amountUsd: priceUsd,
+                quoteToken: quote.token,
                 email: resolvedEmail,
               }),
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.message || "Capture failed");
+            if (!res.ok) {
+              setQuoteError(data.message || "This quote is no longer available. Refresh the price to continue.");
+              throw new Error(data.message || "Capture failed");
+            }
             window.location.href = `/checkout-success?orderId=${data.orderId}&provider=paypal`;
           },
           onError: (err: any) => {
@@ -1962,20 +2001,20 @@ function PublicCheckoutModal({
       });
 
     return () => { cancelled = true; };
-  }, [step, checkoutConfig?.paypal.enabled, checkoutConfig?.paypal.clientId]);
+  }, [step, checkoutConfig?.paypal.enabled, checkoutConfig?.paypal.clientId, quote?.token, resolvedEmail]);
 
   const handlePaddle = async () => {
+    if (!quote) return;
     setPaddleLoading(true);
     try {
       const res = await fetch("/api/checkout/paddle/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          normalizedPlanId: plan.id,
+          quoteToken: quote.token,
           countryCode,
           dataLabel,
           validityLabel,
-          amountUsd: priceUsd,
           email: resolvedEmail,
         }),
       });
@@ -1983,6 +2022,7 @@ function PublicCheckoutModal({
       if (!res.ok) throw new Error(data.message || "Paddle checkout failed");
       window.location.href = data.checkoutUrl;
     } catch (err: any) {
+      setQuoteError(err.message || "This quote is no longer available. Refresh the price to continue.");
       toast({ title: "Paddle checkout failed", description: err.message, variant: "destructive" });
     } finally {
       setPaddleLoading(false);
@@ -1990,30 +2030,29 @@ function PublicCheckoutModal({
   };
 
   const handleStripe = async () => {
+    if (!quote) return;
     setStripeLoading(true);
     try {
       const res = await fetch("/api/checkout/stripe/create-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          normalizedPlanId: plan.normalizedPlanId || plan.id,
+          quoteToken: quote.token,
           countryCode,
           countryName: countryCode,
           region: countryCode,
           dataLabel,
           validityLabel,
-          dataAmountGb: plan.dataGb ?? 0,
-          validityDays: bucketDays,
           email: resolvedEmail,
           userId: me?.id,
           userName: me?.name,
-          sellPriceGbp: plan.sellPriceGbp,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Stripe checkout failed");
       window.location.href = data.sessionUrl;
     } catch (err: any) {
+      setQuoteError(err.message || "This quote is no longer available. Refresh the price to continue.");
       toast({ title: "Checkout failed", description: err.message, variant: "destructive" });
     } finally {
       setStripeLoading(false);
@@ -2053,17 +2092,22 @@ function PublicCheckoutModal({
             <span className="text-muted-foreground">Total</span>
             <div className="text-right">
               <span className="font-bold text-lg" data-testid="text-checkout-price">
-                £{plan.sellPriceGbp.toFixed(2)}
+                {quoteLoading ? "Loading…" : quote ? `US$${quote.amount.toFixed(2)}` : "Unavailable"}
               </span>
-              {isApprox && (
-                <p className="text-[11px] text-muted-foreground">≈ {fmt(priceUsd)} {currency.code}</p>
-              )}
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
             <Lock className="w-3 h-3" />
-            {isApprox ? `Charged in GBP · ${currency.code} shown for reference` : "Charged in GBP"}
+            {quote ? `Charged in ${quote.currency}` : "Checking live availability"}
           </p>
+          {quoteError && (
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-xs text-destructive">{quoteError}</p>
+              <Button type="button" variant="outline" size="sm" onClick={refreshQuote} disabled={quoteLoading}>
+                {quoteLoading ? "Refreshing…" : "Refresh price"}
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Step 1: Email */}
@@ -2092,7 +2136,7 @@ function PublicCheckoutModal({
                 )}
               </div>
             )}
-            <Button type="submit" className="w-full h-11" data-testid="button-continue-to-payment">
+            <Button type="submit" className="w-full h-11" disabled={quoteLoading || !quote} data-testid="button-continue-to-payment">
               Continue to Payment
             </Button>
             <Button type="button" variant="ghost" className="w-full" onClick={onClose}>
@@ -2127,7 +2171,7 @@ function PublicCheckoutModal({
                     <Button
                       className="w-full h-11"
                       onClick={handleStripe}
-                      disabled={stripeLoading}
+                      disabled={stripeLoading || !quote}
                       data-testid="button-stripe-checkout"
                     >
                       {stripeLoading ? (
@@ -2136,7 +2180,7 @@ function PublicCheckoutModal({
                           Redirecting…
                         </span>
                       ) : (
-                        <>Pay £{plan.sellPriceGbp.toFixed(2)}</>
+                        <>Pay {quote ? `US$${quote.amount.toFixed(2)}` : "—"}</>
                       )}
                     </Button>
                   </div>
@@ -2189,10 +2233,10 @@ function PublicCheckoutModal({
                     <Button
                       className="w-full h-11 bg-[#0c2b5e] hover:bg-[#0a2350] text-white"
                       onClick={handlePaddle}
-                      disabled={paddleLoading}
+                      disabled={paddleLoading || !quote}
                       data-testid="button-paddle-checkout"
                     >
-                      {paddleLoading ? "Opening checkout…" : "Pay with Paddle →"}
+                      {paddleLoading ? "Opening checkout…" : quote ? `Pay US$${quote.amount.toFixed(2)} with Paddle →` : "Checking price…"}
                     </Button>
                   </div>
                 )}
