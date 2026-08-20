@@ -6,3 +6,4 @@
 - [Provider balance probes](provider-balance-probes.md) — read-only API calls to check each provider's wallet; keys live in .replit env, not Replit secrets
 - [Wholesale price floor](wholesale-price-floor.md) — every checkout must clear cost+20%/$1.90 via the shared floor service; stored retail_price_usd is mostly 0 and never authoritative
 - [Provider health gating](provider-health-gating.md) — eligibility is fail-closed and canonical across checkout, stored fallbacks, legacy fulfillment, and top-ups
+- [Refund state lifecycle](refund-state-lifecycle.md) — rejected captured payments may be refund-pending; neither pending nor completed refunds may ever fulfill

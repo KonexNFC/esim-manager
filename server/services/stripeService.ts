@@ -22,6 +22,7 @@ import {
   GBP_PER_USD as FLOOR_GBP_PER_USD,
   PriceFloorError,
 } from './priceFloor';
+import { refundRejectedPayment } from './rejectedPaymentRefund';
 
 // Read targetMarginPercent from settings, defaulting to 0.50 (50%)
 async function getTargetMarginPercent(): Promise<number> {
@@ -540,7 +541,12 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
 
   if (existing.length > 0) {
     if (existing[0].status === 'rejected_below_floor') {
-      console.warn(`[Stripe] Session ${session.id} previously rejected below price floor — not fulfilling.`);
+      console.warn(`[Stripe] Session ${session.id} was rejected below price floor — ensuring it is refunded.`);
+      await refundRejectedPayment(existing[0]);
+      return;
+    }
+    if (existing[0].status === 'refunded' || existing[0].status === 'refund_pending') {
+      console.log(`[Stripe] Session ${session.id} has a refund in progress or completed — not fulfilling.`);
       return;
     }
     console.log(`[Stripe] Order already exists for session ${session.id}`);
@@ -622,7 +628,7 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
     console.error(
       `[Stripe] REJECTED payment for session ${session.id}: ${verdict.reason} — NOT fulfilling.`,
     );
-    await db.insert(orders).values({
+    const [rejectedOrder] = await db.insert(orders).values({
       planId: metadata.planId || null,
       email,
       userId: resolvedUserId || null,
@@ -636,8 +642,9 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
       providerName: providerUsed,
       normalizedPlanId: metadata.normalizedPlanId || null,
       wholesaleCostUsd: providerCost > 0 ? providerCost : null,
-    });
-    return; // do NOT fulfill — order flagged for manual review/refund
+    }).returning();
+    await refundRejectedPayment(rejectedOrder);
+    return; // do NOT fulfill — payment was automatically refunded
   }
 
   const [order] = await db.insert(orders).values({

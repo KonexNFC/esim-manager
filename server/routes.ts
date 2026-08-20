@@ -12,6 +12,7 @@ import {
   setAuthCookie, clearAuthCookie, getTokenFromRequest, requireAuth, requireAdmin,
 } from "./auth";
 import { createPayPalOrder, capturePayPalOrder } from "./services/paypalService";
+import { refundRejectedPayment } from "./services/rejectedPaymentRefund";
 import { createPaddleTransaction } from "./services/paddleService";
 import { syncEsimUsage, syncUserEsims, syncAllActiveEsims, runUsageSyncJob, findEsimsLowOnData, findEsimsExpiringSoon, findExpiredEsimsNeedingRenewal } from "./services/usageSync";
 import { getActiveProvider, getProviderAdapterByKey } from "./providers/adapters";
@@ -384,10 +385,19 @@ export async function registerRoutes(
       // ── Idempotency guard ──────────────────────────────────────────────────
       // If we already have an order for this PayPal order ID, return it without
       // capturing again. Prevents duplicate orders from browser retries / double-clicks.
-      const [existing] = await db.select({ id: orders.id, status: orders.status })
+      const [existing] = await db.select()
         .from(orders).where(eq(orders.paypalOrderId, paypalOrderId));
       if (existing) {
         console.log(`[PayPal] Duplicate capture attempt for ${paypalOrderId} — returning existing order ${existing.id}`);
+        if (existing.status === "rejected_below_floor") {
+          const refundStatus = await refundRejectedPayment(existing);
+          return res.status(409).json({
+            message: refundStatus === "refund_pending"
+              ? "This payment was not eligible for fulfillment and its refund is being processed."
+              : "This payment was not eligible for fulfillment and has been automatically refunded.",
+            code: "BELOW_PRICE_FLOOR",
+          });
+        }
         return res.json({ success: true, orderId: existing.id });
       }
 
@@ -412,8 +422,9 @@ export async function registerRoutes(
         } catch (floorErr: any) {
           if (floorErr instanceof PriceFloorError) {
             console.error(`[paypal/capture-order] REJECTED below-floor payment: ${floorErr.message}`);
-            // Record the payment for reconciliation/refund but do NOT fulfill.
-            await (db as any).insert(orders).values({
+            // Record the payment before issuing the refund, so a browser retry
+            // can safely resume an interrupted refund without re-capturing.
+            const [rejectedOrder] = await (db as any).insert(orders).values({
               planId: null,
               normalizedPlanId: normalizedPlanId || null,
               email: captured.payerEmail || email,
@@ -424,9 +435,12 @@ export async function registerRoutes(
               purchaseType: "initial_purchase",
               paypalOrderId: paypalOrderId,
               paypalCaptureId: captured.captureId,
-            });
+            }).returning();
+            const refundStatus = await refundRejectedPayment(rejectedOrder);
             return res.status(409).json({
-              message: "Payment amount did not match the plan price. The order was not fulfilled — please contact support for a refund.",
+              message: refundStatus === "refund_pending"
+                ? "Payment amount did not match the plan price. The order was not fulfilled and its refund is being processed."
+                : "Payment amount did not match the plan price. The order was not fulfilled and has been automatically refunded.",
               code: "BELOW_PRICE_FLOOR",
             });
           }

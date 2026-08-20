@@ -77,6 +77,14 @@ export interface OrderStatusUpdateData {
   message?: string;
 }
 
+export interface PaymentRefundedData {
+  email: string;
+  orderId: string;
+  totalPrice: number;
+  currency: string;
+  refundPending?: boolean;
+}
+
 export interface ProviderWalletLowBalanceData {
   providerName: string;
   balance: number;
@@ -592,6 +600,45 @@ export async function sendOrderStatusUpdate(data: OrderStatusUpdateData): Promis
   `;
 
   await sendEmail(data.email, `Order update: ${data.status}`, lightLayout(content, 'Order Update'));
+}
+
+// ─── Payment Refunded ─────────────────────────────────────────────────────────
+
+export async function sendPaymentRefundedEmail(data: PaymentRefundedData): Promise<void> {
+  const currencySymbol = data.currency === 'GBP' ? '£' : data.currency === 'EUR' ? '€' : '$';
+  const amount = `${currencySymbol}${data.totalPrice.toFixed(2)}`;
+  const title = data.refundPending ? 'Your refund is being processed' : 'Your payment has been refunded';
+  const explanation = data.refundPending
+    ? 'We have requested a full refund, and no eSIM has been activated.'
+    : 'We have issued a full refund, and no eSIM has been activated.';
+  const content = `
+    <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111;">${title}</h2>
+    <p style="margin:0 0 20px;font-size:15px;color:#555;">
+      We were unable to complete your eSIM order because its final payment did not match the current plan price.
+      ${explanation}
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      ${lightInfoRow('Order reference', `#${shortOrderId(data.orderId)}`)}
+      ${lightInfoRow('Refund amount', amount)}
+    </table>
+    <div style="background:#f0faf5;border-radius:8px;padding:16px;margin-bottom:24px;">
+      <p style="margin:0;font-size:14px;color:#065f46;line-height:1.6;">
+        Your payment provider may take a few business days to show the refund in your account.
+      </p>
+    </div>
+    <p style="margin:0;font-size:14px;color:#555;line-height:1.7;">
+      If you have any questions, reply to this email and our team will be happy to help.
+    </p>
+  `;
+
+  const delivered = await sendEmail(
+    data.email,
+    data.refundPending
+      ? 'Your Konex eSIM refund is being processed'
+      : 'Your Konex eSIM payment has been refunded',
+    lightLayout(content, data.refundPending ? 'Refund Processing' : 'Payment Refunded'),
+  );
+  if (!delivered) throw new Error('No email provider accepted the refund notification');
 }
 
 // ─── Payment Failed ───────────────────────────────────────────────────────────

@@ -130,3 +130,35 @@ export async function capturePayPalOrder(orderId: string): Promise<{
     customId: data.purchase_units?.[0]?.custom_id ?? "",
   };
 }
+
+/**
+ * Refund an entire completed capture. The request ID is deterministic so a
+ * retry after a timeout cannot create a second refund for the same capture.
+ */
+export async function refundPayPalCapture(captureId: string): Promise<{
+  refundId: string;
+  status: string;
+}> {
+  if (!captureId) throw new Error("Cannot refund a PayPal payment without a capture ID");
+
+  const token = await getAccessToken();
+  const res = await fetch(
+    `${PAYPAL_BASE}/v2/payments/captures/${encodeURIComponent(captureId)}/refund`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "PayPal-Request-Id": `konex-below-floor-refund-${captureId}`,
+      },
+    },
+  );
+  const data: any = await res.json();
+  if (!res.ok) throw new Error(`PayPal refund failed: ${JSON.stringify(data)}`);
+
+  if (data.status !== "COMPLETED" && data.status !== "PENDING") {
+    throw new Error(`PayPal refund status: ${data.status ?? "unknown"}`);
+  }
+
+  return { refundId: data.id ?? "", status: data.status };
+}
