@@ -1115,7 +1115,7 @@ export async function registerRoutes(
   });
 
   // POST /api/orders — legacy direct order creation (non-Stripe path, kept for admin/testing)
-  app.post("/api/orders", async (req, res) => {
+  app.post("/api/orders", requireAdmin, async (req, res) => {
     try {
       const parsed = insertOrderSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1156,7 +1156,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/orders/:id", async (req, res) => {
+  app.patch("/api/orders/:id", requireAdmin, async (req, res) => {
     try {
       const updated = await storage.updateOrder(req.params.id, req.body);
       if (!updated) return res.status(404).json({ message: "Order not found" });
