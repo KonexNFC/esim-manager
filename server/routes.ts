@@ -354,6 +354,7 @@ export async function registerRoutes(
       const { orderId } = await createPayPalOrder({
         amountUsd: charge.amount,
         description,
+        wholesaleUsd: quote.fallbackChain[0]?.w,
         customId: `quote:${quote.id}`,
         payerName: payerName || undefined,
         payerEmail: email,
@@ -435,12 +436,13 @@ export async function registerRoutes(
       // locks one concrete offer; do not broaden this check to unrelated SKUs
       // in the same normalized group.
       if (quote.normalizedPlanId) {
-        const { assertChargeMeetsFloor, PriceFloorError } =
-          await import("./services/priceFloor");
+        const { assertPayPalCapturedPayment } =
+          await import("./services/paypalService");
+        const { PriceFloorError } = await import("./services/priceFloor");
         try {
           const wholesale = quote.fallbackChain[0]?.w;
           if (wholesale == null) throw new PriceFloorError("Approved quote has no selected wholesale evidence.");
-          assertChargeMeetsFloor(captured.amountUsd, wholesale, `PayPal capture ${paypalOrderId}`);
+          assertPayPalCapturedPayment(captured.amountUsd, wholesale, paypalOrderId);
         } catch (floorErr: any) {
           if (floorErr instanceof PriceFloorError) {
             console.error(`[paypal/capture-order] REJECTED below-floor payment: ${floorErr.message}`);
@@ -532,6 +534,7 @@ export async function registerRoutes(
         amount: charge.amount,
         currency: charge.currency,
         description,
+        wholesaleUsd: quote.fallbackChain[0]?.w,
         email,
         customData: {
           normalizedPlanId: quote.normalizedPlanId,

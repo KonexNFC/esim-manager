@@ -29,7 +29,7 @@ app.post(
       const { getUncachableStripeClient } = await import("./stripeClient");
       const stripe = await getUncachableStripeClient();
 
-      let event: any;
+      const event = JSON.parse(rawBody);
       const sig = req.headers["stripe-signature"] as string;
       const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -116,10 +116,7 @@ async function handlePaddleTransactionCompleted(data: any) {
     // Amount ACTUALLY captured (grand_total/total after all discounts) — never
     // a client value or quote metadata fallback.
     const { paddleCapturedUsd } = await import("./services/priceFloor");
-    const capturedUsd = paddleCapturedUsd(
-      data.details?.totals,
-      null,
-    );
+    const capturedUsd = paddleCapturedUsd(data.details?.totals, null);
     const amountUsd: number = capturedUsd ?? 0;
 
     let normalizedPlanId: string = customData.normalizedPlanId ?? "";
@@ -215,7 +212,7 @@ async function handlePaddleTransactionCompleted(data: any) {
     // Quote validation above has rechecked one concrete supplier SKU. Do not
     // broaden this to unrelated offers in the normalized group.
     if (normalizedPlanId && !quoteFailure) {
-      const { assertChargeMeetsFloor, PriceFloorError } =
+        const { assertPaddleCapturedPayment, PriceFloorError } =
         await import("./services/priceFloor");
       try {
         const wholesale = quote?.fallbackChain?.[0]?.w;
@@ -224,12 +221,11 @@ async function handlePaddleTransactionCompleted(data: any) {
             `Paddle transaction ${transactionId}: approved quote has no selected wholesale evidence.`,
           );
         }
-        if (capturedUsd == null) {
-          throw new PriceFloorError(
-            `Paddle transaction ${transactionId}: could not determine captured amount (unknown totals/currency).`,
+          assertPaddleCapturedPayment(
+            data.details?.totals,
+            wholesale,
+            `Paddle transaction ${transactionId}`,
           );
-        }
-        assertChargeMeetsFloor(amountUsd, wholesale, `Paddle transaction ${transactionId}`);
       } catch (floorErr: any) {
         if (floorErr instanceof PriceFloorError) {
           console.error(`[Paddle] REJECTED below-floor payment: ${floorErr.message}`);

@@ -42,7 +42,7 @@ export function computeFloorUsd(wholesaleUsd: number): number {
 
 /** Round a USD amount UP to the nearest .99 ending (never below the input). */
 export function roundUpTo99(usd: number): number {
-  const cents = Math.round(usd * 100);
+  const cents = Math.ceil(usd * 100);
   const base = Math.floor(cents / 100);
   const candidate = base * 100 + 99;
   return (candidate >= cents ? candidate : candidate + 100) / 100;
@@ -82,8 +82,9 @@ export async function getMaxWholesaleUsd(normalizedPlanId: string): Promise<numb
 export async function resolveSalePriceUsd(
   normalizedPlanId: string,
   storedRetailUsd: number,
+  getWholesaleUsd: (planId: string) => Promise<number | null> = getMaxWholesaleUsd,
 ): Promise<{ priceUsd: number; wholesaleUsd: number; floorUsd: number }> {
-  const wholesaleUsd = await getMaxWholesaleUsd(normalizedPlanId);
+  const wholesaleUsd = await getWholesaleUsd(normalizedPlanId);
   if (wholesaleUsd == null) {
     throw new PriceFloorError(
       `Plan ${normalizedPlanId} has no active supplier offer — cannot price or sell it.`,
@@ -228,4 +229,22 @@ export function assertChargeMeetsFloor(
       `$${floorUsd.toFixed(2)} (wholesale $${wholesaleUsd.toFixed(2)} + min margin).`,
     );
   }
+}
+
+/**
+ * Parse Paddle's final captured amount and verify it against the known
+ * wholesale cost. This is the webhook boundary: subtotal/metadata must not be
+ * substituted when Paddle's captured total is missing or in an unknown currency.
+ */
+export function assertPaddleCapturedPayment(
+  totals: { grand_total?: string | number; total?: string | number; currency_code?: string } | null | undefined,
+  wholesaleUsd: number,
+  context: string,
+): number {
+  const capturedUsd = paddleCapturedUsd(totals, null);
+  if (capturedUsd == null) {
+    throw new PriceFloorError(`${context}: could not determine captured amount.`);
+  }
+  assertChargeMeetsFloor(capturedUsd, wholesaleUsd, context);
+  return capturedUsd;
 }

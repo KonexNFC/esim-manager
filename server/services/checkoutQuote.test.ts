@@ -8,6 +8,12 @@ import {
   type CheckoutQuote,
 } from "./checkoutQuote";
 import { refundPaddleTransaction } from "./paddleService";
+import {
+  assertChargeMeetsFloor,
+  evaluateCapturedPayment,
+  paddleCapturedUsd,
+  PriceFloorError,
+} from "./priceFloor";
 
 const nigeriaUnlimited3DayQuote: CheckoutQuote = {
   version: 1,
@@ -34,6 +40,61 @@ test("captured payment must match the signed quote's exact amount and currency",
   assert.equal(quoteMatchesCapture(nigeriaUnlimited3DayQuote, 1499, "USD"), true);
   assert.equal(quoteMatchesCapture(nigeriaUnlimited3DayQuote, 2999, "USD"), false);
   assert.equal(quoteMatchesCapture(nigeriaUnlimited3DayQuote, 1499, "GBP"), false);
+});
+
+test("PayPal, Paddle, and normalized Stripe session creation reject signed quotes below the floor", () => {
+  // Each of these checkout routes calls quoteCharge after validating the quote:
+  // PayPal /create-order, Paddle /create, and Stripe /create-session.
+  for (const amountMinor of [0, 1, 949]) {
+    const unsafeQuote = { ...nigeriaUnlimited3DayQuote, amountMinor };
+    for (const path of ["PayPal order", "Paddle transaction", "normalized Stripe session"]) {
+      assert.throws(
+        () => quoteCharge(unsafeQuote),
+        PriceFloorError,
+        `${path} creation accepted ${amountMinor}¢ for an $11.92 wholesale offer`,
+      );
+    }
+  }
+});
+
+test("PayPal capture and Paddle webhook amounts reject zero and below-floor payments", () => {
+  const wholesaleUsd = 7.8;
+  for (const amount of [0, 0.01, 9.5]) {
+    assert.throws(
+      () => assertChargeMeetsFloor(amount, wholesaleUsd, "PayPal capture"),
+      PriceFloorError,
+      `PayPal capture accepted $${amount}`,
+    );
+  }
+
+  // The Paddle webhook uses grand_total/total, then asserts that actual capture.
+  for (const total of ["0", "1", "950"]) {
+    const captured = paddleCapturedUsd({ grand_total: total, currency_code: "USD" });
+    assert.throws(
+      () => assertChargeMeetsFloor(captured ?? 0, wholesaleUsd, "Paddle transaction"),
+      PriceFloorError,
+      `Paddle webhook accepted a ${total}¢ capture`,
+    );
+  }
+});
+
+test("legacy and normalized Stripe webhook captures never pass a zero or below-floor payment", () => {
+  for (const paidUsd of [0, 0.01, 9.5]) {
+    const legacy = evaluateCapturedPayment({
+      paidUsd,
+      hasNormalizedPlan: false,
+      chainMaxUsd: 7.8,
+      metadataCostUsd: 7.8,
+    });
+    assert.equal(legacy.ok, false, `legacy Stripe webhook accepted $${paidUsd}`);
+
+    const normalized = evaluateCapturedPayment({
+      paidUsd,
+      hasNormalizedPlan: true,
+      liveMaxUsd: 7.8,
+    });
+    assert.equal(normalized.ok, false, `normalized Stripe webhook accepted $${paidUsd}`);
+  }
 });
 
 test("a selected-offer quote can safely omit a more expensive normalized-plan mapping", () => {

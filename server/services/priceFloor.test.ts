@@ -14,7 +14,9 @@ import {
   assertChargeMeetsFloor,
   maxChainWholesaleUsd,
   resolveGuardWholesaleUsd,
+  resolveSalePriceUsd,
   paddleCapturedUsd,
+  assertPaddleCapturedPayment,
   evaluateCapturedPayment,
   PriceFloorError,
   MIN_MARGIN_PCT,
@@ -35,9 +37,33 @@ test("roundUpTo99 never rounds below the input", () => {
   assert.equal(roundUpTo99(27.99), 27.99);
   assert.equal(roundUpTo99(28.0), 28.99); // the France Unlimited edge case
   assert.equal(roundUpTo99(11.92), 11.99);
-  for (const v of [0.5, 1.99, 2.0, 7.3, 99.98, 100.0]) {
+  for (const v of [0.5, 1.99, 1.9901, 2.0, 7.3, 99.98, 100.0]) {
     assert.ok(roundUpTo99(v) >= v, `roundUpTo99(${v}) rounded down`);
   }
+  assert.equal(roundUpTo99(1.9901), 2.99);
+});
+
+test("resolveSalePriceUsd preserves safe retail prices and raises unsafe ones to a .99 floor", async () => {
+  const lookup = async () => 7.8;
+
+  const raised = await resolveSalePriceUsd("plan-1", 0.01, lookup);
+  assert.deepEqual(raised, {
+    priceUsd: 9.99,
+    wholesaleUsd: 7.8,
+    floorUsd: 9.75,
+  });
+
+  const preserved = await resolveSalePriceUsd("plan-1", 12.5, lookup);
+  assert.deepEqual(preserved, {
+    priceUsd: 12.5,
+    wholesaleUsd: 7.8,
+    floorUsd: 9.75,
+  });
+
+  await assert.rejects(
+    () => resolveSalePriceUsd("missing-plan", 20, async () => null),
+    PriceFloorError,
+  );
 });
 
 test("floor uses worst-case wholesale in a priority-ordered fallback chain", () => {
@@ -133,6 +159,20 @@ test("Paddle captured amount uses discounted total, never subtotal", () => {
   // No totals → metadata fallback only when positive
   assert.equal(paddleCapturedUsd(null, 12.5), 12.5);
   assert.equal(paddleCapturedUsd(null, 0), null);
+});
+
+test("Paddle webhook capture guard rejects missing, zero, and below-floor totals", () => {
+  for (const totals of [
+    null,
+    { grand_total: "0", currency_code: "USD" },
+    { grand_total: "1", currency_code: "USD" },
+    { grand_total: "950", currency_code: "USD" },
+  ]) {
+    assert.throws(
+      () => assertPaddleCapturedPayment(totals, 7.8, "Paddle webhook"),
+      PriceFloorError,
+    );
+  }
 });
 
 test("captured payment evaluation fails closed on missing/failed live offers", () => {

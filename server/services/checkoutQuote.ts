@@ -8,7 +8,13 @@ import { eq } from "drizzle-orm";
 import { db } from "../storage";
 import { normalizedPlans, providerOffers } from "@shared/schema";
 import { getOffersForNormalizedPlan } from "./providerRegistry";
-import { computeFloorUsd, PriceFloorError, roundUpTo99 } from "./priceFloor";
+import {
+  assertChargeMeetsFloor,
+  computeFloorUsd,
+  maxChainWholesaleUsd,
+  PriceFloorError,
+  roundUpTo99,
+} from "./priceFloor";
 import { calculateSellPrice, GBP_RATE } from "../catalogue/pricing-engine";
 import { mapOfferType, normalizeValidityToBucket } from "../catalogue/normalizer";
 
@@ -222,7 +228,13 @@ export async function validateCheckoutQuoteOfferSnapshot(
 }
 
 export function quoteCharge(quote: CheckoutQuote): { amount: number; amountMinor: number; currency: "USD" } {
-  return { amount: quote.amountMinor / 100, amountMinor: quote.amountMinor, currency: quote.currency };
+  const amount = quote.amountMinor / 100;
+  const wholesaleUsd = maxChainWholesaleUsd(quote.fallbackChain);
+  if (wholesaleUsd == null) {
+    throw new PriceFloorError(`Checkout quote ${quote.id} has no wholesale evidence.`);
+  }
+  assertChargeMeetsFloor(amount, wholesaleUsd, `Checkout quote ${quote.id}`);
+  return { amount, amountMinor: quote.amountMinor, currency: quote.currency };
 }
 
 export function quoteMatchesCapture(

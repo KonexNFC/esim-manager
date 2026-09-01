@@ -1,5 +1,7 @@
 // ─── Paddle Billing v2 Service ────────────────────────────────────────────────
 
+import { assertChargeMeetsFloor } from "./priceFloor";
+
 const PADDLE_BASE =
   process.env.PADDLE_SANDBOX === "true"
     ? "https://sandbox-api.paddle.com"
@@ -15,9 +17,17 @@ export async function createPaddleTransaction(params: {
   amount: number;
   currency: string;
   description: string;
+  wholesaleUsd?: number;
   email?: string;
   customData: Record<string, string>;
 }): Promise<{ checkoutUrl: string; transactionId: string }> {
+  if (params.wholesaleUsd != null) {
+    assertChargeMeetsFloor(
+      params.amount,
+      params.wholesaleUsd,
+      `Paddle transaction ${params.customData.quoteToken ?? "creation"}`,
+    );
+  }
   const apiKey = process.env.PADDLE_API_KEY;
   if (!apiKey) throw new Error("PADDLE_API_KEY not configured");
 

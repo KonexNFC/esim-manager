@@ -1,5 +1,7 @@
 // ─── PayPal REST API Service ───────────────────────────────────────────────────
 
+import { assertChargeMeetsFloor } from "./priceFloor";
+
 const PAYPAL_BASE =
   process.env.PAYPAL_SANDBOX === "true"
     ? "https://api-m.sandbox.paypal.com"
@@ -42,11 +44,19 @@ export interface PayPalBillingAddress {
 export async function createPayPalOrder(params: {
   amountUsd: number;
   description: string;
+  wholesaleUsd?: number;
   customId?: string;
   payerName?: string;
   payerEmail?: string;
   billingAddress?: PayPalBillingAddress;
 }): Promise<{ orderId: string }> {
+  if (params.wholesaleUsd != null) {
+    assertChargeMeetsFloor(
+      params.amountUsd,
+      params.wholesaleUsd,
+      `PayPal order ${params.customId ?? "creation"}`,
+    );
+  }
   const token = await getAccessToken();
 
   const payer: Record<string, any> = {};
@@ -100,6 +110,15 @@ export async function createPayPalOrder(params: {
   return { orderId: data.id };
 }
 
+/** Validate a captured PayPal amount after its capture ID is available for refund. */
+export function assertPayPalCapturedPayment(
+  amountUsd: number,
+  wholesaleUsd: number,
+  orderId: string,
+): void {
+  assertChargeMeetsFloor(amountUsd, wholesaleUsd, `PayPal capture ${orderId}`);
+}
+
 export async function capturePayPalOrder(orderId: string): Promise<{
   status: string;
   amountUsd: number;
@@ -121,9 +140,10 @@ export async function capturePayPalOrder(orderId: string): Promise<{
   if (data.status !== "COMPLETED") throw new Error(`PayPal order status: ${data.status}`);
 
   const capture = data.purchase_units?.[0]?.payments?.captures?.[0];
+  const amountUsd = parseFloat(capture?.amount?.value ?? "0");
   return {
     status: data.status,
-    amountUsd: parseFloat(capture?.amount?.value ?? "0"),
+    amountUsd,
     payerEmail: data.payer?.email_address ?? "",
     payerId: data.payer?.payer_id ?? "",
     captureId: capture?.id ?? "",

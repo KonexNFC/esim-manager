@@ -155,6 +155,19 @@ export interface PlanCheckoutParams {
   upsellPrice?: number;
 }
 
+/** Final floor check for the legacy Stripe session path. */
+export function assertLegacyStripeSessionCharge(
+  priceUsd: number,
+  wholesaleUsd: number,
+  planId: string,
+): void {
+  assertChargeMeetsFloor(
+    priceUsd,
+    wholesaleUsd,
+    `Stripe checkout session for plan ${planId}`,
+  );
+}
+
 // ─── Plan checkout ────────────────────────────────────────────────────────────
 
 export async function createPlanCheckoutSession(
@@ -216,6 +229,10 @@ export async function createPlanCheckoutSession(
           ` $${floorUsd.toFixed(2)} — raised to $${finalPriceUsd}`,
         );
       }
+       // Keep an explicit final guard adjacent to the Stripe API call. The
+       // pricing engine can change independently of the shared floor service;
+       // this assertion must reject rather than send Stripe an unsafe amount.
+       assertLegacyStripeSessionCharge(finalPriceUsd, worstCaseCost, params.planId);
 
       // Compact fallback chain for metadata storage
       const compactChain: FallbackEntry[] = routing.fallbackChain.map(p => ({
@@ -312,7 +329,10 @@ export async function createPlanCheckoutSession(
       purchaseType: 'initial_purchase',
       ...routingMetadata,    // routing engine fields (if resolved)
     },
-    allow_promotion_codes: true,
+    // Discounts can make Stripe's final capture fall below the wholesale floor.
+    // This legacy session has no signed quote to constrain a promotion, so do
+    // not offer promotion codes.
+    allow_promotion_codes: false,
   });
 
   return { url: session.url!, sessionId: session.id };
