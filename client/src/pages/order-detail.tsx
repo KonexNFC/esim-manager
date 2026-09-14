@@ -330,14 +330,16 @@ function statusBannerConfig(order: EnrichedOrder) {
       subtitle: "We couldn't issue your eSIM. Our team has been notified — please reply to the confirmation email or contact support with your Order ID for a full refund or re-attempt.",
     };
   }
-  if (s === "fulfilling") {
+  if (s === "fulfilling" || s === "fulfillment_pending" || s === "reconciling") {
     return {
       bg: "from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20",
       iconBg: "bg-blue-500/15 border-blue-500/25",
       icon: Loader2,
       iconColor: "text-blue-500 animate-spin",
       title: "Activating your eSIM…",
-      subtitle: "Your payment was received and your eSIM is being set up. This usually takes under 2 minutes.",
+      subtitle: s === "fulfilling"
+        ? "Your payment was received and your eSIM is being set up. This usually takes under 2 minutes."
+        : "Your provider is still allocating the eSIM. We are checking automatically and will email the QR code as soon as it is ready.",
     };
   }
   if (s === "paid") {
@@ -398,7 +400,12 @@ export default function OrderDetail() {
     refetchInterval: (query) => {
       const o = query.state.data;
       if (!o) return false;
-      if (o.status === "fulfilling" || o.status === "paid") return 10_000;
+      if (
+        o.status === "fulfilling" ||
+        o.status === "paid" ||
+        o.status === "fulfillment_pending" ||
+        o.status === "reconciling"
+      ) return 10_000;
       return false;
     },
   });

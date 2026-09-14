@@ -57,7 +57,7 @@ export const plans = pgTable("plans", {
 });
 
 // ─── ORDERS ──────────────────────────────────────────
-// status: pending | paid | failed | fulfilling | fulfilled | fulfillment_failed | partially_fulfilled | refund_pending | refunded | rejected_below_floor
+// status: pending | paid | failed | fulfilling | fulfillment_pending | reconciling | fulfilled | fulfillment_failed | partially_fulfilled | refund_pending | refunded | rejected_below_floor
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   planId: varchar("plan_id").references(() => plans.id),
@@ -139,14 +139,14 @@ export const settings = pgTable("settings", {
 
 // ─── PROVIDER ATTEMPTS ────────────────────────────────
 // Logs every provider provisioning attempt during fulfillment.
-// status: ok | error | skipped
+// status: ok | error | skipped | pending
 export const providerAttempts = pgTable("provider_attempts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   orderId: varchar("order_id").notNull().references(() => orders.id),
   providerKey: text("provider_key").notNull(),
   providerPlanCode: text("provider_plan_code"),
   attemptNumber: integer("attempt_number").notNull().default(1),
-  status: text("status").notNull().default("pending"), // ok | error | skipped
+  status: text("status").notNull().default("pending"), // ok | error | skipped | pending
   errorMessage: text("error_message"),
   durationMs: integer("duration_ms"),
   createdAt: timestamp("created_at").defaultNow(),

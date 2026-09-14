@@ -94,6 +94,8 @@ export interface ProviderPurchaseParams {
   dataAmountGb: number;
   validityDays: number;
   providerRef?: string;
+  /** Caller-reserved idempotency key for providers with asynchronous purchases. */
+  providerTransactionId?: string;
   customerEmail: string;
 }
 
@@ -108,6 +110,12 @@ export interface ProviderAdapter {
 
   // ── Provisioning ────────────────────────────────────
   purchaseEsim(params: ProviderPurchaseParams, customerContext?: CustomerContext): Promise<EsimProvisionResult>;
+  /**
+   * Check a provider purchase that was already charged but did not finish
+   * before the request timeout. This must never create a second purchase.
+   * Returns null while the provider is still allocating the profile.
+   */
+  reconcilePendingPurchase?(providerEsimId: string, params: ProviderPurchaseParams): Promise<EsimProvisionResult | null>;
   assignExistingEsim?(params: ProviderPurchaseParams, customerContext?: CustomerContext): Promise<EsimProvisionResult>;
 
   // ── Status & Usage ──────────────────────────────────

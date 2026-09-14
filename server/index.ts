@@ -316,6 +316,8 @@ app.use((req, res, next) => {
   // Refresh it in the background so slow supplier APIs cannot block the HTTP
   // listener during an Autoscale cold start.
   startProviderBalanceScheduler();
+  const { startZenditReconciliationScheduler } = await import("./services/fulfillment");
+  startZenditReconciliationScheduler();
 
   // ── Startup recovery: re-trigger orders stuck in "fulfilling" ─────────────
   // These are orders where capture succeeded but the async fulfillment task
@@ -337,7 +339,13 @@ app.use((req, res, next) => {
       const cutoff = new Date(Date.now() - RETRY_WINDOW_MS);
 
       const stuckOrders = await db
-        .select({ id: ordersTable.id, updatedAt: ordersTable.updatedAt, iccid: ordersTable.iccid })
+        .select({
+          id: ordersTable.id,
+          updatedAt: ordersTable.updatedAt,
+          iccid: ordersTable.iccid,
+          providerName: ordersTable.providerName,
+          providerEsimId: ordersTable.providerEsimId,
+        })
         .from(ordersTable)
         .where(eq(ordersTable.status, "fulfilling"));
 
@@ -355,6 +363,17 @@ app.use((req, res, next) => {
           console.log(`[Startup] Order ${order.id} has ICCID ${order.iccid} — marking fulfilled without re-purchase`);
           await db.update(ordersTable)
             .set({ status: "fulfilled", esimStatus: "issued" })
+            .where(eq(ordersTable.id, order.id));
+          continue;
+        }
+
+        // Zendit's transaction ID is persisted before the purchase request.
+        // Its presence means a purchase may already exist, so normal
+        // re-fulfillment is unsafe even after a process restart.
+        if (order.providerName === "zendit" && order.providerEsimId) {
+          console.log(`[Startup] Zendit order ${order.id} has transaction ${order.providerEsimId} — queueing reconciliation`);
+          await db.update(ordersTable)
+            .set({ status: "fulfillment_pending", esimStatus: "pending", updatedAt: new Date() })
             .where(eq(ordersTable.id, order.id));
           continue;
         }

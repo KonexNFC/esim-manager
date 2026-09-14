@@ -13,10 +13,12 @@
 //     → getActiveProvider() (transparent failover adapter, unchanged)
 
 import { db } from '../storage';
+import { randomUUID } from 'node:crypto';
 import { orders, esims, users, topups, plans, destinations, normalizedPlans, providerSyncLogs, providerAttempts, providers } from '@shared/schema';
-import { eq, sql, and, inArray } from 'drizzle-orm';
+import { eq, sql, and, inArray, lt, isNull } from 'drizzle-orm';
 import { getActiveProvider, getProviderAdapterByKey } from '../providers/adapters';
 import type { ProviderAdapter, ProviderPurchaseParams, CustomerContext, EsimProvisionResult } from '../providers/adapters';
+import { ZenditPurchasePendingError } from '../providers/adapters/zendit';
 import {
   sendPurchaseConfirmation, sendEsimReadyEmail, sendTopupConfirmation,
   sendFulfillmentFailedEmail,
@@ -37,6 +39,19 @@ import {
 } from './providerHealth';
 
 const TRANSIENT_RETRY_DELAY_MS = 1500;
+
+type PlanData = {
+  countryCode: string;
+  dataAmountGb: number;
+  validityDays: number;
+  providerRef?: string;
+  providerKey?: string;
+  name: string;
+  destination: string;
+  region: string;
+  dataAmount: string;
+  validity: string;
+};
 
 export function dedupeFallbackChainByProvider<T extends { k: string }>(chain: T[]): T[] {
   const seenKeys = new Set<string>();
@@ -132,7 +147,7 @@ async function logProviderAttempt(
   providerKey: string,
   planCode: string | null,
   attemptNumber: number,
-  status: 'ok' | 'error' | 'skipped',
+  status: 'ok' | 'error' | 'skipped' | 'pending',
   errorMessage?: string,
   durationMs?: number,
 ) {
@@ -147,6 +162,42 @@ async function logProviderAttempt(
       durationMs,
     });
   } catch { /* non-fatal */ }
+}
+
+async function reserveZenditTransaction(orderId: string): Promise<string> {
+  const transactionId = `konex-${randomUUID()}`;
+  const [reserved] = await db.update(orders).set({
+    providerName: 'zendit',
+    providerEsimId: transactionId,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(orders.id, orderId),
+    eq(orders.status, 'fulfilling'),
+    isNull(orders.providerEsimId),
+  )).returning({ providerEsimId: orders.providerEsimId });
+
+  if (reserved?.providerEsimId) return reserved.providerEsimId;
+
+  const [existing] = await db.select({
+    providerName: orders.providerName,
+    providerEsimId: orders.providerEsimId,
+  }).from(orders).where(eq(orders.id, orderId));
+  if (existing?.providerName === 'zendit' && existing.providerEsimId) {
+    return existing.providerEsimId;
+  }
+  throw new Error(`Could not reserve a Zendit transaction ID for order ${orderId}`);
+}
+
+async function clearRejectedZenditTransaction(orderId: string, transactionId: string): Promise<void> {
+  await db.update(orders).set({
+    providerEsimId: null,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(orders.id, orderId),
+    eq(orders.status, 'fulfilling'),
+    eq(orders.providerName, 'zendit'),
+    eq(orders.providerEsimId, transactionId),
+  ));
 }
 
 // ─── Fallback chain executor ──────────────────────────────────────────────────
@@ -194,10 +245,17 @@ async function fulfillWithFallbackChain(
     }
 
     const startMs = Date.now();
+    let purchaseParams: ProviderPurchaseParams = { ...baseParams, providerRef: entry.c };
+    if (canonicalProviderKey(entry.k) === 'zendit') {
+      purchaseParams = {
+        ...purchaseParams,
+        providerTransactionId: await reserveZenditTransaction(orderId),
+      };
+    }
     try {
       console.log(`[Fulfillment] Attempt ${i + 1}/${fallbackChain.length}: ${entry.k} / ${entry.c}`);
       const result = await provider.purchaseEsim(
-        { ...baseParams, providerRef: entry.c },
+        purchaseParams,
         ctx,
       );
       const durationMs = Date.now() - startMs;
@@ -210,6 +268,16 @@ async function fulfillWithFallbackChain(
       return { result, providerName: provider.name, providerKey: entry.k };
     } catch (err: any) {
       const durationMs = Date.now() - startMs;
+      if (err instanceof ZenditPurchasePendingError) {
+        await logProviderAttempt(
+          orderId, entry.k, entry.c, i + 1, 'pending', err.message, durationMs,
+        );
+        console.warn(`[Fulfillment] ${entry.k} purchase is pending reconciliation: ${err.providerEsimId}`);
+        throw err;
+      }
+      if (purchaseParams.providerTransactionId) {
+        await clearRejectedZenditTransaction(orderId, purchaseParams.providerTransactionId);
+      }
       await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'error', err.message, durationMs);
       recordFulfillmentOutcome({
         providerKey: entry.k, destination, outcome: 'failure', isPrimary,
@@ -224,6 +292,205 @@ async function fulfillWithFallbackChain(
   }
 
   throw lastError ?? new Error('All providers in fallback chain failed');
+}
+
+/**
+ * Resolve the customer-facing plan details needed when a previously purchased
+ * provider order is reconciled after the original fulfillment request ended.
+ * This deliberately does not consult live offers: the order must be completed
+ * against the plan that was paid for, not a potentially changed catalogue.
+ */
+async function resolvePlanDataForOrder(order: typeof orders.$inferSelect): Promise<PlanData | null> {
+  if (order.planId) {
+    const [planRow] = await db
+      .select({ plan: plans, dest: destinations })
+      .from(plans)
+      .leftJoin(destinations, eq(plans.destinationId, destinations.id))
+      .where(eq(plans.id, order.planId));
+    if (planRow) {
+      return {
+        countryCode: planRow.dest?.countryCode ?? 'US',
+        dataAmountGb: planRow.plan.dataAmountGb,
+        validityDays: planRow.plan.validityDays,
+        providerRef: planRow.plan.externalPlanCode ?? undefined,
+        providerKey: planRow.plan.provider,
+        name: planRow.plan.name,
+        destination: planRow.dest?.name ?? '',
+        region: planRow.dest?.region ?? '',
+        dataAmount: planRow.plan.dataAmount,
+        validity: planRow.plan.validity,
+      };
+    }
+  }
+
+  if (!order.normalizedPlanId) return null;
+
+  const offerRows = await db.execute<{
+    provider_plan_code: string;
+    region_code: string;
+    validity_days: number;
+    data_mb: number | null;
+    is_unlimited: boolean;
+    name: string;
+  }>(sql`
+    SELECT po.provider_plan_code, np.region_code, np.validity_days,
+           np.data_mb, np.is_unlimited, np.name
+    FROM provider_offers po
+    JOIN normalized_plans np ON np.id = po.normalized_plan_id
+    WHERE po.id = ${order.normalizedPlanId}
+    LIMIT 1
+  `);
+  const offer = offerRows.rows[0];
+  if (offer) {
+    const dataAmountGb = offer.is_unlimited ? 0 : (offer.data_mb ?? 0) / 1024;
+    return {
+      countryCode: offer.region_code,
+      dataAmountGb,
+      validityDays: offer.validity_days,
+      providerRef: offer.provider_plan_code,
+      name: offer.name,
+      destination: offer.region_code,
+      region: '',
+      dataAmount: offer.is_unlimited
+        ? 'Unlimited'
+        : dataAmountGb >= 1
+          ? `${Math.round(dataAmountGb * 10) / 10} GB`
+          : `${offer.data_mb ?? 0} MB`,
+      validity: `${offer.validity_days} Day${offer.validity_days !== 1 ? 's' : ''}`,
+    };
+  }
+
+  const [normalizedPlan] = await db
+    .select()
+    .from(normalizedPlans)
+    .where(eq(normalizedPlans.id, order.normalizedPlanId));
+  if (!normalizedPlan) return null;
+
+  const dataAmountGb = normalizedPlan.isUnlimited ? 0 : normalizedPlan.dataMb / 1024;
+  return {
+    countryCode: normalizedPlan.regionCode,
+    dataAmountGb,
+    validityDays: normalizedPlan.validityDays,
+    name: normalizedPlan.name,
+    destination: normalizedPlan.regionCode,
+    region: '',
+    dataAmount: normalizedPlan.isUnlimited
+      ? 'Unlimited'
+      : dataAmountGb >= 1
+        ? `${Math.round(dataAmountGb * 10) / 10} GB`
+        : `${normalizedPlan.dataMb} MB`,
+    validity: `${normalizedPlan.validityDays} Day${normalizedPlan.validityDays !== 1 ? 's' : ''}`,
+  };
+}
+
+/**
+ * Persist a provider result and send the same customer notifications for both
+ * the normal and reconciliation paths. The caller must have claimed the order
+ * first; the order/provider IDs make the operation auditable and idempotent.
+ */
+async function completeInitialFulfillment(
+  order: typeof orders.$inferSelect,
+  user: typeof users.$inferSelect | null,
+  planData: PlanData,
+  result: EsimProvisionResult,
+  resolvedProviderName: string,
+  resolvedProviderKey: string,
+): Promise<void> {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + planData.validityDays);
+
+  const esimRecord = await db.transaction(async tx => {
+    const [completedOrder] = await tx.update(orders).set({
+      status: 'fulfilled',
+      esimStatus: 'issued',
+      qrCode: result.qrCodeUrl,
+      iccid: result.iccid,
+      providerName: resolvedProviderName,
+      providerEsimId: result.providerEsimId,
+      providerReference: result.activationUrl,
+      activationDate: new Date(),
+      dataTotalMb: result.dataTotalMb,
+      dataUsedMb: result.dataUsedMb,
+      dataRemainingMb: result.dataRemainingMb,
+      daysRemaining: planData.validityDays,
+      expiresAt,
+      lastSyncedAt: new Date(),
+      updatedAt: new Date(),
+      ...(result.apn ? { apn: result.apn } : {}),
+    }).where(and(
+      eq(orders.id, order.id),
+      inArray(orders.status, ['fulfilling', 'reconciling']),
+    )).returning({ id: orders.id });
+
+    // Another worker completed this claim first. Do not insert a duplicate
+    // eSIM or send duplicate customer emails.
+    if (!completedOrder) return null;
+
+    const [existingEsim] = await tx.select().from(esims).where(eq(esims.orderId, order.id));
+    if (existingEsim) return existingEsim;
+
+    return (await tx.insert(esims).values({
+      userId: order.userId ?? undefined,
+      orderId: order.id,
+      planId: order.planId,
+      providerName: resolvedProviderName,
+      providerEsimId: result.providerEsimId,
+      providerIccid: result.iccid,
+      providerReference: result.activationUrl ?? undefined,
+      qrCodeUrl: result.qrCodeUrl,
+      manualCode: result.manualCode ?? undefined,
+      destination: planData.destination,
+      region: planData.region,
+      planName: planData.name,
+      activationStatus: 'issued',
+      dataTotalMb: result.dataTotalMb,
+      dataUsedMb: result.dataUsedMb,
+      dataRemainingMb: result.dataRemainingMb,
+      validityDays: planData.validityDays,
+      daysRemaining: planData.validityDays,
+      expiresAt,
+      lastSyncedAt: new Date(),
+    }).returning())[0];
+  });
+
+  if (!esimRecord) {
+    console.log(`[Fulfillment] Order ${order.id} was already completed by another worker`);
+    return;
+  }
+
+  await logSync(order.id, esimRecord?.id ?? null, 'initial_purchase', resolvedProviderName,
+    `purchaseEsim planId=${order.planId ?? order.normalizedPlanId ?? 'unknown'}`,
+    `iccid=${result.iccid} status=${result.activationStatus}`,
+    'ok');
+
+  // Fire-and-forget notifications. If a process restarts after the DB write,
+  // the eSIM remains issued and the existing order can still be re-sent by
+  // support; email delivery must not roll back fulfillment.
+  sendPurchaseConfirmation({
+    email: order.email, name: user?.name, orderId: order.id,
+    planName: planData.name,
+    destination: planData.destination,
+    dataAmount: planData.dataAmount,
+    validity: planData.validity,
+    totalPrice: order.totalPrice,
+    currency: order.currency,
+  }).catch(console.error);
+
+  sendEsimReadyEmail({
+    email: order.email, name: user?.name, orderId: order.id,
+    qrCodeUrl: result.qrCodeUrl,
+    iccid: result.iccid,
+    destination: planData.destination,
+    manualCode: result.manualCode,
+    planName: planData.name,
+    dataAmount: planData.dataAmount,
+    validity: planData.validity,
+    totalPrice: order.totalPrice,
+    currency: order.currency,
+    paymentMethod: order.paypalOrderId ? 'PayPal' : 'Card',
+  }).catch(console.error);
+
+  console.log(`[Fulfillment] ✓ Order ${order.id} fulfilled via ${resolvedProviderKey} — ICCID: ${result.iccid}`);
 }
 
 // ─── Initial Purchase Fulfillment ─────────────────────────────────────────────
@@ -262,18 +529,6 @@ export async function fulfillInitialPurchase(
   // ── Resolve plan data ──────────────────────────────────────────────────────
   // Legacy orders reference the plans table via planId.
   // Country-plan orders (routing engine) use normalizedPlanId with no legacy planId.
-  type PlanData = {
-    countryCode: string;
-    dataAmountGb: number;
-    validityDays: number;
-    providerRef?: string;
-    providerKey?: string;
-    name: string;
-    destination: string;
-    region: string;
-    dataAmount: string;
-    validity: string;
-  };
   let planData: PlanData | null = null;
 
   if (order.planId) {
@@ -502,7 +757,13 @@ export async function fulfillInitialPurchase(
       }
       const startMs = Date.now();
       try {
-        result = await provider.purchaseEsim(legacyParams, ctx);
+        const providerParams = providerKey === 'zendit'
+          ? {
+              ...legacyParams,
+              providerTransactionId: await reserveZenditTransaction(orderId),
+            }
+          : legacyParams;
+        result = await provider.purchaseEsim(providerParams, ctx);
         const durationMs = Date.now() - startMs;
         await logProviderAttempt(orderId, provider.name, legacyParams.providerRef ?? null, 1, 'ok', undefined, durationMs);
         recordFulfillmentOutcome({
@@ -524,83 +785,39 @@ export async function fulfillInitialPurchase(
       resolvedProviderKey = providerKey;
     }
 
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + planData.validityDays);
-
-    // ── Update order record ────────────────────────────────────────────────
-    await db.update(orders).set({
-      status: 'fulfilled',
-      esimStatus: 'issued',
-      qrCode: result.qrCodeUrl,
-      iccid: result.iccid,
-      providerName: resolvedProviderName,
-      providerEsimId: result.providerEsimId,
-      activationDate: new Date(),
-      dataTotalMb: result.dataTotalMb,
-      dataUsedMb: result.dataUsedMb,
-      dataRemainingMb: result.dataRemainingMb,
-      daysRemaining: planData.validityDays,
-      expiresAt,
-      lastSyncedAt: new Date(),
-      ...(result.apn ? { apn: result.apn } : {}),
-    }).where(eq(orders.id, orderId));
-
-    // ── Create eSIM entity ─────────────────────────────────────────────────
-    const [esimRecord] = await db.insert(esims).values({
-      userId: order.userId ?? undefined,
-      orderId: order.id,
-      planId: order.planId,
-      providerName: resolvedProviderName,
-      providerEsimId: result.providerEsimId,
-      providerIccid: result.iccid,
-      providerReference: result.activationUrl ?? undefined,
-      qrCodeUrl: result.qrCodeUrl,
-      manualCode: result.manualCode ?? undefined,
-      destination: planData.destination,
-      region: planData.region,
-      planName: planData.name,
-      activationStatus: 'issued',
-      dataTotalMb: result.dataTotalMb,
-      dataUsedMb: result.dataUsedMb,
-      dataRemainingMb: result.dataRemainingMb,
-      validityDays: planData.validityDays,
-      daysRemaining: planData.validityDays,
-      expiresAt,
-      lastSyncedAt: new Date(),
-    }).returning();
-
-    await logSync(orderId, esimRecord?.id ?? null, 'initial_purchase', resolvedProviderName,
-      `purchaseEsim planId=${order.planId}`,
-      `iccid=${result.iccid} status=${result.activationStatus}`,
-      'ok');
-
-    // Fire-and-forget notifications
-    sendPurchaseConfirmation({
-      email: order.email, name: user?.name, orderId,
-      planName: planData.name,
-      destination: planData.destination,
-      dataAmount: planData.dataAmount,
-      validity: planData.validity,
-      totalPrice: order.totalPrice,
-      currency: order.currency,
-    }).catch(console.error);
-
-    sendEsimReadyEmail({
-      email: order.email, name: user?.name, orderId,
-      qrCodeUrl: result.qrCodeUrl,
-      iccid: result.iccid,
-      destination: planData.destination,
-      manualCode: result.manualCode,
-      planName: planData.name,
-      dataAmount: planData.dataAmount,
-      validity: planData.validity,
-      totalPrice: order.totalPrice,
-      currency: order.currency,
-      paymentMethod: order.paypalOrderId ? 'PayPal' : 'Card',
-    }).catch(console.error);
-
-    console.log(`[Fulfillment] ✓ Order ${orderId} fulfilled via ${resolvedProviderKey} — ICCID: ${result.iccid}`);
+    await completeInitialFulfillment(
+      order,
+      user,
+      planData,
+      result,
+      resolvedProviderName,
+      resolvedProviderKey,
+    );
   } catch (err: any) {
+    if (err instanceof ZenditPurchasePendingError) {
+      console.warn(
+        `[Fulfillment] Zendit purchase ${err.providerEsimId} for ${orderId} is pending allocation`,
+      );
+      await db.update(orders).set({
+        status: 'fulfillment_pending',
+        esimStatus: 'pending',
+        providerName: 'zendit',
+        providerEsimId: err.providerEsimId,
+        lastSyncedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(orders.id, orderId));
+      await logSync(
+        orderId,
+        null,
+        'initial_purchase_pending',
+        'zendit',
+        `reconcile transactionId=${err.providerEsimId}`,
+        err.message,
+        'ok',
+      );
+      return;
+    }
+
     const isTransient = isTransientError(err);
     if (isTransient) {
       console.warn(`[Fulfillment] Transient error for ${orderId}, retrying in ${TRANSIENT_RETRY_DELAY_MS}ms…`);
@@ -622,6 +839,160 @@ export async function fulfillInitialPurchase(
       `purchaseEsim orderId=${orderId}`, err.message, 'error');
     throw err;
   }
+}
+
+// ─── Zendit delayed-allocation reconciliation ────────────────────────────────
+
+/**
+ * Reconcile one Zendit transaction that has already been purchased. The order
+ * status is used as a database-backed claim so concurrent scheduler ticks or
+ * multiple app instances cannot process the same pending allocation together.
+ */
+export async function reconcilePendingZenditOrder(orderId: string): Promise<boolean> {
+  const [claimed] = await db
+    .update(orders)
+    .set({ status: 'reconciling', updatedAt: new Date() })
+    .where(and(
+      eq(orders.id, orderId),
+      eq(orders.status, 'fulfillment_pending'),
+    ))
+    .returning();
+
+  if (!claimed) return false;
+
+  try {
+    if (!claimed.providerEsimId) {
+      throw new Error(`Pending Zendit order ${orderId} has no transaction ID`);
+    }
+
+    const provider = getProviderAdapterByKey('zendit');
+    if (!provider?.reconcilePendingPurchase) {
+      throw new Error('Zendit reconciliation adapter is unavailable');
+    }
+
+    const planData = await resolvePlanDataForOrder(claimed);
+    if (!planData) {
+      throw new Error(`Plan data not found for pending Zendit order ${orderId}`);
+    }
+
+    const result = await provider.reconcilePendingPurchase(claimed.providerEsimId, {
+      planId: claimed.planId ?? undefined,
+      countryCode: planData.countryCode,
+      dataAmountGb: planData.dataAmountGb,
+      validityDays: planData.validityDays,
+      providerRef: planData.providerRef,
+      customerEmail: claimed.email,
+    });
+
+    if (!result) {
+      await db.update(orders).set({
+        status: 'fulfillment_pending',
+        esimStatus: 'pending',
+        lastSyncedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(and(eq(orders.id, orderId), eq(orders.status, 'reconciling')));
+      return false;
+    }
+
+    const user = claimed.userId
+      ? (await db.select().from(users).where(eq(users.id, claimed.userId)))[0] ?? null
+      : null;
+
+    await completeInitialFulfillment(
+      claimed,
+      user,
+      planData,
+      result,
+      'zendit',
+      'zendit',
+    );
+    await logSync(
+      orderId,
+      null,
+      'initial_purchase_reconciled',
+      'zendit',
+      `reconcile transactionId=${claimed.providerEsimId}`,
+      `iccid=${result.iccid} status=${result.activationStatus}`,
+      'ok',
+    );
+    recordFulfillmentOutcome({
+      providerKey: 'zendit',
+      destination: planData.countryCode,
+      outcome: 'success',
+      isPrimary: true,
+      marginPercent: claimed.marginPercent ?? undefined,
+    }).catch(() => {});
+    return true;
+  } catch (err: any) {
+    // Supplier/network errors are not proof that the already-paid purchase
+    // failed. Put it back in the pending queue instead of buying again or
+    // presenting a terminal failure to the customer.
+    await db.update(orders).set({
+      status: 'fulfillment_pending',
+      esimStatus: 'pending',
+      lastSyncedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(and(eq(orders.id, orderId), eq(orders.status, 'reconciling')));
+    await logSync(
+      orderId,
+      null,
+      'initial_purchase_reconcile',
+      'zendit',
+      `reconcile orderId=${orderId}`,
+      err.message,
+      'error',
+    );
+    throw err;
+  }
+}
+
+let zenditReconciliationRunning = false;
+
+export async function runZenditReconciliationJob(): Promise<void> {
+  if (zenditReconciliationRunning) return;
+  zenditReconciliationRunning = true;
+  try {
+    // Recover a claim left behind by a process restart. Normal Zendit API
+    // calls are capped at 15 seconds, so two minutes safely distinguishes a
+    // dead worker from one still reconciling.
+    const staleClaimCutoff = new Date(Date.now() - 2 * 60_000);
+    await db.update(orders).set({
+      status: 'fulfillment_pending',
+      updatedAt: new Date(),
+    }).where(and(
+      eq(orders.providerName, 'zendit'),
+      eq(orders.status, 'reconciling'),
+      lt(orders.updatedAt, staleClaimCutoff),
+    ));
+
+    const pendingOrders = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(and(
+        eq(orders.providerName, 'zendit'),
+        eq(orders.status, 'fulfillment_pending'),
+      ));
+
+    for (const pending of pendingOrders) {
+      try {
+        const completed = await reconcilePendingZenditOrder(pending.id);
+        if (completed) {
+          console.log(`[Fulfillment] Reconciled delayed Zendit order ${pending.id}`);
+        }
+      } catch (err: any) {
+        console.warn(`[Fulfillment] Zendit reconciliation failed for ${pending.id}: ${err.message}`);
+      }
+    }
+  } finally {
+    zenditReconciliationRunning = false;
+  }
+}
+
+export function startZenditReconciliationScheduler(): void {
+  const INITIAL_DELAY_MS = 15_000;
+  const INTERVAL_MS = 60_000;
+  setTimeout(() => void runZenditReconciliationJob(), INITIAL_DELAY_MS);
+  setInterval(() => void runZenditReconciliationJob(), INTERVAL_MS);
 }
 
 // ─── Failure handler ──────────────────────────────────────────────────────────

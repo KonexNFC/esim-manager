@@ -9,7 +9,6 @@
 // The actual ICCID from confirmation is stored separately as the customer-
 // facing identifier.
 
-import crypto from 'crypto';
 import type {
   ProviderAdapter, ProviderPurchaseParams, CustomerContext,
   EsimProvisionResult, EsimStatusResult, EsimUsageResult,
@@ -49,6 +48,35 @@ interface ZenditQrCodeResponse {
   qrCode?: string;
 }
 
+/** Zendit may have accepted this transaction; it must only be reconciled. */
+export class ZenditPurchasePendingError extends Error {
+  readonly providerEsimId: string;
+
+  constructor(providerEsimId: string, message: string) {
+    super(message);
+    this.name = 'ZenditPurchasePendingError';
+    this.providerEsimId = providerEsimId;
+  }
+}
+
+export class ZenditAllocationPendingError extends ZenditPurchasePendingError {
+  constructor(providerEsimId: string) {
+    super(providerEsimId, `Zendit purchase ${providerEsimId} placed but no profile allocated within 100 s`);
+    this.name = 'ZenditAllocationPendingError';
+  }
+}
+
+class ZenditHttpError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = 'ZenditHttpError';
+  }
+}
+
+function isAllocated(detail: ZenditPurchaseDetail): boolean {
+  return Boolean(detail.confirmation?.smdpAddress && detail.confirmation?.activationCode);
+}
+
 export class ZenditAdapter implements ProviderAdapter {
   name = 'zendit';
   private apiKey: string;
@@ -72,15 +100,23 @@ export class ZenditAdapter implements ProviderAdapter {
     path: string,
     body?: Record<string, unknown>,
   ): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method,
-      headers: this.headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers: this.headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`Zendit ${res.status} ${path}: ${text.slice(0, 300)}`);
+      throw new ZenditHttpError(res.status, `Zendit ${res.status} ${path}: ${text.slice(0, 300)}`);
     }
 
     return res.json() as Promise<T>;
@@ -102,21 +138,37 @@ export class ZenditAdapter implements ProviderAdapter {
       throw new Error('Zendit requires an offerId (providerRef) to purchase — spec-based lookup not supported');
     }
 
-    const transactionId = `konex-${crypto.randomUUID()}`;
+    if (!params.providerTransactionId) {
+      throw new Error('Zendit requires a caller-reserved providerTransactionId');
+    }
+    const transactionId = params.providerTransactionId;
     console.log(`[zendit] Placing order offerId="${params.providerRef}" txn=${transactionId}`);
 
-    await this.req<unknown>('POST', '/esim/purchases', {
-      offerId: params.providerRef,
-      transactionId,
-    });
+    try {
+      await this.req<unknown>('POST', '/esim/purchases', {
+        offerId: params.providerRef,
+        transactionId,
+      });
+    } catch (err: any) {
+      // A 4xx response definitively rejects the request. A timeout/network/5xx
+      // response is ambiguous: Zendit may have committed the purchase before
+      // the response was lost, so only reconciliation is safe.
+      if (err instanceof ZenditHttpError && err.status >= 400 && err.status < 500) {
+        throw err;
+      }
+      throw new ZenditPurchasePendingError(
+        transactionId,
+        `Zendit purchase ${transactionId} has an uncertain response and requires reconciliation: ${err.message}`,
+      );
+    }
 
-    // Poll up to 20×5 s = 100 s for profile allocation
+    // Poll up to 20×5 s = 100 s for profile allocation.
     let detail: ZenditPurchaseDetail | null = null;
     for (let attempt = 0; attempt < 20; attempt++) {
       await new Promise(r => setTimeout(r, 5_000));
       try {
         const d = await this.req<ZenditPurchaseDetail>('GET', `/esim/purchases/${transactionId}`);
-        if (d.confirmation?.iccid || d.confirmation?.activationCode) {
+        if (isAllocated(d)) {
           detail = d;
           break;
         }
@@ -126,15 +178,48 @@ export class ZenditAdapter implements ProviderAdapter {
     }
 
     if (!detail?.confirmation?.smdpAddress || !detail?.confirmation?.activationCode) {
-      throw new Error(`Zendit purchase ${transactionId} placed but no profile allocated within 100 s`);
+      // The POST has already charged the Zendit wallet. Preserve the
+      // transaction ID so a background reconciler can finish this purchase
+      // without issuing another wholesale order.
+      throw new ZenditAllocationPendingError(transactionId);
     }
 
-    const { iccid, smdpAddress, activationCode } = detail.confirmation;
+    return this.buildProvisionResult(transactionId, detail, params);
+  }
+
+  /**
+   * Re-check an already-created Zendit purchase. A null result means Zendit
+   * still has not allocated the profile; importantly, this method never POSTs.
+   */
+  async reconcilePendingPurchase(
+    providerEsimId: string,
+    params: ProviderPurchaseParams,
+  ): Promise<EsimProvisionResult | null> {
+    const detail = await this.req<ZenditPurchaseDetail>(
+      'GET',
+      `/esim/purchases/${encodeURIComponent(providerEsimId)}`,
+    );
+    if (!isAllocated(detail)) return null;
+    return this.buildProvisionResult(providerEsimId, detail, params);
+  }
+
+  private async buildProvisionResult(
+    transactionId: string,
+    detail: ZenditPurchaseDetail,
+    params: ProviderPurchaseParams,
+  ): Promise<EsimProvisionResult> {
+    const { iccid, smdpAddress, activationCode } = detail.confirmation ?? {};
+    if (!smdpAddress || !activationCode) {
+      throw new Error(`Zendit purchase ${transactionId} has an incomplete profile allocation`);
+    }
     const activationUrl = `LPA:1$${smdpAddress}$${activationCode}`;
 
     let qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(activationUrl)}`;
     try {
-      const qrResp = await this.req<ZenditQrCodeResponse>('GET', `/esim/purchases/${transactionId}/qrcode`);
+      const qrResp = await this.req<ZenditQrCodeResponse>(
+        'GET',
+        `/esim/purchases/${encodeURIComponent(transactionId)}/qrcode`,
+      );
       if (qrResp.qrCode) qrCodeUrl = qrResp.qrCode;
     } catch {
       // Fall back to generated QR code URL

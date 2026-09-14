@@ -244,7 +244,11 @@ export default function CheckoutSuccess() {
   const order = orderById ?? orderBySession;
 
   const isFulfilled = order?.status === "fulfilled";
-  const isFulfilling = order?.status === "fulfilling" || order?.status === "paid";
+  const isFulfilling =
+    order?.status === "fulfilling" ||
+    order?.status === "paid" ||
+    order?.status === "fulfillment_pending" ||
+    order?.status === "reconciling";
   const isFailed = order?.status === "fulfillment_failed";
   const isTimedOut = !order && !pollingEnabled && pollAttempts.current >= POLL_MAX_ATTEMPTS;
 

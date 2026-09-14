@@ -1400,7 +1400,11 @@ export async function registerRoutes(
       // All orders including pending/failed — for the total order counter
       const totalOrdersAll = allOrders.length;
       const pendingOrders = allOrders.filter(o =>
-        o.status === 'pending' || o.status === 'paid' || o.status === 'fulfilling'
+        o.status === 'pending' ||
+        o.status === 'paid' ||
+        o.status === 'fulfilling' ||
+        o.status === 'fulfillment_pending' ||
+        o.status === 'reconciling'
       ).length;
 
       // Build per-order profit entries (include planId/planName for plan-level aggregation)
@@ -2000,13 +2004,37 @@ export async function registerRoutes(
       const { orders } = await import("@shared/schema");
       const { eq } = await import("drizzle-orm");
 
-      const [order] = await db.select({ id: orders.id, status: orders.status })
+      const [order] = await db.select({
+        id: orders.id,
+        status: orders.status,
+        providerName: orders.providerName,
+        providerEsimId: orders.providerEsimId,
+      })
         .from(orders).where(eq(orders.id, orderId));
 
       if (!order) return res.status(404).json({ message: "Order not found" });
 
       if (order.status === "fulfilled") {
         return res.status(409).json({ message: "Order is already fulfilled" });
+      }
+
+      if (
+        order.status === "fulfillment_pending" ||
+        order.status === "reconciling" ||
+        (order.providerName === "zendit" && Boolean(order.providerEsimId))
+      ) {
+        await db.update(orders)
+          .set({ status: "fulfillment_pending", esimStatus: "pending", updatedAt: new Date() })
+          .where(eq(orders.id, orderId));
+        const { reconcilePendingZenditOrder } = await import("./services/fulfillment");
+        reconcilePendingZenditOrder(orderId).catch(err =>
+          console.error(`[Admin] Zendit reconciliation failed for ${orderId}:`, err.message)
+        );
+        return res.json({
+          message: "Existing Zendit purchase queued for reconciliation",
+          orderId,
+          providerKey: "zendit",
+        });
       }
 
       // Reset to paid so fulfillment picks it up

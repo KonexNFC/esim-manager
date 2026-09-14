@@ -1475,6 +1475,8 @@ function OrdersTab() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="fulfillment_pending">Awaiting provider</SelectItem>
+                  <SelectItem value="reconciling">Reconciling</SelectItem>
                   <SelectItem value="completed">Paid</SelectItem>
                   <SelectItem value="fulfilled">Fulfilled</SelectItem>
                   <SelectItem value="refunded">Refunded</SelectItem>

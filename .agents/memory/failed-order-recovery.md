@@ -14,3 +14,10 @@ description: How to act on production orders from the workspace, and the recurri
 3. **Zendit async allocation timeout** — "placed but no profile allocated within 100 s" treated as terminal failure with no later reconciliation; the wholesale purchase may still complete, so money can be spent with no eSIM delivered and no retry.
 
 **How to apply:** any fix to stop new fulfillment failures should target these three; re-fulfilling months-old orders is usually wrong (stale travel dates) — refund instead.
+
+## Asynchronous supplier purchase rule
+Reserve and persist the supplier transaction/idempotency ID before sending any purchase request whose response can be delayed or lost. Once that ID exists, every timeout, restart, and manual retry must reconcile the same transaction and must never issue a new purchase.
+
+**Why:** persisting only after an allocation timeout still leaves a crash or lost-response window where startup recovery can charge the supplier twice.
+
+**How to apply:** treat network errors and 5xx responses after submission as uncertain, not rejected; only a definitive client rejection may clear the reservation and continue to another supplier.
