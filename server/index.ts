@@ -29,7 +29,7 @@ app.post(
       const { getUncachableStripeClient } = await import("./stripeClient");
       const stripe = await getUncachableStripeClient();
 
-      const event = JSON.parse(rawBody);
+      let event: import("stripe").default.Event;
       const sig = req.headers["stripe-signature"] as string;
       const secret = process.env.STRIPE_WEBHOOK_SECRET;
 

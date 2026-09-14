@@ -1158,7 +1158,11 @@ export async function registerRoutes(
 
   app.patch("/api/orders/:id", requireAdmin, async (req, res) => {
     try {
-      const updated = await storage.updateOrder(req.params.id, req.body);
+      const id = req.params.id;
+      if (typeof id !== "string") {
+        return res.status(400).json({ message: "Invalid order ID" });
+      }
+      const updated = await storage.updateOrder(id, req.body);
       if (!updated) return res.status(404).json({ message: "Order not found" });
       res.json(updated);
     } catch (error) {
