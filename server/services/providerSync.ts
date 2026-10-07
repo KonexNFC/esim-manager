@@ -7,7 +7,8 @@
 //   2. eSIMGo  → getAllCataloguePlans() (single API call, all regions)
 //   3. eSIM Access → getAllPackages(countryCodes) (batched per country)
 //   4. For each provider plan: upsert normalizedPlan + providerOffer
-//   5. For each internal plan: find cheapest matching offer, update cost+provider
+//   5. For each internal plan: use routing policy to update its maintained
+//      supplier cost/provider identity
 //   6. Record everything in `provider_sync_runs`
 
 import { eq, and, sql } from "drizzle-orm";
@@ -28,6 +29,8 @@ import { zendit } from "../providers/zendit";
 import { airalo } from "../providers/airalo";
 import { quantizeDataMb, formatPlanName } from "./planNormalizer";
 import { computeFloorUsd, roundUpTo99 } from "./priceFloor";
+import { selectBestProviderForPlan } from "./routingEngine";
+import { canonicalProviderKey } from "./providerHealth";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -273,7 +276,7 @@ async function backfillNormalizedPlanRetailPrices(): Promise<{ plansUpdated: num
   return { plansUpdated };
 }
 
-/** For each internal plan, find the cheapest matching providerOffer and update plan cost+provider. */
+/** Maintain legacy plan metadata from the common routing policy, never price order. */
 async function autoUpdateInternalPlanCosts(): Promise<{ plansUpdated: number; priceChanges: number }> {
   const rows = await db
     .select({ plan: plans, dest: destinations })
@@ -305,27 +308,38 @@ async function autoUpdateInternalPlanCosts(): Promise<{ plansUpdated: number; pr
 
     if (!normPlan) continue;
 
-    const offers = await db
-      .select({ providerKey: providerOffers.providerKey, wholesalePriceUsd: providerOffers.wholesalePriceUsd })
-      .from(providerOffers)
-      .where(
-        and(
-          eq(providerOffers.normalizedPlanId, normPlan.id),
-          eq(providerOffers.isActive, true),
-        ),
+    let routing: Awaited<ReturnType<typeof selectBestProviderForPlan>>;
+    try {
+      routing = await selectBestProviderForPlan(normPlan.id, "blended_score");
+    } catch (err: any) {
+      // A catalogue sync can legitimately encounter a normalized product with
+      // no currently eligible supplier. Keep syncing every other plan and
+      // leave this legacy plan untouched rather than aborting the whole run.
+      console.warn(
+        `[providerSync] Skipping legacy plan ${plan.id}: routing unavailable for ${normPlan.id}: ${err?.message ?? err}`,
       );
+      continue;
+    }
+    const winner = routing.fallbackChain[0];
+    if (!winner) {
+      console.warn(
+        `[providerSync] Skipping legacy plan ${plan.id}: routing returned no eligible supplier for ${normPlan.id}`,
+      );
+      continue;
+    }
 
-    if (offers.length === 0) continue;
+    const costDiff = Math.abs((plan.wholesaleCost ?? 0) - winner.wholesalePriceUsd);
+    const providerDiff = canonicalProviderKey(plan.provider) !== canonicalProviderKey(winner.providerKey);
+    const skuDiff = plan.externalPlanCode !== winner.providerPlanCode;
 
-    const cheapest = offers.reduce((a, b) => (a.wholesalePriceUsd < b.wholesalePriceUsd ? a : b));
-
-    const costDiff = Math.abs((plan.wholesaleCost ?? 0) - cheapest.wholesalePriceUsd);
-    const providerDiff = plan.provider !== cheapest.providerKey;
-
-    if (costDiff > 0.0001 || providerDiff) {
+    if (costDiff > 0.0001 || providerDiff || skuDiff) {
       await db
         .update(plans)
-        .set({ wholesaleCost: cheapest.wholesalePriceUsd, provider: cheapest.providerKey })
+        .set({
+          wholesaleCost: winner.wholesalePriceUsd,
+          provider: winner.providerKey,
+          externalPlanCode: winner.providerPlanCode,
+        })
         .where(eq(plans.id, plan.id));
       plansUpdated++;
       if (costDiff > 0.0001) priceChanges++;
@@ -343,14 +357,20 @@ async function autoUpdateInternalPlanCosts(): Promise<{ plansUpdated: number; pr
 export async function syncAllProviders(
   triggeredBy: "auto" | "manual" = "auto",
 ): Promise<SyncSummary> {
-  // Guard: skip if a sync is already in progress (e.g. previous run took >30 min)
-  if (_syncRunning && triggeredBy === "auto") {
-    console.warn("[providerSync] Previous sync still running — skipping this scheduled run to avoid overlap");
+  const result = await withProviderSyncLock(
+    triggeredBy,
+    () => syncAllProvidersInternal(triggeredBy),
+  );
+  if (result === null) {
     return { status: "skipped", totalOffersUpserted: 0, plansUpdated: 0, durationMs: 0, errors: [] } as any;
   }
-  _syncRunning = true;
-  const startedAt = Date.now();
+  return result;
+}
 
+async function syncAllProvidersInternal(
+  triggeredBy: "auto" | "manual",
+): Promise<SyncSummary> {
+  const startedAt = Date.now();
   const [logRow] = await db
     .insert(providerSyncRuns)
     .values({ triggeredBy, status: "running", startedAt: new Date(startedAt) })
@@ -530,7 +550,6 @@ export async function syncAllProviders(
 
   console.log(`[providerSync] Done in ${durationMs}ms — status=${status}, offers=${totalOffersUpserted}, plans=${plansUpdated}`);
 
-  _syncRunning = false;
   return { logId, triggeredBy, durationMs, results, totalOffersUpserted, internalPlansUpdated: plansUpdated, priceChanges: totalPriceChanges, failedProviders, status };
 }
 
@@ -568,6 +587,27 @@ async function ensureSyncIndexes(): Promise<void> {
 
 let _schedulerStarted = false;
 let _syncRunning     = false;
+
+/**
+ * Serialize sync runs and always release the process-local guard, including
+ * database/provider failures. Kept as a small exported seam for regression
+ * tests; the real sync uses this same lock.
+ */
+export async function withProviderSyncLock<T>(
+  triggeredBy: "auto" | "manual",
+  task: () => Promise<T>,
+): Promise<T | null> {
+  if (_syncRunning && triggeredBy === "auto") {
+    console.warn("[providerSync] Previous sync still running — skipping this scheduled run to avoid overlap");
+    return null;
+  }
+  _syncRunning = true;
+  try {
+    return await task();
+  } finally {
+    _syncRunning = false;
+  }
+}
 
 /**
  * Mark any sync runs that were left in "running" state (e.g. from a server

@@ -122,16 +122,17 @@ async function findNormalizedPlanForParams(
 ) {
   // dataMb in normalized_plans = dataAmountGb * 1024
   const dataMb = Math.round(dataAmountGb * 1024);
-  const [match] = await db
+  const candidates = await db
     .select()
     .from(normalizedPlans)
     .where(and(
       eq(normalizedPlans.regionCode, countryCode),
-      eq(normalizedPlans.dataMb, dataMb),
       eq(normalizedPlans.validityDays, validityDays),
       eq(normalizedPlans.isActive, true),
     ));
-  return match ?? null;
+  return candidates.find(candidate =>
+    !candidate.isUnlimited && candidate.dataMb === dataMb,
+  ) ?? candidates.find(candidate => candidate.isUnlimited) ?? null;
 }
 
 // ─── Checkout params ──────────────────────────────────────────────────────────
@@ -202,6 +203,11 @@ export async function createPlanCheckoutSession(
         getTargetMarginPercent(),
       ]);
       const winner = routing.fallbackChain[0];
+      if (!winner) {
+        throw new PriceFloorError(
+          `Refusing to create checkout session for plan ${params.planId}: no routed supplier offer is available`,
+        );
+      }
 
       // Compute server-side retail price from wholesale cost using the admin's
       // configured target margin (not a hardcoded constant).
@@ -216,11 +222,10 @@ export async function createPlanCheckoutSession(
       finalPriceUsd = pricing.retailPriceUsd;
 
       // ── Wholesale price floor: never sell below cost + minimum margin ──
-      // Floor against the WORST-CASE cost in the fallback chain: fulfillment
-      // may fall back to any provider in it, not just the winner.
-      const worstCaseCost = maxChainWholesaleUsd(
-        routing.fallbackChain.map(p => ({ w: p.wholesalePriceUsd })),
-      ) ?? winner.wholesalePriceUsd;
+      // A legacy Stripe session is an audited pinned path. Persist only the
+      // selected supplier SKU, so fulfillment cannot silently broaden a paid
+      // session to another normalized-plan offer.
+      const worstCaseCost = winner.wholesalePriceUsd;
       const floorUsd = computeFloorUsd(worstCaseCost);
       if (finalPriceUsd < floorUsd) {
         finalPriceUsd = roundUpTo99(floorUsd);
@@ -234,13 +239,15 @@ export async function createPlanCheckoutSession(
        // this assertion must reject rather than send Stripe an unsafe amount.
        assertLegacyStripeSessionCharge(finalPriceUsd, worstCaseCost, params.planId);
 
-      // Compact fallback chain for metadata storage
-      const compactChain: FallbackEntry[] = routing.fallbackChain.map(p => ({
-        r: p.rank,
-        k: p.providerKey,
-        c: p.providerPlanCode,
-        w: p.wholesalePriceUsd,
-      }));
+      // Compact singleton chain for metadata storage. The full routing
+      // decision remains audited by routingEngine, but a paid legacy session
+      // must retain only the exact supplier identity that was priced.
+      const compactChain: FallbackEntry[] = [{
+        r: winner.rank,
+        k: winner.providerKey,
+        c: winner.providerPlanCode,
+        w: winner.wholesalePriceUsd,
+      }];
 
       routingMetadata.normalizedPlanId = normalizedPlan.id;
       routingMetadata.routingDecisionId = routing.decisionId;

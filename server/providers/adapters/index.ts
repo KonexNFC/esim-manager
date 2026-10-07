@@ -3,15 +3,10 @@ import { EsimGoAdapter } from './esimgo';
 import { EsimAccessAdapter } from './esimAccess';
 import { ZenditAdapter } from './zendit';
 import { AiraloAdapter } from './airalo';
-import { FailoverProviderAdapter } from './failover';
 import type { ProviderAdapter } from './base';
 
-// PROVIDER_NAME env var lets you force a specific provider for testing.
-// When unset the system auto-selects the best available option:
-//   • Both keys present  → eSIMGo primary + eSIM Access fallback (recommended)
-//   • Only eSIMGo key   → eSIMGo only
-//   • Only eSIM Access  → eSIM Access only
-//   • Neither           → Mock (dev/test only)
+// PROVIDER_NAME is an explicit adapter choice for health/import tooling. It is
+// not a purchase-selection policy; purchase paths must supply a routed key.
 const PROVIDER_NAME = process.env.PROVIDER_NAME;
 
 /** Return a specific provider adapter by its registry key, or null if unavailable.
@@ -69,53 +64,34 @@ export function getActiveProvider(): ProviderAdapter {
   const airaloId       = process.env.AIRALO_CLIENT_ID;
   const airaloSecret   = process.env.AIRALO_CLIENT_SECRET;
 
-  // Explicit override
-  if (PROVIDER_NAME === 'mock') return new MockProviderAdapter();
-
-  if (PROVIDER_NAME === 'esimgo') {
-    if (!esimgoKey) { console.warn('[Provider] ESIMGO_API_KEY missing — falling back to mock'); return new MockProviderAdapter(); }
-    return new EsimGoAdapter(esimgoKey);
+  if (PROVIDER_NAME) {
+    const selected = getProviderAdapterByKey(PROVIDER_NAME);
+    if (!selected) throw new Error(`Configured provider "${PROVIDER_NAME}" is unavailable`);
+    return selected;
   }
 
-  if (PROVIDER_NAME === 'esimAccess') {
-    if (!eaAccessCode || !eaSecret) { console.warn('[Provider] eSIM Access keys missing — falling back to mock'); return new MockProviderAdapter(); }
-    return new EsimAccessAdapter(eaAccessCode, eaSecret);
+  const configured = [
+    esimgoKey ? 'esimgo' : null,
+    eaAccessCode && eaSecret ? 'esimaccess' : null,
+    airaloId && airaloSecret ? 'airalo' : null,
+  ].filter((key): key is string => Boolean(key));
+
+  if (configured.length > 1) {
+    throw new Error(
+      `Multiple providers are configured (${configured.join(', ')}); getActiveProvider requires an explicit provider key`,
+    );
+  }
+  if (configured.length === 1) {
+    const selected = getProviderAdapterByKey(configured[0]);
+    if (!selected) throw new Error(`Configured provider "${configured[0]}" is unavailable`);
+    return selected;
   }
 
-  if (PROVIDER_NAME === 'airalo') {
-    if (!airaloId || !airaloSecret) { console.warn('[Provider] Airalo keys missing — falling back to mock'); return new MockProviderAdapter(); }
-    return new AiraloAdapter(airaloId, airaloSecret, 'production');
-  }
-
-  // Auto-select: priority order is Airalo → eSIMGo → eSIM Access
-  const hasAiralo    = !!(airaloId && airaloSecret);
-  const hasEsimGo    = !!esimgoKey;
-  const hasEsimAccess = !!(eaAccessCode && eaSecret);
-
-  // Build ordered chain of available providers (Airalo first per priority)
-  const chain: ProviderAdapter[] = [];
-  if (hasAiralo)     chain.push(new AiraloAdapter(airaloId!, airaloSecret!, 'production'));
-  if (hasEsimGo)     chain.push(new EsimGoAdapter(esimgoKey!));
-  if (hasEsimAccess) chain.push(new EsimAccessAdapter(eaAccessCode!, eaSecret!));
-
-  if (chain.length === 0) {
-    console.warn('[Provider] No real provider keys found — using mock');
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn('[Provider] No real provider keys found — using mock outside production');
     return new MockProviderAdapter();
   }
-
-  if (chain.length === 1) {
-    console.log(`[Provider] Auto: ${chain[0].name} only`);
-    return chain[0];
-  }
-
-  // Use failover adapter: primary = first in chain, secondary = second
-  // For 3-provider scenario, wrap nested failovers: Airalo → (eSIMGo → eSIM Access)
-  const names = chain.map(p => p.name).join(' → ');
-  console.log(`[Provider] Auto: ${names}`);
-  if (chain.length === 2) {
-    return new FailoverProviderAdapter(chain[0], chain[1]);
-  }
-  return new FailoverProviderAdapter(chain[0], new FailoverProviderAdapter(chain[1], chain[2]));
+  throw new Error('No provider is configured; route a provider key before performing provider work');
 }
 
 export type {

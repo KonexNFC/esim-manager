@@ -5,7 +5,7 @@ import { db } from "./storage";
 import { sql, eq, and, inArray } from "drizzle-orm";
 import { insertOrderSchema, insertPlanSchema, settings, normalizedPlans, providerOffers, orders } from "@shared/schema";
 import { fetchProviderPlans, getBestPlan } from "./providers";
-import { purchaseEsim as providerPurchase, getAvailableProviders } from "./providers/providerManager";
+import { getAvailableProviders } from "./providers/providerManager";
 import { z } from "zod";
 import {
   hashPassword, verifyPassword, signToken, verifyToken,
@@ -26,6 +26,8 @@ import { syncEsimUsage, syncUserEsims, syncAllActiveEsims, runUsageSyncJob, find
 import { getActiveProvider, getProviderAdapterByKey } from "./providers/adapters";
 import { calculateMargin } from "./services/marginEngine";
 import { canonicalProviderKey, getProviderEligibilityByKey } from "./services/providerHealth";
+import { selectBestProviderForPlan } from "./services/routingEngine";
+import { getOffersForNormalizedPlan } from "./services/providerRegistry";
 
 // ─── Schemas ─────────────────────────────────────────
 const bestPlanSchema = z.object({
@@ -900,24 +902,21 @@ export async function registerRoutes(
       const code = normaliseCode(req.params.code);
 
       // Get all normalized plans for this country that have active offers.
-      // Deduplicate by (data_mb, validity_days) across all providers —
-      // pick the cheapest offer spec and the corresponding normalized_plan_id.
-      // Only include providers that have a registered purchase adapter.
+      // Supplier selection is performed by the routing policy below; this
+      // query only establishes product availability/counts.
       const rows = await db.execute<{
         normalized_plan_id: string;
         data_mb: string;
         validity_days: string;
         is_unlimited: boolean;
-        min_wholesale: string;
-        offer_count: string;
+        offer_count: number;
       }>(sql`
-        SELECT DISTINCT ON (np.data_mb, np.validity_days, np.is_unlimited)
+        SELECT
           np.id          AS normalized_plan_id,
           np.data_mb,
           np.validity_days,
           np.is_unlimited,
-          MIN(po.wholesale_price_usd) OVER (PARTITION BY np.data_mb, np.validity_days, np.is_unlimited) AS min_wholesale,
-          COUNT(po.id)   OVER (PARTITION BY np.data_mb, np.validity_days, np.is_unlimited)::int         AS offer_count
+           COUNT(po.id)::int AS offer_count
         FROM   normalized_plans np
         JOIN   provider_offers po    ON po.normalized_plan_id = np.id
         JOIN   providers       prov  ON prov.key = po.provider_key
@@ -928,8 +927,8 @@ export async function registerRoutes(
           AND  prov.auto_paused      = false
           AND  po.provider_key       IN ('esimgo', 'esimaccess', 'zendit', 'airalo', 'mock')
           AND  po.wholesale_price_usd > 0
-        ORDER BY np.data_mb, np.validity_days, np.is_unlimited,
-                 po.wholesale_price_usd ASC
+        GROUP BY np.id, np.data_mb, np.validity_days, np.is_unlimited
+        ORDER BY np.data_mb, np.validity_days, np.is_unlimited
       `);
 
       const { calculateRetailPrice } = await import("./services/pricingEngine");
@@ -937,11 +936,14 @@ export async function registerRoutes(
       const targetMargin = settingRow?.value ? parseFloat(settingRow.value) : 0.50;
       const minimumMarginPercent = Math.round(targetMargin * 100);
 
-      const planOptions = rows.rows.map(row => {
+      const planOptions = (await Promise.all(rows.rows.map(async row => {
+        const decision = await selectBestProviderForPlan(row.normalized_plan_id, "blended_score").catch(() => null);
+        const winner = decision?.fallbackChain?.[0];
+        if (!winner) return null;
         const dataMb = Number(row.data_mb);
         const validityDays = Number(row.validity_days);
         const isUnlimited = row.is_unlimited;
-        const wholesaleCost = Number(row.min_wholesale);
+        const wholesaleCost = Number(winner.wholesalePriceUsd);
         const dataAmountGb = isUnlimited ? 999 : dataMb / 1024;
 
         const pricing = calculateRetailPrice(wholesaleCost, {
@@ -968,8 +970,10 @@ export async function registerRoutes(
           estimatedPriceUsd: pricing.retailPriceUsd,
           wholesaleCostUsd: wholesaleCost,
           providerCount: Number(row.offer_count),
+          selectedProviderKey: winner.providerKey,
+          selectedProviderPlanCode: winner.providerPlanCode,
         };
-      });
+      }))).filter((option): option is NonNullable<typeof option> => option !== null);
 
       res.json({ countryCode: code, plans: planOptions });
     } catch (err: any) {
@@ -1126,17 +1130,6 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid plan ID" });
       }
 
-      let providerResult: { iccid?: string; qrCodeUrl?: string } = {};
-
-      if (plan.provider && plan.provider !== "manual") {
-        try {
-          const result = await providerPurchase(plan.id, plan.provider);
-          providerResult = { iccid: result.iccid, qrCodeUrl: result.qrCodeUrl };
-        } catch (err) {
-          console.log(`[orders] Provider ${plan.provider} purchase failed, falling back to manual:`, err);
-        }
-      }
-
       let userId: string | undefined;
       const token = getTokenFromRequest(req);
       if (token) {
@@ -1148,8 +1141,30 @@ export async function registerRoutes(
         if (existingUser) userId = existingUser.id;
       }
 
-      const orderData = userId ? { ...parsed.data, userId } : parsed.data;
-      const order = await storage.createOrder(orderData, providerResult.iccid, providerResult.qrCodeUrl);
+      const isPinnedProvider = Boolean(plan.provider && plan.provider !== "manual");
+      const orderData = userId
+        ? { ...parsed.data, userId, ...(isPinnedProvider ? { status: "paid" } : {}) }
+        : { ...parsed.data, ...(isPinnedProvider ? { status: "paid" } : {}) };
+      const order = await storage.createOrder(orderData);
+
+      if (isPinnedProvider) {
+        // Legacy/admin orders remain an explicitly pinned singleton, but use
+        // the audited fulfillment path so provider attempts and final issuance
+        // outcomes are recorded. Never silently fall back to manual.
+        // storage.createOrder historically materializes a placeholder order;
+        // move it into the paid state before the normal fulfillment claim.
+        await db.update(orders)
+          .set({ status: "paid", iccid: null, qrCode: null, updatedAt: new Date() })
+          .where(eq(orders.id, order.id));
+        const { fulfillInitialPurchase } = await import("./services/fulfillment");
+        await fulfillInitialPurchase(order.id, {
+          forceProviderKey: plan.provider,
+          forcePlanCode: plan.externalPlanCode ?? undefined,
+        });
+        const fulfilled = await storage.getOrder(order.id);
+        return res.status(201).json(fulfilled ?? order);
+      }
+
       res.status(201).json(order);
     } catch (error) {
       res.status(500).json({ message: "Failed to create order" });
@@ -1274,9 +1289,13 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/internal/provider/health", async (_req, res) => {
+  app.get("/api/internal/provider/health", async (req, res) => {
     try {
-      const provider = getActiveProvider();
+      const requestedProvider = typeof req.query.provider === "string" ? req.query.provider : undefined;
+      const provider = requestedProvider
+        ? getProviderAdapterByKey(requestedProvider)
+        : getActiveProvider();
+      if (!provider) return res.status(404).json({ message: `Provider ${requestedProvider} is unavailable` });
       res.json({ provider: provider.name, status: "ok" });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
@@ -1287,7 +1306,11 @@ export async function registerRoutes(
   app.post("/api/internal/provider/import-plans", requireAdmin, async (req, res) => {
     try {
       const countryCode = req.body?.countryCode as string | undefined;
-      const provider = getActiveProvider();
+      const requestedProvider = req.body?.providerKey as string | undefined;
+      const provider = requestedProvider
+        ? getProviderAdapterByKey(requestedProvider)
+        : getActiveProvider();
+      if (!provider) return res.status(404).json({ message: `Provider ${requestedProvider} is unavailable` });
       const providerPlans = await provider.getSupportedPlans(countryCode);
       const imported: string[] = [];
 
@@ -2520,8 +2543,14 @@ export async function registerRoutes(
   // Routes use live DB data fetched from provider_offers + normalized_plans.
 
   {
-    const { buildPublicCatalogue, buildInternalCatalogue, buildLadderReport } =
+    const {
+      buildPublicCatalogue,
+      buildInternalCatalogue,
+      buildLadderReport,
+    } =
       await import("./catalogue/catalogue-service");
+    const { attachPublicCatalogueQuotes } =
+      await import("./catalogue/public-catalogue");
     const { GBP_RATE } = await import("./catalogue/pricing-engine");
     const { getDbSupplierPlans } = await import("./catalogue/db-supplier-plans");
 
@@ -2660,7 +2689,9 @@ export async function registerRoutes(
 
     // GET /api/plans/public/:countryCode
     // Public travel catalogue: only TRAVEL-category, active plans.
-    // M2M/M2D bulk products are excluded.
+    // M2M/M2D bulk products are excluded. Recommendation roles are assigned
+    // statically, then each normalized product is routed to one concrete SKU
+    // before its singleton checkout quote is attached.
     app.get("/api/plans/public/:countryCode", async (req, res) => {
       try {
         const code = String(req.params.countryCode).toUpperCase();
@@ -2669,34 +2700,13 @@ export async function registerRoutes(
         // Price every visible native offer before returning it. Synthetic bundles
         // cannot be fulfilled as one supplier SKU, so they are omitted rather
         // than advertising an offer that cannot receive a safe quote.
-        const quotedDurations = await Promise.all(
-          Object.entries(catalogue.durations).map(async ([bucket, slot]) => {
-            if (!slot) return [bucket, slot] as const;
-            const quoteOffer = async (offer: any) => {
-              if (!offer || offer.isSynthetic) return null;
-              try {
-                const quote = await createCheckoutQuoteForOffer(offer.id);
-                return { ...offer, quote: toPublicCheckoutQuote(quote) };
-              } catch {
-                return null;
-              }
-            };
-            const [recommended, cheaper, premium, browseAll] = await Promise.all([
-              quoteOffer(slot.recommended),
-              quoteOffer(slot.cheaper),
-              quoteOffer(slot.premium),
-              Promise.all(slot.browseAll.map(quoteOffer)),
-            ]);
-            return [bucket, {
-              ...slot,
-              recommended,
-              cheaper,
-              premium,
-              browseAll: browseAll.filter(Boolean),
-            }] as const;
-          }),
-        );
-        const durations = Object.fromEntries(quotedDurations);
+        const quotedCatalogue = await attachPublicCatalogueQuotes(catalogue, {
+          selectBestProviderForPlan,
+          getOffersForNormalizedPlan,
+          createCheckoutQuoteForOffer,
+          toPublicCheckoutQuote,
+        });
+        const durations = quotedCatalogue.durations;
         const availableDurations = catalogue.availableDurations.filter(bucket => {
           const slot = durations[bucket];
           return !!slot && !!(slot.recommended || slot.cheaper || slot.premium || slot.browseAll?.length);

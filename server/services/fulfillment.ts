@@ -10,13 +10,13 @@
 //   • Orders with routing data (normalizedPlanId + fallbackProvidersJson)
 //     → iterate fallback chain, log each attempt to provider_attempts
 //   • Legacy orders without routing data
-//     → getActiveProvider() (transparent failover adapter, unchanged)
+//     → pinned plan provider + exact externalPlanCode (singleton, no failover)
 
 import { db } from '../storage';
 import { randomUUID } from 'node:crypto';
-import { orders, esims, users, topups, plans, destinations, normalizedPlans, providerSyncLogs, providerAttempts, providers } from '@shared/schema';
+import { orders, esims, users, topups, plans, destinations, normalizedPlans, providerSyncLogs, providerAttempts, providers, providerOffers } from '@shared/schema';
 import { eq, sql, and, inArray, lt, isNull } from 'drizzle-orm';
-import { getActiveProvider, getProviderAdapterByKey } from '../providers/adapters';
+import { getProviderAdapterByKey } from '../providers/adapters';
 import type { ProviderAdapter, ProviderPurchaseParams, CustomerContext, EsimProvisionResult } from '../providers/adapters';
 import { ZenditPurchasePendingError } from '../providers/adapters/zendit';
 import {
@@ -39,6 +39,40 @@ import {
 } from './providerHealth';
 
 const TRANSIENT_RETRY_DELAY_MS = 1500;
+
+export type FulfillmentFailureClass =
+  | 'timeout'
+  | 'network'
+  | 'provider_rejected'
+  | 'provider_unavailable'
+  | 'validation'
+  | 'pending_reconciliation'
+  | 'internal';
+
+/** Keep failure classification stable in the existing text-only audit schema. */
+export function classifyFulfillmentFailure(err: unknown): FulfillmentFailureClass {
+  const value = err as any;
+  const message = String(value?.message ?? value ?? '').toLowerCase();
+  if (value instanceof ZenditPurchasePendingError || message.includes('pending')) {
+    return 'pending_reconciliation';
+  }
+  if (value?.status === 401 || value?.status === 403 || message.includes('not configured') ||
+      message.includes('unavailable') || message.includes('credentials')) {
+    return 'provider_unavailable';
+  }
+  if (value?.status >= 400 && value?.status < 500 ||
+      message.includes('invalid') || message.includes('requires') ||
+      message.includes('rejected')) {
+    return 'provider_rejected';
+  }
+  if (isTransientError(value)) {
+    return message.includes('timeout') || message.includes('timed out') ? 'timeout' : 'network';
+  }
+  if (message.includes('plan') || message.includes('offer') || message.includes('sku')) {
+    return 'validation';
+  }
+  return 'internal';
+}
 
 type PlanData = {
   countryCode: string;
@@ -164,6 +198,131 @@ async function logProviderAttempt(
   } catch { /* non-fatal */ }
 }
 
+async function nextProviderAttemptNumber(orderId: string): Promise<number> {
+  try {
+    const attempts = await db
+      .select({ attemptNumber: providerAttempts.attemptNumber })
+      .from(providerAttempts)
+      .where(eq(providerAttempts.orderId, orderId));
+    return Math.max(0, ...attempts.map(attempt => attempt.attemptNumber ?? 0)) + 1;
+  } catch {
+    return 1;
+  }
+}
+
+async function logIssuanceOutcome(
+  orderId: string,
+  providerKey: string,
+  planCode: string | null | undefined,
+  status: 'ok' | 'error' | 'pending',
+  durationMs: number,
+  error?: unknown,
+): Promise<void> {
+  const failureClass = status === 'ok'
+    ? null
+    : classifyFulfillmentFailure(error);
+  const suffix = status === 'ok'
+    ? `status=issued durationMs=${durationMs}`
+    : `status=${status} durationMs=${durationMs} failureClass=${failureClass} error=${String((error as any)?.message ?? error ?? 'unknown')}`;
+  await logSync(
+    orderId,
+    null,
+    'issuance_outcome',
+    canonicalProviderKey(providerKey),
+    `provider=${canonicalProviderKey(providerKey)} planCode=${planCode ?? 'unknown'}`,
+    suffix,
+    status === 'error' ? 'error' : 'ok',
+  );
+}
+
+/**
+ * A stored normalized-plan order is pinned to the supplier SKU captured at
+ * checkout.  Provider-plan-code lookup by itself is unsafe because codes may
+ * be reused across normalized products or legacy catalogue rows.
+ */
+export interface StoredProviderOfferIdentity {
+  normalizedPlanId: string;
+  providerKey: string;
+  providerPlanCode: string;
+  isActive: boolean;
+}
+
+/**
+ * Older orders stored provider_offers.id in normalizedPlanId. Newer orders
+ * store normalized_plans.id. Resolve the former to the canonical normalized
+ * product without changing the supplier identity captured by the order.
+ */
+export function resolveCanonicalNormalizedPlanId(
+  storedReference: string,
+  storedOffer?: Pick<StoredProviderOfferIdentity, 'normalizedPlanId'> | null,
+): string {
+  return storedOffer?.normalizedPlanId ?? storedReference;
+}
+
+/**
+ * When the order reference itself is a provider-offer ID, the fallback entry
+ * must remain that exact offer. A matching SKU from another supplier is not a
+ * safe substitute, even when it belongs to the same normalized product.
+ */
+export function matchesStoredProviderOfferIdentity(
+  storedOffer: StoredProviderOfferIdentity | null | undefined,
+  entry: Pick<FallbackEntry, 'k' | 'c'>,
+): boolean {
+  if (!storedOffer) return true;
+  return storedOffer.isActive
+    && canonicalProviderKey(storedOffer.providerKey) === canonicalProviderKey(entry.k)
+    && storedOffer.providerPlanCode === entry.c;
+}
+
+async function assertExactOrderOffer(
+  order: typeof orders.$inferSelect,
+  entry: FallbackEntry,
+): Promise<void> {
+  if (!order.normalizedPlanId) return;
+  const [storedOffer] = await db
+    .select({
+      normalizedPlanId: providerOffers.normalizedPlanId,
+      providerKey: providerOffers.providerKey,
+      providerPlanCode: providerOffers.providerPlanCode,
+      isActive: providerOffers.isActive,
+    })
+    .from(providerOffers)
+    .where(eq(providerOffers.id, order.normalizedPlanId))
+    .limit(1);
+
+  if (!matchesStoredProviderOfferIdentity(storedOffer, entry)) {
+    throw new Error(
+      `Pinned supplier offer ${entry.k}/${entry.c} does not match the stored provider offer ${order.normalizedPlanId}`,
+    );
+  }
+  const canonicalNormalizedPlanId = resolveCanonicalNormalizedPlanId(
+    order.normalizedPlanId,
+    storedOffer,
+  );
+  const offers = await db
+    .select({
+      id: providerOffers.id,
+      providerKey: providerOffers.providerKey,
+      providerPlanCode: providerOffers.providerPlanCode,
+      isActive: providerOffers.isActive,
+    })
+    .from(providerOffers)
+    .where(and(
+      eq(providerOffers.normalizedPlanId, canonicalNormalizedPlanId),
+      eq(providerOffers.providerPlanCode, entry.c),
+      eq(providerOffers.isActive, true),
+    ))
+    ;
+  const offer = offers.find(candidate =>
+    canonicalProviderKey(candidate.providerKey) === canonicalProviderKey(entry.k),
+  );
+  if (!offer) {
+    throw new Error(
+      `Pinned supplier offer ${entry.k}/${entry.c} is not active for normalized plan ${canonicalNormalizedPlanId}`,
+    );
+  }
+}
+
 async function reserveZenditTransaction(orderId: string): Promise<string> {
   const transactionId = `konex-${randomUUID()}`;
   const [reserved] = await db.update(orders).set({
@@ -206,12 +365,19 @@ async function clearRejectedZenditTransaction(orderId: string, transactionId: st
 
 async function fulfillWithFallbackChain(
   orderId: string,
+  order: typeof orders.$inferSelect,
   fallbackChain: FallbackEntry[],
   baseParams: ProviderPurchaseParams,
   ctx: CustomerContext,
   destination: string,
   marginPercent?: number | null,
-): Promise<{ result: EsimProvisionResult; providerName: string; providerKey: string }> {
+): Promise<{
+  result: EsimProvisionResult;
+  providerName: string;
+  providerKey: string;
+  providerPlanCode: string;
+  durationMs: number;
+}> {
   let lastError: Error | null = null;
 
   // Deduplicate: only keep the first entry per provider key so a single-provider
@@ -222,10 +388,25 @@ async function fulfillWithFallbackChain(
     const entry = deduped[i];
     const isPrimary = i === 0;
 
+    try {
+      await assertExactOrderOffer(order, entry);
+    } catch (err: any) {
+      const reason = `${classifyFulfillmentFailure(err)}: ${err.message}`;
+      await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'skipped', reason);
+      recordFulfillmentOutcome({ providerKey: entry.k, destination, outcome: 'skipped', isPrimary }).catch(() => {});
+      continue;
+    }
+
     // ── Runtime health gate ────────────────────────────────────────────────
     // The chain is built at order-capture time, before any attempts run.
     // Re-check all fail-closed eligibility signals before every purchase call.
-    const eligibility = await getProviderOfferEligibility(entry.k, entry.c);
+    // Legacy/admin pinned plans predate provider_offers and carry their exact
+    // supplier SKU on plans.external_plan_code. They still require a configured
+    // adapter below, but must not be widened or rejected merely because an old
+    // SKU is absent from today's normalized live-offer table.
+    const eligibility = order.normalizedPlanId
+      ? await getProviderOfferEligibility(entry.k, entry.c)
+      : { eligible: true, reason: 'legacy pinned supplier identity' };
     if (!eligibility.eligible) {
       console.warn(`[Fulfillment] Provider "${entry.k}" excluded — ${eligibility.reason}`);
       await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'skipped', eligibility.reason);
@@ -260,12 +441,14 @@ async function fulfillWithFallbackChain(
       );
       const durationMs = Date.now() - startMs;
       await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'ok', undefined, durationMs);
-      recordFulfillmentOutcome({
-        providerKey: entry.k, destination, outcome: 'success', isPrimary,
-        latencyMs: durationMs, marginPercent: marginPercent ?? undefined,
-      }).catch(() => {});
       console.log(`[Fulfillment] ✓ ${entry.k} succeeded in ${durationMs}ms`);
-      return { result, providerName: provider.name, providerKey: entry.k };
+      return {
+        result,
+        providerName: provider.name,
+        providerKey: entry.k,
+        providerPlanCode: entry.c,
+        durationMs,
+      };
     } catch (err: any) {
       const durationMs = Date.now() - startMs;
       if (err instanceof ZenditPurchasePendingError) {
@@ -325,62 +508,95 @@ async function resolvePlanDataForOrder(order: typeof orders.$inferSelect): Promi
 
   if (!order.normalizedPlanId) return null;
 
-  const offerRows = await db.execute<{
-    provider_plan_code: string;
-    region_code: string;
-    validity_days: number;
-    data_mb: number | null;
-    is_unlimited: boolean;
-    name: string;
-  }>(sql`
-    SELECT po.provider_plan_code, np.region_code, np.validity_days,
-           np.data_mb, np.is_unlimited, np.name
-    FROM provider_offers po
-    JOIN normalized_plans np ON np.id = po.normalized_plan_id
-    WHERE po.id = ${order.normalizedPlanId}
-    LIMIT 1
-  `);
-  const offer = offerRows.rows[0];
-  if (offer) {
-    const dataAmountGb = offer.is_unlimited ? 0 : (offer.data_mb ?? 0) / 1024;
+  // Reconciliation must use the supplier SKU captured in the paid routing
+  // chain, not an arbitrary offer row returned by a later catalogue query.
+  const storedChain = Array.isArray(order.fallbackProvidersJson)
+    ? order.fallbackProvidersJson as Array<{ k?: string; c?: string; providerKey?: string; providerPlanCode?: string }>
+    : [];
+  const providerKey = order.providerName ? canonicalProviderKey(order.providerName) : null;
+  const pinnedEntry = storedChain.find(entry =>
+    canonicalProviderKey(entry.k ?? entry.providerKey ?? '') === providerKey,
+  );
+  const [storedOffer] = await db
+    .select({
+      normalizedPlanId: providerOffers.normalizedPlanId,
+      providerKey: providerOffers.providerKey,
+      providerPlanCode: providerOffers.providerPlanCode,
+      isActive: providerOffers.isActive,
+    })
+    .from(providerOffers)
+    .where(eq(providerOffers.id, order.normalizedPlanId))
+    .limit(1);
+  if (storedOffer && !storedOffer.isActive) {
+    throw new Error(
+      `Paid normalized order ${order.id} references an inactive supplier offer`,
+    );
+  }
+  if (
+    storedOffer &&
+    providerKey &&
+    canonicalProviderKey(storedOffer.providerKey) !== providerKey
+  ) {
+    throw new Error(
+      `Paid normalized order ${order.id} provider does not match its stored provider offer`,
+    );
+  }
+  if (
+    storedOffer &&
+    pinnedEntry &&
+    !matchesStoredProviderOfferIdentity(storedOffer, {
+      k: pinnedEntry.k ?? pinnedEntry.providerKey ?? '',
+      c: pinnedEntry.c ?? pinnedEntry.providerPlanCode ?? '',
+    })
+  ) {
+    throw new Error(
+      `Paid normalized order ${order.id} supplier identity does not match its stored provider offer`,
+    );
+  }
+  const canonicalNormalizedPlanId = resolveCanonicalNormalizedPlanId(
+    order.normalizedPlanId,
+    storedOffer,
+  );
+  const [normalizedPlanForReconciliation] = await db
+    .select()
+    .from(normalizedPlans)
+    .where(eq(normalizedPlans.id, canonicalNormalizedPlanId))
+    .limit(1);
+  if (normalizedPlanForReconciliation) {
+    const isUnlimited = normalizedPlanForReconciliation.isUnlimited || normalizedPlanForReconciliation.dataMb >= 999999;
+    const dataAmountGb = isUnlimited ? 0 : normalizedPlanForReconciliation.dataMb / 1024;
+    const reconciliationProviderRef =
+      pinnedEntry?.c ??
+      pinnedEntry?.providerPlanCode ??
+      storedOffer?.providerPlanCode;
+    if (!reconciliationProviderRef) {
+      throw new Error(
+        `Paid normalized order ${order.id} has no stored supplier SKU for reconciliation`,
+      );
+    }
     return {
-      countryCode: offer.region_code,
+      countryCode: normalizedPlanForReconciliation.regionCode,
       dataAmountGb,
-      validityDays: offer.validity_days,
-      providerRef: offer.provider_plan_code,
-      name: offer.name,
-      destination: offer.region_code,
+      validityDays: normalizedPlanForReconciliation.validityDays,
+      providerRef: reconciliationProviderRef,
+      providerKey:
+        pinnedEntry?.k ??
+        pinnedEntry?.providerKey ??
+        storedOffer?.providerKey,
+      name: normalizedPlanForReconciliation.name,
+      destination: normalizedPlanForReconciliation.regionCode,
       region: '',
-      dataAmount: offer.is_unlimited
+      dataAmount: isUnlimited
         ? 'Unlimited'
         : dataAmountGb >= 1
           ? `${Math.round(dataAmountGb * 10) / 10} GB`
-          : `${offer.data_mb ?? 0} MB`,
-      validity: `${offer.validity_days} Day${offer.validity_days !== 1 ? 's' : ''}`,
+          : `${normalizedPlanForReconciliation.dataMb} MB`,
+      validity: `${normalizedPlanForReconciliation.validityDays} Day${normalizedPlanForReconciliation.validityDays !== 1 ? 's' : ''}`,
     };
   }
-
-  const [normalizedPlan] = await db
-    .select()
-    .from(normalizedPlans)
-    .where(eq(normalizedPlans.id, order.normalizedPlanId));
-  if (!normalizedPlan) return null;
-
-  const dataAmountGb = normalizedPlan.isUnlimited ? 0 : normalizedPlan.dataMb / 1024;
-  return {
-    countryCode: normalizedPlan.regionCode,
-    dataAmountGb,
-    validityDays: normalizedPlan.validityDays,
-    name: normalizedPlan.name,
-    destination: normalizedPlan.regionCode,
-    region: '',
-    dataAmount: normalizedPlan.isUnlimited
-      ? 'Unlimited'
-      : dataAmountGb >= 1
-        ? `${Math.round(dataAmountGb * 10) / 10} GB`
-        : `${normalizedPlan.dataMb} MB`,
-    validity: `${normalizedPlan.validityDays} Day${normalizedPlan.validityDays !== 1 ? 's' : ''}`,
-  };
+  // A missing normalized product also means the paid SKU cannot be recovered.
+  // Never select a replacement offer from the current catalogue.
+  return null;
 }
 
 /**
@@ -563,6 +779,10 @@ export async function fulfillInitialPurchase(
     // Both paths resolve to a normalized_plan_id so we can build the dynamic chain after.
 
     let resolvedNormalizedPlanId: string | null = null;
+    let resolvedProviderOffer: {
+      provider_key: string;
+      provider_plan_code: string;
+    } | null = null;
 
     // ── Path A: try provider_offers lookup first ──────────────────────────────
     const offerRows = await db.execute<{
@@ -579,6 +799,12 @@ export async function fulfillInitialPurchase(
       LIMIT 1
     `);
     const offer = offerRows.rows[0];
+    resolvedProviderOffer = offer
+      ? {
+          provider_key: offer.provider_key,
+          provider_plan_code: offer.provider_plan_code,
+        }
+      : null;
 
     if (offer) {
       const dataAmountGb = offer.is_unlimited ? 0 : (offer.data_mb ?? 0) / 1024;
@@ -628,45 +854,36 @@ export async function fulfillInitialPurchase(
     if (planData && resolvedNormalizedPlanId) {
       // Admin forced provider override — bypass the dynamic chain entirely.
       if (opts?.forceProviderKey) {
-        dynamicFallbackChain = [{ r: 1, k: opts.forceProviderKey, c: opts.forcePlanCode ?? '', w: 0 }];
-        console.log(`[Fulfillment] Admin force-provider "${opts.forceProviderKey}" planCode="${opts.forcePlanCode ?? 'auto'}" for order ${orderId}`);
-      }
-
-      // Only build dynamic chain if no routing chain was stored at checkout time.
-      // (If selectedProviderKey+fallbackProvidersJson were stored by the routing engine,
-      //  those take priority and are used directly at line ~402.)
-      if (!opts?.forceProviderKey && !order.selectedProviderKey) {
-        const allOffersRows = await getOffersForNormalizedPlan(resolvedNormalizedPlanId);
-
-        if (allOffersRows.length > 0) {
-          // Filter to only providers that have a working adapter with credentials
-          const adapterReady = allOffersRows.filter(r => {
-            const adapter = getProviderAdapterByKey(r.providerKey);
-            if (!adapter) {
-              console.warn(`[Fulfillment] Excluding "${r.providerKey}" from dynamic chain — no adapter/credentials`);
-              return false;
-            }
-            return true;
-          });
-
-          if (adapterReady.length > 0) {
-            dynamicFallbackChain = adapterReady.map((row, i) => ({
-              r: i + 1,
-              k: row.providerKey,
-              c: row.providerPlanCode,
-              w: row.wholesalePriceUsd,
-            }));
-
-            console.log(`[Fulfillment] Dynamic chain for ${orderId}: ${dynamicFallbackChain.map(e => e.k).join(' → ')}`);
-          } else {
-            console.warn(`[Fulfillment] No adapter-ready eligible providers in dynamic chain for ${orderId}`);
-            dynamicFallbackChain = [];
-          }
-        } else {
-          console.warn(`[Fulfillment] No eligible offers in dynamic chain for ${orderId}`);
-          dynamicFallbackChain = [];
+        let pinnedCode = opts.forcePlanCode;
+        let pinnedWholesale = 0;
+        if (!pinnedCode && resolvedNormalizedPlanId) {
+          const pinnedOffers = await getOffersForNormalizedPlan(resolvedNormalizedPlanId);
+          const pinned = pinnedOffers.find(offer =>
+            offer.providerKey === canonicalProviderKey(opts.forceProviderKey!),
+          );
+          pinnedCode = pinned?.providerPlanCode;
+          pinnedWholesale = pinned?.wholesalePriceUsd ?? 0;
         }
+        if (!pinnedCode) {
+          throw new Error(`No active ${opts.forceProviderKey} SKU is available for this normalized plan`);
+        }
+        dynamicFallbackChain = [{ r: 1, k: opts.forceProviderKey, c: pinnedCode, w: pinnedWholesale }];
+        console.log(`[Fulfillment] Admin force-provider "${opts.forceProviderKey}" planCode="${opts.forcePlanCode ?? 'auto'}" for order ${orderId}`);
+      } else if (resolvedProviderOffer) {
+        // Legacy orders may store provider_offers.id in normalizedPlanId.
+        // That ID is itself the authenticated supplier identity, so retain it
+        // as a singleton rather than dynamically broadening to equivalents.
+        dynamicFallbackChain = [{
+          r: 1,
+          k: resolvedProviderOffer.provider_key,
+          c: resolvedProviderOffer.provider_plan_code,
+          w: 0,
+        }];
       }
+
+      // No dynamic chain construction here. A paid normalized order without
+      // persisted routing metadata has no authenticated supplier SKU and must
+      // fail closed rather than expanding to a newly equivalent offer.
     }
   }
 
@@ -694,10 +911,20 @@ export async function fulfillInitialPurchase(
   // Admin force-provider: apply for legacy planId orders or when the
   // normalizedPlanId branch didn't set a dynamic chain.
   if (opts?.forceProviderKey && (dynamicFallbackChain === null || dynamicFallbackChain.length === 0)) {
-    dynamicFallbackChain = [{ r: 1, k: opts.forceProviderKey, c: opts.forcePlanCode ?? '', w: 0 }];
+    if (!opts.forcePlanCode) {
+      throw new Error(`A pinned provider re-fulfillment requires an explicit supplier SKU for order ${orderId}`);
+    }
+    dynamicFallbackChain = [{ r: 1, k: opts.forceProviderKey, c: opts.forcePlanCode, w: 0 }];
     console.log(`[Fulfillment] Admin force-provider "${opts.forceProviderKey}" planCode="${opts.forcePlanCode ?? 'auto'}" (fallback) for order ${orderId}`);
   }
 
+  let auditProviderKey = canonicalProviderKey(
+    order.selectedProviderKey ?? planData.providerKey ?? 'unknown',
+  );
+  let auditPlanCode: string | null = planData.providerRef ?? null;
+  let auditDurationMs = 0;
+  let auditUsedPrimary = true;
+  const fulfillmentStartedAt = Date.now();
   try {
     let result: EsimProvisionResult;
     let resolvedProviderName: string;
@@ -722,38 +949,31 @@ export async function fulfillInitialPurchase(
         chain.map(e => e.k).join(' → '),
       );
       const fulfilled = await fulfillWithFallbackChain(
-        orderId, chain, baseParams, ctx, countryCode, order.marginPercent,
+        orderId, order, chain, baseParams, ctx, countryCode, order.marginPercent,
       );
       result = fulfilled.result;
       resolvedProviderName = fulfilled.providerName;
       resolvedProviderKey = fulfilled.providerKey;
+      auditProviderKey = canonicalProviderKey(fulfilled.providerKey);
+      auditDurationMs = fulfilled.durationMs;
+      auditPlanCode = fulfilled.providerPlanCode;
+      auditUsedPrimary = canonicalProviderKey(fulfilled.providerKey) === canonicalProviderKey(chain[0]?.k ?? fulfilled.providerKey);
     } else if (order.normalizedPlanId) {
       throw new Error('No provider in this order is currently eligible for fulfillment');
     } else {
       // ── Legacy path ─────────────────────────────────────────────────────
-      // No routing data — choose only from providers that pass the same live gate.
-      let selected: { provider: ProviderAdapter; providerKey: string };
-      try {
-        selected = await resolveEligibleProviderAdapter(planData.providerKey);
-      } catch (preferredError: any) {
-        console.warn(`[Fulfillment] Legacy preferred provider unavailable: ${preferredError.message}`);
-        selected = await resolveEligibleProviderAdapter();
+      // A legacy plan's provider + externalPlanCode is its only supplier
+      // identity. Treat it as a pinned singleton rather than retrying another
+      // provider with an incompatible SKU.
+      if (!planData.providerKey) {
+        throw new Error('Legacy order has no pinned provider identity');
       }
+      const selected = await resolveEligibleProviderAdapter(planData.providerKey);
       const { provider, providerKey } = selected;
-      console.log(`[Fulfillment] No routing chain for order ${orderId} — using eligible provider ${providerKey}`);
-      // For routing-engine orders (normalizedPlanId set), the providerRef stored in baseParams
-      // belongs to whichever provider was selected at checkout (e.g. eSIM Access plan code).
-      // Passing that code to a different provider (e.g. Airalo) causes a hard 422/400 error.
-      // Clear it here so each provider in the failover chain does a spec-based lookup instead.
-      const preferredKey = planData.providerKey ? canonicalProviderKey(planData.providerKey) : null;
-      const legacyParams: typeof baseParams = preferredKey === providerKey
-        ? baseParams
-        : { ...baseParams, providerRef: undefined };
-      if (legacyParams.providerRef) {
-        const offerEligibility = await getProviderOfferEligibility(providerKey, legacyParams.providerRef);
-        if (!offerEligibility.eligible) {
-          throw new Error(`Legacy stored provider offer is not eligible: ${offerEligibility.reason}`);
-        }
+      console.log(`[Fulfillment] Pinned legacy provider for order ${orderId}: ${providerKey}`);
+      const legacyParams = baseParams;
+      if (!legacyParams.providerRef) {
+        throw new Error(`Legacy order ${orderId} has no pinned supplier SKU`);
       }
       const startMs = Date.now();
       try {
@@ -765,12 +985,9 @@ export async function fulfillInitialPurchase(
           : legacyParams;
         result = await provider.purchaseEsim(providerParams, ctx);
         const durationMs = Date.now() - startMs;
+        auditDurationMs = durationMs;
+        auditPlanCode = legacyParams.providerRef ?? null;
         await logProviderAttempt(orderId, provider.name, legacyParams.providerRef ?? null, 1, 'ok', undefined, durationMs);
-        recordFulfillmentOutcome({
-          providerKey: provider.name, destination: countryCode,
-          outcome: 'success', isPrimary: true, latencyMs: durationMs,
-          marginPercent: order.marginPercent ?? undefined,
-        }).catch(() => {});
       } catch (err: any) {
         const durationMs = Date.now() - startMs;
         await logProviderAttempt(orderId, provider.name, legacyParams.providerRef ?? null, 1, 'error', err.message, durationMs);
@@ -783,6 +1000,7 @@ export async function fulfillInitialPurchase(
       }
       resolvedProviderName = provider.name;
       resolvedProviderKey = providerKey;
+      auditProviderKey = canonicalProviderKey(providerKey);
     }
 
     await completeInitialFulfillment(
@@ -793,6 +1011,21 @@ export async function fulfillInitialPurchase(
       resolvedProviderName,
       resolvedProviderKey,
     );
+    await logIssuanceOutcome(
+      orderId,
+      resolvedProviderKey,
+      auditPlanCode,
+      'ok',
+      auditDurationMs,
+    );
+    recordFulfillmentOutcome({
+      providerKey: resolvedProviderKey,
+      destination: countryCode,
+      outcome: 'success',
+      isPrimary: auditUsedPrimary,
+      latencyMs: auditDurationMs,
+      marginPercent: order.marginPercent ?? undefined,
+    }).catch(() => {});
   } catch (err: any) {
     if (err instanceof ZenditPurchasePendingError) {
       console.warn(
@@ -815,6 +1048,14 @@ export async function fulfillInitialPurchase(
         err.message,
         'ok',
       );
+      await logIssuanceOutcome(
+        orderId,
+        'zendit',
+        err.providerEsimId,
+        'pending',
+        Date.now() - fulfillmentStartedAt,
+        err,
+      );
       return;
     }
 
@@ -827,16 +1068,22 @@ export async function fulfillInitialPurchase(
         await fulfillInitialPurchase(orderId);
         return;
       } catch (retryErr: any) {
-        await markFulfillmentFailed(orderId, `Retry failed: ${retryErr.message}`);
+        const reason = `${classifyFulfillmentFailure(retryErr)}: Retry failed: ${retryErr.message}`;
+        await markFulfillmentFailed(orderId, reason);
+        await logIssuanceOutcome(orderId, auditProviderKey, auditPlanCode, 'error', auditDurationMs, retryErr);
         await logSync(orderId, null, 'initial_purchase_retry', 'unknown',
-          `retryFulfill orderId=${orderId}`, retryErr.message, 'error');
+          `retryFulfill orderId=${orderId} durationMs=${auditDurationMs}`,
+          `failureClass=${classifyFulfillmentFailure(retryErr)} ${retryErr.message}`, 'error');
         throw retryErr;
       }
     }
 
-    await markFulfillmentFailed(orderId, err.message);
+    const failureClass = classifyFulfillmentFailure(err);
+    await markFulfillmentFailed(orderId, `${failureClass}: ${err.message}`);
+    await logIssuanceOutcome(orderId, auditProviderKey, auditPlanCode, 'error', auditDurationMs, err);
     await logSync(orderId, null, 'initial_purchase', 'unknown',
-      `purchaseEsim orderId=${orderId}`, err.message, 'error');
+      `purchaseEsim orderId=${orderId} durationMs=${auditDurationMs}`,
+      `failureClass=${failureClass} ${err.message}`, 'error');
     throw err;
   }
 }
@@ -860,6 +1107,9 @@ export async function reconcilePendingZenditOrder(orderId: string): Promise<bool
 
   if (!claimed) return false;
 
+  const reconciliationStartedAt = Date.now();
+  let reconciliationPlanCode: string | null = null;
+  const reconciliationAttemptNumber = await nextProviderAttemptNumber(orderId);
   try {
     if (!claimed.providerEsimId) {
       throw new Error(`Pending Zendit order ${orderId} has no transaction ID`);
@@ -874,6 +1124,7 @@ export async function reconcilePendingZenditOrder(orderId: string): Promise<bool
     if (!planData) {
       throw new Error(`Plan data not found for pending Zendit order ${orderId}`);
     }
+    reconciliationPlanCode = planData.providerRef ?? null;
 
     const result = await provider.reconcilePendingPurchase(claimed.providerEsimId, {
       planId: claimed.planId ?? undefined,
@@ -885,12 +1136,29 @@ export async function reconcilePendingZenditOrder(orderId: string): Promise<bool
     });
 
     if (!result) {
+      await logProviderAttempt(
+        orderId,
+        'zendit',
+        reconciliationPlanCode,
+        reconciliationAttemptNumber,
+        'pending',
+        'Supplier allocation is still pending',
+        Date.now() - reconciliationStartedAt,
+      );
       await db.update(orders).set({
         status: 'fulfillment_pending',
         esimStatus: 'pending',
         lastSyncedAt: new Date(),
         updatedAt: new Date(),
       }).where(and(eq(orders.id, orderId), eq(orders.status, 'reconciling')));
+      await logIssuanceOutcome(
+        orderId,
+        'zendit',
+        claimed.providerEsimId,
+        'pending',
+        Date.now() - reconciliationStartedAt,
+        new Error('Supplier allocation is still pending'),
+      );
       return false;
     }
 
@@ -906,6 +1174,15 @@ export async function reconcilePendingZenditOrder(orderId: string): Promise<bool
       'zendit',
       'zendit',
     );
+    await logProviderAttempt(
+      orderId,
+      'zendit',
+      reconciliationPlanCode,
+      reconciliationAttemptNumber,
+      'ok',
+      undefined,
+      Date.now() - reconciliationStartedAt,
+    );
     await logSync(
       orderId,
       null,
@@ -915,11 +1192,19 @@ export async function reconcilePendingZenditOrder(orderId: string): Promise<bool
       `iccid=${result.iccid} status=${result.activationStatus}`,
       'ok',
     );
+    await logIssuanceOutcome(
+      orderId,
+      'zendit',
+      claimed.providerEsimId,
+      'ok',
+      Date.now() - reconciliationStartedAt,
+    );
     recordFulfillmentOutcome({
       providerKey: 'zendit',
       destination: planData.countryCode,
       outcome: 'success',
       isPrimary: true,
+      latencyMs: Date.now() - reconciliationStartedAt,
       marginPercent: claimed.marginPercent ?? undefined,
     }).catch(() => {});
     return true;
@@ -933,13 +1218,30 @@ export async function reconcilePendingZenditOrder(orderId: string): Promise<bool
       lastSyncedAt: new Date(),
       updatedAt: new Date(),
     }).where(and(eq(orders.id, orderId), eq(orders.status, 'reconciling')));
+    await logProviderAttempt(
+      orderId,
+      'zendit',
+      reconciliationPlanCode,
+      reconciliationAttemptNumber,
+      'error',
+      `${classifyFulfillmentFailure(err)}: ${err.message}`,
+      Date.now() - reconciliationStartedAt,
+    );
+    await logIssuanceOutcome(
+      orderId,
+      'zendit',
+      claimed.providerEsimId,
+      'error',
+      Date.now() - reconciliationStartedAt,
+      err,
+    );
     await logSync(
       orderId,
       null,
       'initial_purchase_reconcile',
       'zendit',
-      `reconcile orderId=${orderId}`,
-      err.message,
+      `reconcile orderId=${orderId} durationMs=${Date.now() - reconciliationStartedAt}`,
+      `failureClass=${classifyFulfillmentFailure(err)} ${err.message}`,
       'error',
     );
     throw err;

@@ -17,6 +17,7 @@ import {
 } from "./priceFloor";
 import { calculateSellPrice, GBP_RATE } from "../catalogue/pricing-engine";
 import { mapOfferType, normalizeValidityToBucket } from "../catalogue/normalizer";
+import { selectBestProviderForPlan } from "./routingEngine";
 
 // Stripe Checkout requires sessions to remain open for at least 30 minutes.
 // Keep the signed quote just above that minimum, then expire the hosted session
@@ -185,12 +186,28 @@ export async function createCheckoutQuoteForOffer(providerOfferId: string): Prom
 /** Legacy plan pages have no supplier-offer identity in the URL, so choose one
  * current eligible offer once and preserve that identity in the returned quote. */
 export async function createCheckoutQuoteForNormalizedPlan(normalizedPlanId: string): Promise<CheckoutQuote> {
-  const eligible = await getOffersForNormalizedPlan(normalizedPlanId);
-  const selected = [...eligible].sort((a, b) =>
-    a.wholesalePriceUsd - b.wholesalePriceUsd || a.providerPriority - b.providerPriority,
-  )[0];
+  // A normalized plan is a product family, not a supplier SKU.  Selection must
+  // therefore go through the same health/performance policy used by fulfillment
+  // rather than silently choosing the cheapest offer.  Once the policy picks a
+  // winner, quote only that concrete offer: a paid quote must never broaden to
+  // another SKU in the normalized family.
+  const decision = await selectBestProviderForPlan(normalizedPlanId, "blended_score");
+  const selected = decision.fallbackChain[0];
   if (!selected) throw new PriceFloorError("This plan has no currently fulfillable offer.");
-  return createCheckoutQuoteForOffer(selected.id);
+
+  const eligible = await getOffersForNormalizedPlan(normalizedPlanId);
+  const selectedOffer = eligible.find(offer =>
+    offer.providerKey === selected.providerKey &&
+    offer.providerPlanCode === selected.providerPlanCode,
+  );
+  if (!selectedOffer) {
+    throw new PriceFloorError("The routed supplier offer is no longer available.");
+  }
+
+  // createCheckoutQuoteForOffer deliberately emits a singleton chain.  This is
+  // the audited pinned path for a legacy plan URL and keeps the signed supplier
+  // identity exact through payment and fulfillment.
+  return createCheckoutQuoteForOffer(selectedOffer.id);
 }
 
 /**

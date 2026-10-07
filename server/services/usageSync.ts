@@ -5,7 +5,7 @@
 import { db } from '../storage';
 import { orders, esims, providerSyncLogs } from '@shared/schema';
 import { eq, and, isNotNull } from 'drizzle-orm';
-import { getActiveProvider } from '../providers/adapters';
+import { getProviderAdapterByKey } from '../providers/adapters';
 import { sendLowDataAlert, sendExpiryReminder } from './notifications';
 
 const LOW_DATA_THRESHOLD_PCT = 0.2;
@@ -17,7 +17,13 @@ export async function syncEsimUsage(orderId: string): Promise<void> {
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
   if (!order?.providerEsimId) return;
 
-  const provider = getActiveProvider();
+  if (!order.providerName) return;
+  // Usage belongs to the provider that issued this eSIM. Never use a process
+  // wide static provider/failover order for lifecycle operations.
+  const provider = getProviderAdapterByKey(order.providerName);
+  if (!provider) {
+    throw new Error(`Provider ${order.providerName} is unavailable for usage sync`);
+  }
 
   try {
     const sync = await provider.syncEsim(order.providerEsimId);

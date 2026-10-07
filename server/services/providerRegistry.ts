@@ -2,13 +2,13 @@
 // Core service layer for the multi-provider routing system.
 // Manages the `providers`, `normalized_plans`, and `provider_offers` tables.
 //
-// Routing logic (used by the fulfillment service):
-//   1. Look up the normalizedPlan for the requested destination/data/validity
-//   2. Fetch all active provider_offers for that plan
-//   3. Sort by providers.priority (lower = preferred)
-//   4. The fulfillment adapter picks the winner at provisioning time
+// Routing data access (used by the routing/fulfillment services):
+//   1. Look up an active normalizedPlan
+//   2. Fetch active, fresh provider_offers mapped to that exact plan
+//   3. Apply provider health eligibility
+//   4. Let routingPolicy choose the concrete supplier SKU
 
-import { eq, and, asc, inArray } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { db } from "../storage";
 import {
   providers, normalizedPlans, providerOffers,
@@ -49,7 +49,7 @@ function applyOfferFreshness(
 
 // ─── Provider CRUD ───────────────────────────────────────────────────────────
 
-/** Return all providers ordered by priority (ascending). */
+/** Return all providers ordered by the admin display priority. */
 export async function getAllProviders(): Promise<Provider[]> {
   return db.select().from(providers).orderBy(asc(providers.priority));
 }
@@ -63,7 +63,7 @@ export async function getAllProvidersWithEligibility(): Promise<Array<Provider &
   }));
 }
 
-/** Return only enabled providers ordered by priority. */
+/** Return only enabled providers ordered by the admin display priority. */
 export async function getEnabledProviders(): Promise<Provider[]> {
   return db
     .select()
@@ -121,7 +121,12 @@ export async function getNormalizedPlansByRegion(regionCode: string): Promise<No
 
 /** Look up a normalized plan by ID. */
 export async function getNormalizedPlan(id: string): Promise<NormalizedPlan | undefined> {
-  const [row] = await db.select().from(normalizedPlans).where(eq(normalizedPlans.id, id));
+  // Routing and checkout must fail closed for an inactive plan.  Returning an
+  // inactive row here used to let callers reconstruct a stale provider SKU.
+  const [row] = await db
+    .select()
+    .from(normalizedPlans)
+    .where(and(eq(normalizedPlans.id, id), eq(normalizedPlans.isActive, true)));
   return row;
 }
 
@@ -150,7 +155,20 @@ export async function getOffersForNormalizedPlan(
   normalizedPlanId: string,
   options: { includeIneligible?: boolean } = {},
 ): Promise<ProviderOfferWithEligibility[]> {
-  // Fetch offers + join provider priority in-process (avoids complex ORM join)
+  // Never return offers for an inactive normalized plan.  `includeIneligible`
+  // means "include disabled/stale providers for audit", not "include deleted
+  // catalogue plans".
+  const [normalizedPlan] = await db
+    .select({ id: normalizedPlans.id })
+    .from(normalizedPlans)
+    .where(and(
+      eq(normalizedPlans.id, normalizedPlanId),
+      eq(normalizedPlans.isActive, true),
+    ))
+    .limit(1);
+  if (!normalizedPlan) return [];
+
+  // Fetch offers + provider metadata in-process (avoids complex ORM join).
   const offers = await db
     .select()
     .from(providerOffers)
@@ -161,7 +179,6 @@ export async function getOffersForNormalizedPlan(
 
   if (offers.length === 0) return [];
 
-  const providerKeys = Array.from(new Set(offers.map(o => o.providerKey)));
   // Provider keys in early data used mixed casing (e.g. esimAccess). The
   // registry is tiny, so loading all rows makes canonical matching reliable.
   const providerRows = await db.select().from(providers);
@@ -204,7 +221,14 @@ export async function getOffersForNormalizedPlan(
       };
     })
     .filter(offer => options.includeIneligible || offer.eligibility.eligible)
-    .sort((a, b) => a.providerPriority - b.providerPriority);
+    // Provider priority is an admin/display field, never a routing signal.
+    // Stable lexical ordering makes callers deterministic until the policy
+    // explicitly ranks concrete offers.
+    .sort((a, b) =>
+      a.providerKey.localeCompare(b.providerKey) ||
+      a.providerPlanCode.localeCompare(b.providerPlanCode) ||
+      a.id.localeCompare(b.id),
+    );
 }
 
 /**
@@ -215,6 +239,7 @@ export async function getOffersForNormalizedPlan(
 export async function getProviderOfferEligibility(
   providerKey: string,
   providerPlanCode: string | null | undefined,
+  normalizedPlanId?: string,
 ): Promise<ProviderEligibility> {
   const providerRows = await db.select().from(providers);
   const canonicalKey = canonicalProviderKey(providerKey);
@@ -247,12 +272,36 @@ export async function getProviderOfferEligibility(
   if (!providerEligibility.eligible || !providerPlanCode) return providerEligibility;
 
   try {
+    if (normalizedPlanId) {
+      const [plan] = await db
+        .select({ id: normalizedPlans.id })
+        .from(normalizedPlans)
+        .where(and(
+          eq(normalizedPlans.id, normalizedPlanId),
+          eq(normalizedPlans.isActive, true),
+        ))
+        .limit(1);
+      if (!plan) {
+        return {
+          eligible: false,
+          status: "excluded",
+          healthStatus: providerEligibility.healthStatus,
+          reason: "Normalized plan is no longer active",
+          codes: ["normalized_plan_inactive"],
+          checkedAt: providerEligibility.checkedAt,
+          ageMs: providerEligibility.ageMs,
+        };
+      }
+    }
     const matches = await db
       .select()
       .from(providerOffers)
       .where(and(
         eq(providerOffers.providerPlanCode, providerPlanCode),
         eq(providerOffers.isActive, true),
+        ...(normalizedPlanId
+          ? [eq(providerOffers.normalizedPlanId, normalizedPlanId)]
+          : []),
       ));
     const offer = matches.find(row => canonicalProviderKey(row.providerKey) === canonicalKey);
     if (!offer) {
@@ -357,5 +406,9 @@ export async function getBestOffersForRequirement(
     allOffers.push(...offers.map(o => ({ ...o, planName: plan.name })));
   }
 
-  return allOffers.sort((a, b) => a.providerPriority - b.providerPriority);
+  return allOffers.sort((a, b) =>
+    a.providerKey.localeCompare(b.providerKey) ||
+    a.providerPlanCode.localeCompare(b.providerPlanCode) ||
+    a.id.localeCompare(b.id),
+  );
 }

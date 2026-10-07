@@ -9,3 +9,4 @@
 - [Refund state lifecycle](refund-state-lifecycle.md) — rejected captured payments may be refund-pending; neither pending nor completed refunds may ever fulfill
 - [Non-blocking production startup](non-blocking-production-startup.md) — open the HTTP listener before database seeding or supplier probes; dependency waits cause Autoscale health-check outages
 - [Checkout quote integrity](checkout-quote-integrity.md) — bind displayed price and fulfillment to one concrete supplier offer; normalized grouping is not equivalence
+- [Routing evidence confidence](routing-evidence-confidence.md) — shrink global and destination priors independently; successful fallback usage is not a reliability failure
