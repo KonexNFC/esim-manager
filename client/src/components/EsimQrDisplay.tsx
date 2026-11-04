@@ -7,6 +7,7 @@ import {
   Hand, QrCode,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { qrImageUrl } from "@shared/qrImage";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -117,17 +118,9 @@ export function EsimQrDisplay({ qrCode, iccid, className = "" }: EsimQrDisplayPr
 
   const activationCode = useMemo(() => extractActivationCode(qrCode), [qrCode]);
 
-  // Build a larger QR image URL (512px for clarity)
-  const largeQrUrl = useMemo(() => {
-    try {
-      const u = new URL(qrCode);
-      u.searchParams.set("size", "512x512");
-      u.searchParams.set("margin", "1");
-      return u.toString();
-    } catch {
-      return qrCode;
-    }
-  }, [qrCode]);
+  const largeQrUrl = useMemo(() => qrImageUrl(qrCode, 512), [qrCode]);
+  const [imageStatus, setImageStatus] = useState<"loading" | "loaded" | "error">("loading");
+  useEffect(() => { setImageStatus("loading"); }, [largeQrUrl]);
 
   const isMobile = device !== "desktop";
 
@@ -163,6 +156,8 @@ export function EsimQrDisplay({ qrCode, iccid, className = "" }: EsimQrDisplayPr
           <div className="p-4 bg-white rounded-2xl border-2 border-border shadow-md relative z-10">
             <img
               src={largeQrUrl}
+              onLoad={() => setImageStatus("loaded")}
+              onError={() => setImageStatus("error")}
               alt="eSIM QR Code — hold down to install"
               className="w-56 h-56 object-contain rounded-lg"
               draggable={false}
@@ -179,9 +174,8 @@ export function EsimQrDisplay({ qrCode, iccid, className = "" }: EsimQrDisplayPr
 
         {/* Download + badge row */}
         <div className="flex items-center gap-3">
-          <Badge variant="outline" className="text-green-600 border-green-500/40 bg-green-500/8">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5" />
-            Ready to install
+          <Badge variant="outline" aria-live="polite">
+            {imageStatus === "loaded" ? "QR code loaded" : imageStatus === "error" ? "QR image unavailable" : "Loading QR code"}
           </Badge>
           <a
             href={largeQrUrl}
@@ -193,6 +187,12 @@ export function EsimQrDisplay({ qrCode, iccid, className = "" }: EsimQrDisplayPr
             Save QR image
           </a>
         </div>
+        {imageStatus === "error" && (
+          <p role="alert" className="text-sm text-destructive text-center max-w-xs">
+            The QR image could not load. Try opening “Save QR image” or contact support.
+            Do not purchase another eSIM.
+          </p>
+        )}
       </div>
 
       {/* ── Installation instructions ─────────────────────────────────────── */}

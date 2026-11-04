@@ -5,6 +5,8 @@
 // Fallback: set RESEND_API_KEY to use Resend instead.
 // Dev fallback: console-logs if neither is configured.
 
+import { qrImageUrl } from "../../shared/qrImage";
+
 const RESEND_API = 'https://api.resend.com/emails';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'info@konexesim.com';
@@ -282,14 +284,7 @@ export async function sendEsimReadyEmail(data: EsimReadyData): Promise<void> {
   const orderRef = shortOrderId(data.orderId);
   const orderDate = formatDate();
 
-  // Build larger QR URL
-  let largeQrUrl = data.qrCodeUrl;
-  try {
-    const u = new URL(data.qrCodeUrl);
-    u.searchParams.set('size', '400x400');
-    u.searchParams.set('margin', '1');
-    largeQrUrl = u.toString();
-  } catch { /* keep original */ }
+  const largeQrUrl = esc(qrImageUrl(data.qrCodeUrl, 400));
 
   const currencySymbol = data.currency === 'GBP' ? '£' : data.currency === 'EUR' ? '€' : '$';
   const totalFormatted = data.totalPrice ? `${currencySymbol}${data.totalPrice.toFixed(2)}` : '';

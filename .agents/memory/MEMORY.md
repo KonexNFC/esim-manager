@@ -10,3 +10,4 @@
 - [Non-blocking production startup](non-blocking-production-startup.md) — open the HTTP listener before database seeding or supplier probes; dependency waits cause Autoscale health-check outages
 - [Checkout quote integrity](checkout-quote-integrity.md) — bind displayed price and fulfillment to one concrete supplier offer; normalized grouping is not equivalence
 - [Routing evidence confidence](routing-evidence-confidence.md) — shrink global and destination priors independently; successful fallback usage is not a reliability failure
+- [Signed QR image URLs](signed-qr-urls.md) — Airalo URLs must remain byte-for-byte unchanged in emails and dashboard images.
