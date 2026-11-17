@@ -11,3 +11,4 @@
 - [Checkout quote integrity](checkout-quote-integrity.md) — bind displayed price and fulfillment to one concrete supplier offer; normalized grouping is not equivalence
 - [Routing evidence confidence](routing-evidence-confidence.md) — shrink global and destination priors independently; successful fallback usage is not a reliability failure
 - [Signed QR image URLs](signed-qr-urls.md) — Airalo URLs must remain byte-for-byte unchanged in emails and dashboard images.
+- [Production crash diagnostics](production-crash-diagnostics.md) — minified source dumps hid fatal exceptions; keep compact fatal locations and avoid guessing from nearby caught errors.

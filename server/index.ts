@@ -1,3 +1,4 @@
+import "./services/fatalDiagnostics";
 import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";

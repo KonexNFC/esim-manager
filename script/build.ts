@@ -55,7 +55,8 @@ async function buildAll() {
     define: {
       "process.env.NODE_ENV": '"production"',
     },
-    minify: true,
+    // Long minified source lines hid fatal exception tails in production logs.
+    minify: false,
     external: externals,
     logLevel: "info",
   });
