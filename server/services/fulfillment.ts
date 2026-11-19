@@ -1285,6 +1285,12 @@ export async function runZenditReconciliationJob(): Promise<void> {
         console.warn(`[Fulfillment] Zendit reconciliation failed for ${pending.id}: ${err.message}`);
       }
     }
+  } catch {
+    // A failed queue scan (including stale-claim recovery) must not reject the
+    // timer's fire-and-forget promise and terminate the HTTP process. Leave
+    // persisted orders untouched and retry on the next scheduled tick.
+    // Do not log the raw Drizzle error: it can include SQL/customer data.
+    console.warn('[Fulfillment] Zendit reconciliation queue unavailable; will retry on the next scheduled run');
   } finally {
     zenditReconciliationRunning = false;
   }
