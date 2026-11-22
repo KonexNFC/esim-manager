@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useCurrency, Price, formatCharge } from "@/lib/currency";
 import type { Destination, Plan } from "@shared/schema";
+import { purchasableCatalogue } from "@shared/purchasable-catalogue";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1429,9 +1430,10 @@ function TravelPlansFlow({
     ? data.defaultDuration
     : availBuckets[0] ?? "DAY_3";
 
-  const [comparisonBucket, setComparisonBucket] = useState(() =>
+  const [selectedComparisonBucket, setComparisonBucket] = useState(() =>
     initialBucket && data.availableDurations.includes(initialBucket) ? initialBucket : defaultBucket
   );
+  const comparisonBucket = availBuckets.includes(selectedComparisonBucket) ? selectedComparisonBucket : defaultBucket;
   const [viewMode, setViewMode] = useState<"flow" | "matrix">(() =>
     typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches ? "matrix" : "flow"
   );
@@ -1676,7 +1678,7 @@ function TravelPlansFlow({
                     </div>
                   ) : (
                     <div className="px-4 py-3.5 text-sm text-muted-foreground italic">
-                      No plans available for this duration
+                      No recommended plan for this duration. See the other available options below.
                     </div>
                   )}
 
@@ -1811,7 +1813,7 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
     queryFn: async () => {
       const res = await fetch(`/api/plans/public/${code}`);
       if (!res.ok) throw new Error("Failed");
-      return res.json();
+      return purchasableCatalogue(await res.json() as PublicPlansResponse);
     },
   });
 

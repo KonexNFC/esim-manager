@@ -2709,19 +2709,14 @@ export async function registerRoutes(
           toPublicCheckoutQuote,
         });
         const durations = quotedCatalogue.durations;
-        const availableDurations = catalogue.availableDurations.filter(bucket => {
-          const slot = durations[bucket];
-          return !!slot && !!(slot.recommended || slot.cheaper || slot.premium || slot.browseAll?.length);
-        });
+        const availableDurations = quotedCatalogue.availableDurations;
         if (availableDurations.length === 0) {
           return res.status(404).json({ message: `No public plans found for ${code}` });
         }
         return res.json({
           ...catalogue,
           availableDurations,
-          defaultDuration: availableDurations.includes(catalogue.defaultDuration)
-            ? catalogue.defaultDuration
-            : availableDurations[0],
+          defaultDuration: quotedCatalogue.defaultDuration,
           durations,
         });
       } catch (err: any) {

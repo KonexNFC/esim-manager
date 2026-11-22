@@ -3,6 +3,7 @@ import type {
   DurationSlot,
   NormalizedOffer,
 } from "./supplier-plan.types";
+import { purchasableCatalogue } from "../../shared/purchasable-catalogue";
 
 type RoutedProvider = {
   providerKey: string;
@@ -201,8 +202,8 @@ export async function attachPublicCatalogueQuotes(
     }),
   );
 
-  return {
+  return purchasableCatalogue({
     ...catalogue,
     durations: Object.fromEntries(quotedDurations),
-  };
+  });
 }
