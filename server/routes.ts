@@ -28,6 +28,7 @@ import { calculateMargin } from "./services/marginEngine";
 import { canonicalProviderKey, getProviderEligibilityByKey } from "./services/providerHealth";
 import { selectBestProviderForPlan } from "./services/routingEngine";
 import { getOffersForNormalizedPlan } from "./services/providerRegistry";
+import { registerHomepageRoutes } from "./homepage";
 
 // ─── Schemas ─────────────────────────────────────────
 const bestPlanSchema = z.object({
@@ -70,6 +71,7 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  registerHomepageRoutes(app);
 
   // ─── AUTH ────────────────────────────────────────────
   app.post("/api/auth/signup", async (req, res) => {

@@ -924,7 +924,7 @@ interface PublicPlan {
   offerType: string;
   dataGb: number | null;
   isUnlimited: boolean;
-  hotspotSupported: boolean;
+  hotspotSupported?: boolean | null;
   isSynthetic: boolean;
   wholesaleCostUsd: number;
   sellPriceGbp: number;
@@ -1138,7 +1138,7 @@ function LegacyDetail({ destId }: { destId: string }) {
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <BackButton />
-      <CountryHero imageUrl={destination.imageUrl} name={destination.name} region={destination.region ?? ""} />
+      <CountryHero countryCode={destination.countryCode} name={destination.name} region={destination.region ?? ""} planCount={new Set(sortedPlans.map(p => p.id)).size} fromPrice={sortedPlans[0]?.price} />
       {sortedPlans.length > 0 && (
         <DataCalculatorLegacy plans={sortedPlans} onHighlight={setHighlightedPlanId} />
       )}
@@ -1342,6 +1342,78 @@ function PublicBrowseAll({
   );
 }
 
+function PlanComparison({ data, bucket, onBucketChange, onSelect }: {
+  data: PublicPlansResponse;
+  bucket: string;
+  onBucketChange: (bucket: string) => void;
+  onSelect: (plan: PublicPlan) => void;
+}) {
+  const duration = data.durations[bucket];
+  const tiers = [
+    { label: "Budget", plan: duration?.cheaper },
+    { label: "Recommended", plan: duration?.recommended },
+    { label: "Premium", plan: duration?.premium },
+  ];
+  const rows: { label: string; render: (plan: PublicPlan) => React.ReactNode }[] = [
+    { label: "Data allowance", render: publicPlanDataLabel },
+    { label: "Validity", render: p => BUCKET_LABELS[p.bucket] ?? "Not stated" },
+    { label: "Total price", render: p => p.quote ? quotePrice(p) : "Not available" },
+    { label: "Price per day", render: p => p.quote && BUCKET_DAYS[p.bucket] ? <><Price amount={p.quote.amount / BUCKET_DAYS[p.bucket]} />/day</> : "Not stated" },
+    { label: "Price per GB", render: p => p.isUnlimited ? "Unlimited" : p.quote && p.dataGb != null && p.dataGb > 0 ? <><Price amount={p.quote.amount / p.dataGb} />/GB</> : "Not stated" },
+    { label: "Hotspot", render: p => p.hotspotSupported === true ? "Supported" : p.hotspotSupported === false ? "Not supported" : "Not stated" },
+  ];
+  return (
+    <section aria-labelledby="compare-options-title" className="mb-10">
+      <div className="mb-5">
+        <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-2">Your trip, compared</p>
+        <h2 id="compare-options-title" className="text-2xl sm:text-3xl font-bold">Compare your options</h2>
+        <p className="text-sm text-muted-foreground mt-2">Choose a duration to compare the available tiers side by side.</p>
+      </div>
+      <div role="group" aria-label="Comparison duration" className="flex flex-wrap gap-2 mb-5">
+        {data.availableDurations.map(b => (
+          <button key={b} type="button" aria-pressed={bucket === b} onClick={() => onBucketChange(b)}
+            data-testid={`button-compare-duration-${b}`}
+            className={`rounded-lg border px-4 py-2 text-sm font-semibold ${bucket === b ? "bg-primary text-primary-foreground border-primary" : "bg-card text-foreground border-border hover:bg-muted"}`}>
+            {BUCKET_LABELS[b] ?? b}
+          </button>
+        ))}
+      </div>
+      <div className="overflow-x-auto rounded-xl border bg-card" role="region" aria-label="Plan tier comparison, scroll horizontally for all options" tabIndex={0}>
+        <table className="w-full min-w-[660px] table-fixed text-sm">
+          <caption className="sr-only">Compare Budget, Recommended and Premium options for {BUCKET_LABELS[bucket] ?? bucket}. Validity and daily prices use the plan's duration bucket.</caption>
+          <thead>
+            <tr className="border-b">
+              <th scope="col" className="w-[24%] p-4 text-left text-muted-foreground font-medium">Plan details</th>
+              {tiers.map(({ label }) => <th key={label} scope="col" className={`p-4 text-center text-base ${label === "Recommended" ? "bg-primary/10 text-primary" : ""}`}>{label}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ label, render }) => (
+              <tr key={label} className="border-b">
+                <th scope="row" className="p-4 text-left font-medium text-muted-foreground">{label}</th>
+                {tiers.map(({ label: tier, plan }) => (
+                  <td key={tier} className={`p-4 text-center tabular-nums ${tier === "Recommended" ? "bg-primary/5" : ""}`}>
+                    {plan ? render(plan) : <span className="text-xs text-muted-foreground">Not available for this duration</span>}
+                  </td>
+                ))}
+              </tr>
+            ))}
+            <tr>
+              <th scope="row" className="p-4 text-left text-muted-foreground font-medium">Choose a plan</th>
+              {tiers.map(({ label, plan }) => (
+                <td key={label} className={`p-4 text-center ${label === "Recommended" ? "bg-primary/5" : ""}`}>
+                  {plan ? <Button variant={label === "Recommended" ? "default" : "outline"} disabled={!plan.quote} onClick={() => onSelect(plan)} aria-label={`Select ${label} plan for ${BUCKET_LABELS[bucket] ?? bucket}`} data-testid={`button-compare-select-${label.toLowerCase()}`}>Select</Button> : <span className="text-xs text-muted-foreground">Not available for this duration</span>}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">Validity is shown by duration bucket. Daily prices use the same bucket days.</p>
+    </section>
+  );
+}
+
 function TravelPlansFlow({
   data,
   onSelectPublic,
@@ -1357,7 +1429,12 @@ function TravelPlansFlow({
     ? data.defaultDuration
     : availBuckets[0] ?? "DAY_3";
 
-  const [viewMode, setViewMode] = useState<"flow" | "matrix">("flow");
+  const [comparisonBucket, setComparisonBucket] = useState(() =>
+    initialBucket && data.availableDurations.includes(initialBucket) ? initialBucket : defaultBucket
+  );
+  const [viewMode, setViewMode] = useState<"flow" | "matrix">(() =>
+    typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches ? "matrix" : "flow"
+  );
   const [expandedBrowse, setExpandedBrowse] = useState<Set<string>>(new Set());
 
   // ── Price inversion hints ─────────────────────────────────────────────────
@@ -1386,7 +1463,7 @@ function TravelPlansFlow({
   }, [availBuckets, data.durations]);
 
   // ── Build plan matrix: dataKey × bucket → best plan ──────────────────────
-  const DATA_ROW_ORDER = [1, 2, 3, 5, 10, 0]; // 0 = unlimited sentinel
+  const availableAllowances = new Set<number | "unknown">();
   const matrixMap = new Map<string, PublicPlan>(); // key = `${gb}::${bucket}`
   for (const bucket of availBuckets) {
     const durData = data.durations[bucket];
@@ -1398,7 +1475,10 @@ function TravelPlansFlow({
       ...durData.browseAll,
     ].filter((p): p is PublicPlan => p !== null && p !== undefined);
     for (const plan of allInBucket) {
-      const gb = plan.isUnlimited ? 0 : Math.round((plan.dataGb ?? 0) * 10) / 10;
+      // Preserve the historic unlimited cell ID (0), without treating missing
+      // or zero fixed allowances as unlimited.
+      const gb = plan.isUnlimited ? 0 : plan.dataGb != null && plan.dataGb > 0 ? plan.dataGb : "unknown";
+      availableAllowances.add(gb);
       const key = `${gb}::${bucket}`;
       const existing = matrixMap.get(key);
       if (!existing || quoteAmount(plan) < quoteAmount(existing)) {
@@ -1406,12 +1486,14 @@ function TravelPlansFlow({
       }
     }
   }
-  const matrixRows = DATA_ROW_ORDER.filter(gb =>
-    availBuckets.some(b => matrixMap.has(`${gb}::${b}`))
+  const matrixRows = Array.from(availableAllowances).sort((a, b) =>
+    (a === "unknown" ? Infinity : a === 0 ? Number.MAX_VALUE : a) -
+    (b === "unknown" ? Infinity : b === 0 ? Number.MAX_VALUE : b)
   );
 
   return (
     <div>
+      <PlanComparison data={data} bucket={comparisonBucket} onBucketChange={setComparisonBucket} onSelect={onSelectPublic} />
       {/* Header + view toggle */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold" data-testid="text-duration-title">
@@ -1420,6 +1502,7 @@ function TravelPlansFlow({
         <div className="flex border rounded-lg overflow-hidden text-xs font-semibold">
           <button
             onClick={() => setViewMode("flow")}
+            aria-pressed={viewMode === "flow"}
             className={`px-3 py-1.5 transition-colors ${viewMode === "flow" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
             data-testid="button-view-flow"
           >
@@ -1427,6 +1510,7 @@ function TravelPlansFlow({
           </button>
           <button
             onClick={() => setViewMode("matrix")}
+            aria-pressed={viewMode === "matrix"}
             className={`px-3 py-1.5 transition-colors border-l ${viewMode === "matrix" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
             data-testid="button-view-matrix"
           >
@@ -1441,15 +1525,16 @@ function TravelPlansFlow({
           <p className="text-sm text-muted-foreground mb-4">
             Tap any cell to select that plan. Greyed cells have no plan available.
           </p>
-          <div className="overflow-x-auto -mx-0 rounded-xl border">
+          <div className="overflow-x-auto -mx-0 rounded-xl border" role="region" aria-label="All plans grid, scroll horizontally" tabIndex={0}>
             <table className="text-sm border-collapse" style={{ minWidth: "100%" }}>
+              <caption className="sr-only">Available plans by data allowance and duration bucket. Select a price to continue.</caption>
               <thead>
                 <tr className="bg-muted/50">
-                  <th className="text-left px-2 py-2 text-xs font-semibold text-muted-foreground border-b border-r whitespace-nowrap min-w-[68px] sticky left-0 bg-muted/50 z-10">
+                  <th scope="col" className="text-left px-2 py-2 text-xs font-semibold text-muted-foreground border-b border-r whitespace-nowrap min-w-[68px] sticky left-0 bg-muted z-10">
                     Data
                   </th>
                   {availBuckets.map(b => (
-                    <th key={b} className="px-2 py-2 text-xs font-semibold text-center border-b border-r last:border-r-0 whitespace-nowrap min-w-[58px]">
+                    <th scope="col" key={b} className="px-2 py-2 text-xs font-semibold text-center border-b border-r last:border-r-0 whitespace-nowrap min-w-[58px]">
                       {BUCKET_LABELS[b]}
                     </th>
                   ))}
@@ -1458,9 +1543,9 @@ function TravelPlansFlow({
               <tbody>
                 {matrixRows.map((gb, ri) => (
                   <tr key={gb} className={ri % 2 === 0 ? "bg-background" : "bg-muted/20"}>
-                    <td className={`px-2 py-2 text-xs font-semibold border-r border-b last:border-b-0 whitespace-nowrap sticky left-0 z-10 ${ri % 2 === 0 ? "bg-background" : "bg-muted/20"}`}>
-                      {gb === 0 ? "Unlimited" : `${gb} GB`}
-                    </td>
+                    <th scope="row" className={`px-2 py-2 text-left text-xs font-semibold border-r border-b last:border-b-0 whitespace-nowrap sticky left-0 z-10 ${ri % 2 === 0 ? "bg-background" : "bg-muted"}`}>
+                      {gb === 0 ? "Unlimited" : gb === "unknown" ? "Not stated" : `${gb} GB`}
+                    </th>
                     {availBuckets.map(b => {
                       const plan = matrixMap.get(`${gb}::${b}`);
                       return (
@@ -1468,13 +1553,14 @@ function TravelPlansFlow({
                           {plan ? (
                             <button
                               onClick={() => onSelectPublic(plan)}
+                              aria-label={`Select ${publicPlanDataLabel(plan)}, ${BUCKET_LABELS[b] ?? b}`}
                               className="w-full rounded-md px-1.5 py-1.5 font-semibold text-xs bg-primary/10 hover:bg-primary hover:text-primary-foreground transition-colors whitespace-nowrap"
                               data-testid={`button-matrix-${gb}-${b}`}
                             >
                               {quotePrice(plan)}
                             </button>
                           ) : (
-                            <span className="text-muted-foreground/30 text-xs select-none">—</span>
+                            <span className="block rounded-md bg-muted px-1.5 py-1.5 text-muted-foreground text-xs"><span aria-hidden="true">—</span><span className="sr-only">Not available</span></span>
                           )}
                         </td>
                       );
@@ -1514,7 +1600,7 @@ function TravelPlansFlow({
                 key={bucket}
                 className={`rounded-2xl border overflow-hidden transition-all ${
                   isPopular
-                    ? "border-primary/50 shadow-md shadow-primary/10"
+                    ? "border-primary"
                     : "border-border"
                 }`}
                 data-testid={`card-bucket-${bucket}`}
@@ -1760,17 +1846,16 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
   if (!meta) return <NotFoundState />;
 
   const hasPlans = publicPlans && publicPlans.availableDurations.length > 0;
-  const totalPlansCount = publicPlans
-    ? Object.values(publicPlans.durations).reduce((acc, d) => {
-        const ids = new Set([
-          ...(d.recommended ? [d.recommended.id] : []),
-          ...(d.cheaper ? [d.cheaper.id] : []),
-          ...(d.premium ? [d.premium.id] : []),
-          ...(d.browseAll ?? []).map(p => p.id),
-        ]);
-        return acc + ids.size;
-      }, 0)
-    : 0;
+  const availableSummaryPlans = publicPlans
+    ? Object.values(publicPlans.durations).flatMap(d =>
+        [d.recommended, d.cheaper, d.premium, ...(d.browseAll ?? [])]
+          .filter((p): p is PublicPlan => !!p && !!p.quote)
+      )
+    : [];
+  const totalPlansCount = new Set(availableSummaryPlans.map(p => p.id)).size;
+  const lowestQuote = availableSummaryPlans.length > 0
+    ? Math.min(...availableSummaryPlans.map(p => p.quote!.amount))
+    : undefined;
 
   const handleSelectPublic = (p: PublicPlan) => setCheckoutPlan(p);
 
@@ -1786,39 +1871,9 @@ function CountryDetail({ countryCode }: { countryCode: string }) {
 
       <BackButton />
 
-      {/* Hero */}
-      <div className="relative rounded-xl overflow-hidden mb-8 h-48 sm:h-56 bg-muted">
-        {!meta.isRegion && (
-          <img
-            src={`https://flagcdn.com/w1280/${code.toLowerCase()}.png`}
-            alt={meta.name}
-            className="w-full h-full object-cover opacity-60"
-            onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = "0"; }}
-          />
-        )}
-        {meta.isRegion && (
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-primary/10 to-transparent" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-        <div className="absolute bottom-0 left-0 p-5 flex items-center gap-3">
-          <span className="text-4xl">{meta.flagEmoji}</span>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-white" data-testid="text-destination-title">
-              {meta.name}
-            </h1>
-            <p className="text-white/70 text-sm" data-testid="text-destination-region">
-              {meta.isRegion ? "Multi-country plan" : meta.region}
-            </p>
-          </div>
-        </div>
-        {totalPlansCount > 0 && (
-          <div className="absolute top-4 right-4">
-            <Badge className="bg-black/50 text-white border-white/20 backdrop-blur-sm">
-              {totalPlansCount} plan{totalPlansCount !== 1 ? "s" : ""} available
-            </Badge>
-          </div>
-        )}
-      </div>
+      <CountryHero countryCode={code} name={meta.name} region={meta.region}
+        isRegion={meta.isRegion || meta.type === "region" || meta.type === "global"}
+        planCount={totalPlansCount} fromPrice={lowestQuote} />
 
       {hasPlans ? (
         <TravelPlansFlow
@@ -1862,6 +1917,7 @@ function PublicCheckoutModal({
   countryCode: string;
   onClose: () => void;
 }) {
+  const { currency } = useCurrency();
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
   const [step, setStep] = useState<"email" | "pay">("email");
@@ -2093,6 +2149,11 @@ function PublicCheckoutModal({
             <Lock className="w-3 h-3" />
             {quote ? `Actual charge: ${formatCharge(quote.amount, quote.currency)}` : "Checking live availability"}
           </p>
+          {quote && currency.code !== quote.currency && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Displayed in {currency.code}; charged in {quote.currency}. Conversion is approximate.
+            </p>
+          )}
           {quoteError && (
             <div className="mt-2 flex items-center justify-between gap-2">
               <p className="text-xs text-destructive">{quoteError}</p>
@@ -2263,31 +2324,53 @@ function FeatureRow({ icon, label, sub }: { icon: React.ReactNode; label: string
   );
 }
 
-function CountryHero({ imageUrl, name, region }: { imageUrl: string; name: string; region: string }) {
+function CountryHero({ countryCode, name, region, isRegion, planCount, fromPrice }: {
+  countryCode: string;
+  name: string;
+  region: string;
+  isRegion?: boolean;
+  planCount: number;
+  fromPrice?: number;
+}) {
   return (
-    <div className="relative rounded-xl overflow-hidden mb-8">
-      <img src={imageUrl} alt={name} className="w-full h-48 sm:h-56 object-cover" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-      <div className="absolute bottom-0 left-0 p-5 flex items-center gap-3">
-        <div className="flex items-center justify-center w-10 h-10 rounded-md bg-white/20 backdrop-blur-sm">
-          <Globe className="w-5 h-5 text-white" />
+    <section aria-label={`${name} eSIM summary`} className="mb-8 rounded-xl border bg-card">
+      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted">
+            {isRegion || !/^[A-Za-z]{2}$/.test(countryCode)
+              ? <Globe className="h-6 w-6 text-primary" aria-hidden="true" />
+              : <img src={flagSrc(countryCode)} alt={`${name} flag`} className="h-full w-full object-cover" onError={e => { e.currentTarget.style.visibility = "hidden"; }} />}
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1" data-testid="text-destination-region">{isRegion ? "Multi-country plan" : region}</p>
+            <h1 className="text-2xl sm:text-3xl font-bold leading-tight" data-testid="text-destination-title">{name}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{planCount} plan{planCount !== 1 ? "s" : ""} available</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white" data-testid="text-destination-title">{name}</h1>
-          <p className="text-white/70 text-sm" data-testid="text-destination-region">{region}</p>
-        </div>
+        {fromPrice !== undefined && (
+          <div className="border-t pt-4 sm:border-t-0 sm:border-l sm:pl-6 sm:pt-0">
+            <p className="text-xs text-muted-foreground mb-1">From</p>
+            <p className="text-2xl font-bold tabular-nums" data-testid="text-destination-from-price"><Price amount={fromPrice} /></p>
+            <p className="text-xs text-muted-foreground mt-1">One-time payment</p>
+          </div>
+        )}
       </div>
-    </div>
+      <ul className="flex flex-wrap gap-x-5 gap-y-2 border-t bg-muted/30 px-5 py-3 sm:px-6">
+        {["QR emailed after payment", "No contracts", "No roaming fees", "No physical SIM"].map(fact => (
+          <li key={fact} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />{fact}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
 function BackButton() {
   return (
-    <Link href="/destinations">
-      <Button variant="ghost" className="mb-4" data-testid="button-back-destinations">
+    <Link href="/destinations" className="mb-4 inline-flex items-center rounded-md px-3 py-2 text-sm font-medium hover:bg-muted" data-testid="button-back-destinations">
         <ArrowLeft className="w-4 h-4 mr-2" />
         All Destinations
-      </Button>
     </Link>
   );
 }

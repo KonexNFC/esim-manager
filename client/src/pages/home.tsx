@@ -1,139 +1,225 @@
 import { Link, useLocation } from "wouter";
-import { useCurrency, Price } from "@/lib/currency";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { KonexLogo } from "@/components/konex-logo";
-import { useQuery } from "@tanstack/react-query";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import {
-  ArrowRight, Globe, Zap, Smartphone, Search,
-  Wifi, Star, Lock, CheckCircle2,
-  Signal, Quote, Radio,
-  QrCode, MapPin, Banknote, ShieldCheck,
-  Package, Timer, ChevronRight,
-  Network, Activity, TrendingUp, Shield,
-} from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { SiVisa, SiMastercard, SiApplepay, SiPaypal, SiGooglepay, SiVodafone, SiTmobile, SiOrange } from "react-icons/si";
-import type { Destination, Plan } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
+import { Price } from "@/lib/currency";
+import { Button } from "@/components/ui/button";
+import { KonexLogo } from "@/components/konex-logo";
 import { CountryCombobox } from "@/components/country-combobox";
-import { useInView } from "@/hooks/use-in-view";
-import { GlobeVisualization } from "@/components/globe-visualization";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { ArrowRight, Globe, Smartphone, Search, Lock, CheckCircle2, QrCode, MapPin, Banknote, ShieldCheck, Timer, Mail, FileText } from "lucide-react";
+import { SiVisa, SiMastercard, SiApplepay, SiPaypal, SiGooglepay } from "react-icons/si";
+import type { Destination } from "@shared/schema";
+import { eventHasNotEnded } from "@shared/event-dates";
 import travelLandmarksImg from "@assets/Travel_Image__1776723002223.jpeg";
 
-// ─── Reveal wrapper ──────────────────────────────────────────────────────────
-function Reveal({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
-  const { ref, inView } = useInView(0.1);
+// The catalogue is the sole source of homepage prices. Missing prices stay absent.
+interface HomepageCatalogue {
+  destinationCount: number;
+  activePlanCount: number;
+  popularPrices: Record<string, number>;
+  bundlePrices: Record<string, number>;
+  updatedAt: string;
+}
+
+function useHomepageCatalogue() {
+  return useQuery<HomepageCatalogue>({
+    queryKey: ["/api/homepage/catalogue"],
+    staleTime: 60_000,
+  });
+}
+
+function validPrice(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+const flagStrip = [
+  { code: "GB", label: "UK" }, { code: "US", label: "USA" },
+  { code: "AE", label: "UAE" }, { code: "NG", label: "Nigeria" },
+  { code: "FR", label: "France" }, { code: "DE", label: "Germany" },
+  { code: "JP", label: "Japan" }, { code: "SG", label: "Singapore" },
+  { code: "ES", label: "Spain" }, { code: "IT", label: "Italy" },
+  { code: "TH", label: "Thailand" }, { code: "AU", label: "Australia" },
+];
+
+function FlagImg({ code, name, className = "" }: { code: string; name: string; className?: string }) {
+  return <img src={`https://flagcdn.com/w80/${code.toLowerCase()}.png`} alt={name} loading="lazy" className={`object-cover ${className}`} />;
+}
+
+function TravelSmarterSection() {
+  const [, navigate] = useLocation();
+  const [heroCode, setHeroCode] = useState("");
+  const [heroDays, setHeroDays] = useState<number | null>(null);
+  const handleFind = () => {
+    const params = new URLSearchParams();
+    if (heroDays) params.set("days", String(heroDays));
+    if (heroCode && heroCode !== "any") params.set("country", heroCode);
+    navigate(params.toString() ? `/find-plan?${params}` : "/find-plan");
+  };
+
   return (
-    <div
-      ref={ref}
-      className={`reveal ${inView ? "in-view" : ""} ${delay ? `reveal-delay-${delay}` : ""} ${className}`}
-    >
-      {children}
+    <section className="konex-inverse relative overflow-hidden" data-testid="section-travel-smarter">
+      <div className="absolute inset-0 pointer-events-none">
+        <img src="/images/hero-bg.png" alt="" className="w-full h-full object-cover opacity-[0.07]" />
+      </div>
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 lg:gap-20 items-center py-4 sm:py-8">
+          <div>
+            <p className="text-primary text-xs font-bold uppercase tracking-[0.2em] mb-6">A little planning. A better arrival.</p>
+            <h1 className="font-display text-[2.7rem] sm:text-6xl lg:text-7xl font-bold tracking-[-0.055em] leading-[1.04] mb-6" data-testid="text-hero-title">
+              <span data-testid="text-travel-smarter-title">Your travel data.<br /><span className="text-primary">Ready before<br className="hidden lg:block" /> you land.</span></span>
+            </h1>
+            <p className="text-white/85 leading-relaxed text-base sm:text-lg max-w-lg mb-8" data-testid="text-hero-subtitle">
+              Choose your destination and trip length, then get your eSIM QR code by email after payment.
+            </p>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-4 mb-5" data-testid="trust-bullets">
+              {[
+                { icon: Mail, text: "Instant QR by email*" },
+                { icon: CheckCircle2, text: "No contracts" },
+                { icon: Banknote, text: "No roaming fees" },
+                { icon: Smartphone, text: "No physical SIM" },
+              ].map(({ icon: Icon, text }) => (
+                <div key={text} className="flex items-center gap-2 text-sm text-white/90">
+                  <Icon aria-hidden className="w-4 h-4 text-primary shrink-0" />{text}
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-white/70 leading-relaxed max-w-md">
+              *Typically within minutes. Rare cases can take up to 24 hours. <Link href="/terms" className="underline underline-offset-4">Delivery terms</Link>
+            </p>
+            <Link href="/find-plan" className="inline-flex items-center gap-2 mt-5 text-sm font-semibold text-primary" data-testid="button-travel-smarter-find">Explore the plan finder<ArrowRight aria-hidden className="w-4 h-4" /></Link>
+          </div>
+          <div data-testid="section-plan-finder">
+          <div className="rounded-3xl border border-border bg-card text-card-foreground [--primary-text:202_90%_30%] dark:[--primary-text:199_93%_72%] shadow-xl p-6 sm:p-8 lg:p-9" data-testid="hero-plan-selector">
+            <div className="flex items-center justify-between pb-5 mb-6 border-b">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Your next connection</p>
+              <Globe aria-hidden className="w-5 h-5 text-primary" />
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight mb-2" data-testid="text-plan-finder-title">Where are you heading?</h2>
+            <p className="text-sm text-muted-foreground mb-7">Find data that fits your destination and your stay.</p>
+            <label className="block text-sm font-semibold mb-2" id="hero-destination-label">Destination</label>
+            <CountryCombobox value={heroCode} onSelect={code => setHeroCode(code ?? "")} placeholder="Search destination…" allowAny className="h-12 w-full text-sm" data-testid="hero-select-destination" />
+            <fieldset className="mt-6 mb-7">
+              <legend className="text-sm font-semibold mb-3">How long are you away?</legend>
+              <div className="flex flex-wrap gap-2" data-testid="hero-duration-buttons">
+                {[1, 3, 5, 7, 30].map(d => (
+                  <button key={d} type="button" aria-pressed={heroDays === d} onClick={() => setHeroDays(heroDays === d ? null : d)}
+                    className={`flex-1 min-w-[52px] rounded-lg border px-2 py-3 text-sm font-semibold ${heroDays === d ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border hover:bg-muted"}`}
+                    data-testid={`hero-duration-${d}`}>{d} {d === 1 ? "day" : "days"}</button>
+                ))}
+              </div>
+            </fieldset>
+            <button type="button" onClick={handleFind} className="group flex items-center justify-center gap-2 h-12 rounded-xl w-full bg-primary text-primary-foreground font-bold transition-transform duration-200 active:scale-[0.99]" data-testid="button-hero-find-plan">
+              <Search aria-hidden className="w-4 h-4" />Find My Plan<ArrowRight aria-hidden className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
+            </button>
+            <div className="mt-5 flex items-center justify-between gap-3 text-xs">
+              <Link href="/compatibility" className="text-muted-foreground underline underline-offset-4">Check your device first</Link>
+              <Link href="/destinations" className="font-semibold text-primary" data-testid="button-travel-smarter-browse">View Plans <ArrowRight aria-hidden className="inline w-3 h-3" /></Link>
+            </div>
+          </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StatsStrip() {
+  const { data, isLoading, isError, refetch, isFetching } = useHomepageCatalogue();
+  return (
+    <div className="border-b bg-secondary/45" data-testid="section-stats-strip">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6" aria-live="polite">
+        {isLoading ? (
+          <div role="status" className="flex flex-wrap gap-8 sm:gap-16">
+            <span className="text-sm text-muted-foreground">Checking the live catalogue…</span>
+            {[1, 2].map(n => <div key={n} aria-hidden className="h-7 w-28 rounded bg-muted motion-safe:animate-pulse" />)}
+          </div>
+        ) : isError ? (
+          <div className="flex flex-wrap items-center gap-3 text-sm" role="alert">
+            <span>Live catalogue details are temporarily unavailable. You can still browse destinations.</span>
+            <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()} data-testid="button-catalogue-retry">{isFetching ? "Trying again…" : "Retry"}</Button>
+          </div>
+        ) : data ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-10">
+            <div className="flex items-baseline gap-3"><strong className="text-2xl font-display tracking-tight">{data.destinationCount.toLocaleString()}</strong><span className="text-sm text-muted-foreground">destinations in the catalogue</span></div>
+            <div className="flex items-baseline gap-3 md:border-l md:pl-8"><strong className="text-2xl font-display tracking-tight">{data.activePlanCount.toLocaleString()}</strong><span className="text-sm text-muted-foreground">active data plans</span></div>
+            <Link href="/terms" className="md:border-l md:pl-8">
+              <strong className="block font-display text-lg">Typically minutes</strong>
+              <span className="text-xs text-muted-foreground underline underline-offset-4">QR delivery · rare cases up to 24 hours</span>
+            </Link>
+          </div>
+        ) : <p className="text-sm text-muted-foreground">No catalogue details available yet.</p>}
+      </div>
     </div>
   );
 }
 
-async function goToCheckout(
-  navigate: (path: string) => void,
-  destId: string,
-  size: string,
-  duration: string,
-) {
-  try {
-    const res = await fetch(`/api/plans?destinationId=${destId}`);
-    const plans: Plan[] = await res.json();
-    const active = plans.filter((p) => p.planStatus !== "inactive");
-    if (!active.length) { navigate(`/destinations/${destId}`); return; }
-    let pool = [...active];
-    if (size && size !== "Unlimited") {
-      const targetGb = parseFloat(size);
-      const bySize = pool.filter((p) => {
-        const m = p.dataAmount.match(/(\d+(?:\.\d+)?)/);
-        return m && Math.abs(parseFloat(m[1]) - targetGb) < 0.5;
-      });
-      if (bySize.length) pool = bySize;
-    } else if (size === "Unlimited") {
-      const unl = pool.filter((p) => /unlimited/i.test(p.dataAmount));
-      if (unl.length) pool = unl;
-    }
-    if (duration) {
-      const targetDays = parseInt(duration);
-      const byDur = pool.filter((p) => {
-        const m = p.validity.match(/(\d+)/);
-        return m && Math.abs(parseInt(m[1]) - targetDays) <= 2;
-      });
-      if (byDur.length) pool = byDur;
-    }
-    const best = pool.reduce((a, b) => (b.price < a.price ? b : a), pool[0]);
-    navigate(`/checkout/${best.id}`);
-  } catch {
-    navigate(`/destinations/${destId}`);
-  }
+function NigeriaCampaignCard() {
+  const [, navigate] = useLocation();
+  return (
+    <section className="px-4 sm:px-6 py-6" data-testid="section-nigeria-campaign">
+      <div className="max-w-7xl mx-auto">
+        <div className="konex-inverse rounded-2xl border border-primary/25 cursor-pointer group px-6 py-6 flex flex-col md:flex-row md:items-center justify-between gap-5"
+          onClick={() => navigate("/nigeria-esim")} data-testid="card-nigeria-campaign" role="button" tabIndex={0}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate("/nigeria-esim"); } }}>
+          <div className="flex items-center gap-4">
+            <FlagImg code="NG" name="Nigeria" className="w-10 h-7 rounded shrink-0" />
+            <div><p className="font-bold text-base sm:text-lg">Flying to Nigeria? Get connected before landing.</p>
+              <p className="text-white/85 text-sm mt-1">Skip the airport SIM queue. Buy before you fly and follow your QR installation guide.</p></div>
+          </div>
+          <Button className="font-bold shrink-0" onClick={e => { e.stopPropagation(); navigate("/nigeria-esim"); }} data-testid="button-nigeria-campaign-cta">Get Nigeria eSIM<ArrowRight aria-hidden className="ml-2 w-4 h-4" /></Button>
+        </div>
+      </div>
+    </section>
+  );
 }
 
-const flagStrip = [
-  { code: "GB", label: "UK",        flag: "🇬🇧" },
-  { code: "US", label: "USA",       flag: "🇺🇸" },
-  { code: "AE", label: "UAE",       flag: "🇦🇪" },
-  { code: "NG", label: "Nigeria",   flag: "🇳🇬" },
-  { code: "FR", label: "France",    flag: "🇫🇷" },
-  { code: "DE", label: "Germany",   flag: "🇩🇪" },
-  { code: "JP", label: "Japan",     flag: "🇯🇵" },
-  { code: "SG", label: "Singapore", flag: "🇸🇬" },
-  { code: "ES", label: "Spain",     flag: "🇪🇸" },
-  { code: "IT", label: "Italy",     flag: "🇮🇹" },
-  { code: "TH", label: "Thailand",  flag: "🇹🇭" },
-  { code: "AU", label: "Australia", flag: "🇦🇺" },
-];
-
-const mockPlans = [
-  { dest: "United Kingdom", flag: "🇬🇧", data: "10 GB", days: 30, price: "$18" },
-  { dest: "Europe",         flag: "🇪🇺", data: "5 GB",  days: 15, price: "$14" },
-  { dest: "UAE",            flag: "🇦🇪", data: "3 GB",  days:  7, price: "$11" },
-  { dest: "Nigeria",        flag: "🇳🇬", data: "5 GB",  days: 30, price: "$16" },
-];
-
-
-// ─── Festival events data ──────────────────────────────────────────────────────
-interface FestivalEvent {
-  id: string;
-  name: string;
-  subtitle: string;
-  location: string;
-  dates: string;
-  flags: string[];
-  countryCode: string;
-  bgFrom: string;
-  bgTo: string;
-  accent: string;
-  photo: string;
-  cta: string;
+function PopularDestinations() {
+  const { data: destinations, isLoading, isError, refetch } = useQuery<Destination[]>({ queryKey: ["/api/destinations"] });
+  const { data: catalogue } = useHomepageCatalogue();
+  const popular = destinations?.filter(d => d.popular).slice(0, 8) ?? [];
+  return (
+    <section id="plans" className="border-t scroll-mt-24">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-5 mb-9">
+          <div><p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Popular destinations</p>
+            <h2 className="font-display text-4xl sm:text-5xl font-bold mb-3">Next stop?<br />Already connected.</h2>
+            <p className="text-muted-foreground text-sm">Explore data plans for the places on your itinerary.</p></div>
+          <Button asChild variant="outline" className="font-bold self-start"><Link href="/destinations" data-testid="button-popular-browse-all">Browse all destinations<ArrowRight aria-hidden className="ml-2 w-4 h-4" /></Link></Button>
+        </div>
+        {isLoading ? <div role="status"><span className="sr-only">Loading destinations</span><div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">{[1, 2, 3, 4].map(n => <div key={n} className="aspect-[3/4] bg-muted rounded-2xl motion-safe:animate-pulse" />)}</div></div>
+          : isError ? <div role="alert" className="p-8 rounded-2xl border bg-card"><p className="mb-4">We couldn't load destinations.</p><Button onClick={() => void refetch()} variant="outline">Try again</Button></div>
+          : !popular.length ? <div className="rounded-2xl border bg-card p-8"><Globe aria-hidden className="w-8 h-8 text-primary mb-4" /><h3 className="text-xl font-bold mb-2">Find your own favourite.</h3><p className="text-muted-foreground mb-4">Browse the destination catalogue to plan your connection.</p><Link href="/destinations" className="underline">Explore destinations</Link></div>
+          : <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+            {popular.map(dest => {
+              const price = catalogue?.popularPrices?.[dest.id];
+              return (
+                <Link key={dest.id} href={`/destinations/${dest.countryCode}`} data-testid={`card-popular-dest-${dest.id}`} className="group relative block overflow-hidden rounded-2xl aspect-[3/4] bg-muted">
+                  <img src={dest.imageUrl} alt={dest.name} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 motion-reduce:transition-none group-hover:scale-[1.03]" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[hsl(var(--inverse))] via-[hsl(var(--inverse)/.15)] to-transparent" />
+                  {validPrice(price) && <div className="absolute top-3 right-3 rounded-lg bg-[hsl(var(--inverse)/.85)] text-[hsl(var(--inverse-foreground))] px-3 py-2 text-xs"><span className="block text-[10px] mb-0.5">From</span><strong><Price amount={price} /></strong></div>}
+                  <div className="absolute bottom-0 inset-x-0 p-3 sm:p-5 text-[hsl(var(--inverse-foreground))]">
+                    <FlagImg code={dest.countryCode} name={dest.name} className="w-7 h-5 rounded-sm mb-3 border border-white/20" />
+                    <p className="font-bold text-sm sm:text-lg pr-3">{dest.name}</p><p className="text-xs opacity-85 mt-1">{dest.region}</p>
+                    <ArrowRight aria-hidden className="absolute bottom-6 right-3 sm:right-5 w-3 h-3 sm:w-4 sm:h-4" />
+                  </div>
+                </Link>
+              );
+            })}
+          </div>}
+      </div>
+    </section>
+  );
 }
 
-const FESTIVAL_EVENTS: FestivalEvent[] = [
+const FESTIVAL_EVENTS = [
   {
     id: "notting-hill-2026",
     name: "Notting Hill Carnival",
     subtitle: "Europe's biggest street festival",
     location: "London, United Kingdom",
     dates: "Aug 30 – 31, 2026",
-    flags: ["🇬🇧"],
     countryCode: "GB",
-    bgFrom: "#2e1065",
-    bgTo: "#5b21b6",
-    accent: "#f0abfc",
+    bgFrom: "#2e1065", bgTo: "#5b21b6", accent: "#f0abfc",
     photo: "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&w=700&q=80",
     cta: "Get UK eSIM",
   },
@@ -143,11 +229,8 @@ const FESTIVAL_EVENTS: FestivalEvent[] = [
     subtitle: "Six million visitors, 16 days of Bavarian tradition. Munich's legendary celebration returns.",
     location: "Munich, Germany",
     dates: "Sep 19 – Oct 4, 2026",
-    flags: ["🇩🇪", "🍺"],
     countryCode: "DE",
-    bgFrom: "#0c1f3c",
-    bgTo: "#1e3a5f",
-    accent: "#60a5fa",
+    bgFrom: "#0c1f3c", bgTo: "#1e3a5f", accent: "#60a5fa",
     photo: "https://images.unsplash.com/photo-1567327613485-fbd5f472a1c0?auto=format&fit=crop&w=700&q=80",
     cta: "Get Germany eSIM",
   },
@@ -157,11 +240,8 @@ const FESTIVAL_EVENTS: FestivalEvent[] = [
     subtitle: "F1 night race under the lights",
     location: "Marina Bay, Singapore",
     dates: "October 2026",
-    flags: ["🇸🇬"],
     countryCode: "SG",
-    bgFrom: "#2d0a0a",
-    bgTo: "#4a1010",
-    accent: "#f87171",
+    bgFrom: "#2d0a0a", bgTo: "#4a1010", accent: "#f87171",
     photo: "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?auto=format&fit=crop&w=700&q=80",
     cta: "Get Singapore eSIM",
   },
@@ -171,11 +251,8 @@ const FESTIVAL_EVENTS: FestivalEvent[] = [
     subtitle: "The world's largest trade fair",
     location: "Guangzhou, China",
     dates: "Oct 15 – Nov 4, 2026",
-    flags: ["🇨🇳"],
     countryCode: "CN",
-    bgFrom: "#450a0a",
-    bgTo: "#7f1d1d",
-    accent: "#fbbf24",
+    bgFrom: "#450a0a", bgTo: "#7f1d1d", accent: "#fbbf24",
     photo: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=700&q=80",
     cta: "Get China eSIM",
   },
@@ -185,11 +262,8 @@ const FESTIVAL_EVENTS: FestivalEvent[] = [
     subtitle: "The world's premier art fair",
     location: "Miami Beach, USA",
     dates: "December 2026",
-    flags: ["🇺🇸"],
     countryCode: "US",
-    bgFrom: "#083344",
-    bgTo: "#155e75",
-    accent: "#f472b6",
+    bgFrom: "#083344", bgTo: "#155e75", accent: "#f472b6",
     photo: "https://images.unsplash.com/photo-1506966953602-c20cc11f75e3?auto=format&fit=crop&w=700&q=80",
     cta: "Get USA eSIM",
   },
@@ -199,1716 +273,310 @@ const FESTIVAL_EVENTS: FestivalEvent[] = [
     subtitle: "A month of shopping, shows & fireworks",
     location: "Dubai, UAE",
     dates: "Dec 2026 – Jan 2027",
-    flags: ["🇦🇪"],
     countryCode: "AE",
-    bgFrom: "#1c1917",
-    bgTo: "#44403c",
-    accent: "#facc15",
+    bgFrom: "#1c1917", bgTo: "#44403c", accent: "#facc15",
     photo: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=700&q=80",
     cta: "Get UAE eSIM",
   },
 ];
 
-// ─── Flag helpers ─────────────────────────────────────────────────────────────
-function flagUrl(code: string) {
-  return `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
-}
-
-function FlagImg({ code, name, className = "" }: { code: string; name: string; className?: string }) {
-  return (
-    <img
-      src={flagUrl(code)}
-      alt={name}
-      loading="lazy"
-      className={`object-cover ${className}`}
-    />
-  );
-}
-
-// ─── Quick countries data ──────────────────────────────────────────────────────
-const QUICK_COUNTRIES = [
-  { code: "GB", flag: "🇬🇧", name: "United Kingdom",  from: "$11" },
-  { code: "US", flag: "🇺🇸", name: "United States",   from: "$9"  },
-  { code: "AE", flag: "🇦🇪", name: "UAE / Dubai",     from: "$12" },
-  { code: "NG", flag: "🇳🇬", name: "Nigeria",         from: "$13" },
-  { code: "FR", flag: "🇫🇷", name: "France",          from: "$10" },
-  { code: "DE", flag: "🇩🇪", name: "Germany",         from: "$10" },
-  { code: "JP", flag: "🇯🇵", name: "Japan",           from: "$11" },
-  { code: "SG", flag: "🇸🇬", name: "Singapore",      from: "$9"  },
-  { code: "ES", flag: "🇪🇸", name: "Spain",           from: "$9"  },
-  { code: "IT", flag: "🇮🇹", name: "Italy",           from: "$10" },
-  { code: "TH", flag: "🇹🇭", name: "Thailand",        from: "$8"  },
-  { code: "AU", flag: "🇦🇺", name: "Australia",       from: "$14" },
-  { code: "TR", flag: "🇹🇷", name: "Turkey",          from: "$7"  },
-  { code: "GH", flag: "🇬🇭", name: "Ghana",           from: "$12" },
-  { code: "IN", flag: "🇮🇳", name: "India",           from: "$9"  },
-  { code: "CA", flag: "🇨🇦", name: "Canada",          from: "$13" },
-  { code: "MX", flag: "🇲🇽", name: "Mexico",          from: "$8"  },
-  { code: "ZA", flag: "🇿🇦", name: "South Africa",   from: "$11" },
-  { code: "KE", flag: "🇰🇪", name: "Kenya",           from: "$10" },
-  { code: "GR", flag: "🇬🇷", name: "Greece",          from: "$9"  },
-];
-
-// ─────────────────────────────────────────────
-// STATS STRIP
-// ─────────────────────────────────────────────
-const STATS = [
-  { value: "205+",   label: "Countries covered",   accent: "text-primary" },
-  { value: "5,000+", label: "Happy travellers",     accent: "text-primary" },
-  { value: "800+",   label: "Networks",             accent: "text-primary" },
-  { value: "Instant", label: "Activation",          accent: "text-primary" },
-];
-
-function StatsStrip() {
-  const { ref, inView } = useInView(0.2);
-  return (
-    <div className="border-b bg-muted/25 dark:bg-white/[0.02]" data-testid="section-stats-strip">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5" ref={ref}>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-4 divide-x-0 sm:divide-x divide-border/50">
-          {STATS.map((s, i) => (
-            <div
-              key={s.label}
-              className={`text-center sm:text-left sm:pl-6 first:pl-0 reveal ${inView ? "in-view" : ""} reveal-delay-${i + 1}`}
-            >
-              <div className={`font-display text-3xl sm:text-4xl font-bold tracking-tight leading-none mb-1 ${s.accent}`}>
-                {s.value}
-              </div>
-              <div className="text-xs text-muted-foreground font-medium">{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-// FESTIVAL EVENTS CAROUSEL  (primary hero)
-// ─────────────────────────────────────────────
 function EventsCarousel() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  const events = FESTIVAL_EVENTS.filter(event => eventHasNotEnded(event.dates, now));
+  if (!events.length) return null;
+  // Reset the active index only when the visible event set changes.
+  return <EventsSlides key={events.map(event => event.id).join(",")} events={events} />;
+}
+
+function EventsSlides({ events }: { events: typeof FESTIVAL_EVENTS }) {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
   const [, navigate] = useLocation();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
+  const resumeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (paused) return;
-    timerRef.current = setInterval(() => {
-      setActive(n => (n + 1) % FESTIVAL_EVENTS.length);
-    }, 5000);
+    timerRef.current = setInterval(() => setActive(n => (n + 1) % events.length), 5000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [paused]);
-
-  const ev = FESTIVAL_EVENTS[active];
-
+  }, [paused, events.length]);
+  useEffect(() => () => { if (resumeRef.current) clearTimeout(resumeRef.current); }, []);
+  const ev = events[active];
   return (
-    <section
-      className="konex-inverse relative overflow-hidden min-h-[70vh] flex flex-col"
-      data-testid="section-events-carousel"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-    >
-      {/* Background slides */}
-      {FESTIVAL_EVENTS.map((event, i) => (
-        <div
-          key={event.id}
-          className={`absolute inset-0 transition-opacity duration-700 ${i === active ? "opacity-100 z-10" : "opacity-0 z-0"}`}
-          style={{ background: "hsl(var(--inverse))" }}
-        >
-          <img
-            src={event.photo}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-40"
-            loading="lazy"
-          />
-          {/* Stronger overlay for readability */}
+    <section className="konex-inverse relative overflow-hidden" data-testid="section-events-carousel" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} aria-label="Travel for an event">
+      {events.map((event, i) => (
+        <div key={event.id} aria-hidden className={`absolute inset-0 transition-opacity duration-700 motion-reduce:transition-none ${i === active ? "opacity-100 z-10" : "opacity-0 z-0"}`} style={{ background: "hsl(var(--inverse))" }}>
+          <img src={event.photo} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover opacity-40" />
           <div className="absolute inset-0 bg-[hsl(var(--inverse)/.85)]" />
-          <div className="absolute inset-0 bg-transparent" />
         </div>
       ))}
-
-      {/* Content layer */}
-      <div className="relative z-20 flex-1 max-w-7xl mx-auto px-4 sm:px-6 w-full flex flex-col">
-
-        {/* ── Static hero headline ── */}
-        <div className="pt-12 sm:pt-20 lg:pt-24 pb-8 sm:pb-10">
-          <h1
-            className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-[1.05] tracking-tight mb-4"
-            data-testid="text-hero-title"
-          >
-            Stay connected at the
-            <br className="hidden sm:block" /> world's biggest events.
-          </h1>
-          <p className="text-white/55 text-base sm:text-xl max-w-2xl leading-relaxed">
-            From Monaco to Tomorrowland, activate instant eSIM data in 205+ countries before you land.
-          </p>
-        </div>
-
-        {/* ── Event-specific content ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 items-center gap-8 pb-4">
-
-          {/* Left: event detail */}
-          <div className="text-white">
-            <div
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-widest mb-4 text-white"
-              style={{ backgroundColor: ev.accent + "33", border: `1px solid ${ev.accent}55` }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: ev.accent }} />
-              Upcoming Event
-            </div>
-
-            <h2
-              className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold leading-tight mb-3 text-white"
-              data-testid="text-event-title"
-            >
-              {ev.name}
-            </h2>
-
-            <p className="text-white/65 text-sm sm:text-base max-w-md leading-relaxed mb-5">
-              {ev.subtitle}
-            </p>
-
-            {/* Location + Date + flag chips */}
-            <div className="flex flex-wrap gap-2 mb-6">
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 text-white/80 text-xs font-medium border border-white/15">
-                <MapPin className="w-3 h-3 flex-shrink-0" style={{ color: ev.accent }} />
-                {ev.location}
-              </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 text-white/80 text-xs font-medium border border-white/15">
-                <Timer className="w-3 h-3 flex-shrink-0" style={{ color: ev.accent }} />
-                {ev.dates}
-              </div>
-              <div className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-white/10 border border-white/15">
-                {ev.flags.map(f => <span key={f} className="text-base leading-none">{f}</span>)}
-              </div>
-            </div>
-
-            {/* CTA */}
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                onClick={() => navigate(`/destinations/${ev.countryCode}`)}
-                className="font-bold h-11 px-6 text-sm"
-                style={{ backgroundColor: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))", border: "none" }}
-                data-testid={`button-event-cta-${ev.id}`}
-              >
-                {ev.cta}
-                <ArrowRight className="ml-2 w-4 h-4" />
-              </Button>
-              <span className="text-white/40 text-xs">eSIM ready in seconds · No SIM card needed</span>
-            </div>
+      <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1.15fr] gap-10 lg:gap-20 items-center">
+          <div>
+            <p className="text-xs text-primary font-bold uppercase tracking-widest mb-5">Worth the journey</p>
+            <h2 className="text-3xl sm:text-5xl font-bold leading-tight mb-5">Big plans.<br />One less thing<br className="hidden md:block" /> to organise.</h2>
+            <p className="text-white/85 text-sm leading-relaxed max-w-sm">Heading to a festival, a race or a trade fair? Arrange your travel data before the trip begins.</p>
+            <Link href="/events" className="inline-flex items-center gap-2 text-sm text-primary font-semibold mt-6">Explore events<ArrowRight aria-hidden className="w-4 h-4" /></Link>
           </div>
-
-          {/* Right: 16:9 event image */}
-          <div className="hidden lg:flex justify-center items-center">
-            <div className="relative w-full max-w-lg">
-              <div
-                className="absolute -inset-4 rounded-2xl opacity-0"
-                style={{ backgroundColor: ev.accent }}
-              />
-              <div
-                className="relative w-full rounded-2xl overflow-hidden border-2 shadow-2xl"
-                style={{ borderColor: ev.accent + "60", aspectRatio: "16/9" }}
-              >
-                <img
-                  src={ev.photo}
-                  alt={ev.name}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-                <div className="absolute bottom-3 right-3 px-3 py-2 rounded-xl bg-black/80 backdrop-blur border border-white/15 shadow-xl">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 leading-none mb-0.5">When</p>
-                  <p className="text-xs font-bold text-white">{ev.dates}</p>
-                </div>
-              </div>
+          <div className="rounded-2xl border border-white/20 bg-white/[.04] p-6 sm:p-9">
+            <div className="relative aspect-video overflow-hidden rounded-xl border border-white/20 mb-7">
+              {FESTIVAL_EVENTS.map((event, i) => <img key={event.id} src={event.photo} alt={i === active ? event.name : ""} aria-hidden={i !== active} loading="lazy" className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 motion-reduce:transition-none ${i === active ? "opacity-100" : "opacity-0"}`} />)}
             </div>
+            <div className="flex justify-between items-center mb-7"><span className="text-xs font-semibold uppercase tracking-widest text-primary">Upcoming event</span><FlagImg code={ev.countryCode} name={ev.location} className="w-8 h-6 rounded" /></div>
+            <h3 className="text-2xl sm:text-3xl font-bold mb-3" data-testid="text-event-title">{ev.name}</h3>
+            <p className="text-white/85 text-sm leading-relaxed mb-6">{ev.subtitle}</p>
+            <div className="flex flex-wrap gap-4 text-xs text-white/90 mb-7">
+              <span className="flex items-center gap-2"><MapPin aria-hidden className="w-4 h-4 text-primary" />{ev.location}</span>
+              <span className="flex items-center gap-2"><Timer aria-hidden className="w-4 h-4 text-primary" />{ev.dates}</span>
+            </div>
+            <Button onClick={() => navigate(`/destinations/${ev.countryCode}`)} className="font-bold" data-testid={`button-event-cta-${ev.id}`}>{ev.cta}<ArrowRight aria-hidden className="w-4 h-4 ml-2" /></Button>
+            <p className="text-xs text-white/70 mt-4">QR by email · No physical SIM needed</p>
           </div>
         </div>
-
-        {/* Dots navigation — pushed to bottom */}
-        <div className="flex items-center gap-2 py-5 mt-auto">
-          {FESTIVAL_EVENTS.map((e, i) => (
-            <button
-              key={e.id}
-              onClick={() => { setActive(i); setPaused(true); setTimeout(() => setPaused(false), 8000); }}
-              className={`rounded-full transition-all duration-300 ${i === active ? "w-6 h-2" : "w-2 h-2 bg-white/25 hover:bg-white/50"}`}
-              style={i === active ? { backgroundColor: ev.accent, width: "24px" } : {}}
-              data-testid={`dot-event-${i}`}
-              aria-label={e.name}
-            />
-          ))}
-          <span className="ml-3 text-white/30 text-[11px] font-medium">
-            {active + 1} / {FESTIVAL_EVENTS.length}
-          </span>
+        <div className="flex items-center justify-center md:justify-end gap-3 pt-8">
+          {events.map((event, i) => <button key={event.id} type="button" onClick={() => { setActive(i); setPaused(true); if (resumeRef.current) clearTimeout(resumeRef.current); resumeRef.current = setTimeout(() => setPaused(false), 8000); }}
+            className="p-2" data-testid={`dot-event-${i}`} aria-label={event.name} aria-current={i === active ? "true" : undefined}><span className={`block h-2 rounded-full ${i === active ? "w-6 bg-primary" : "w-2 bg-white/35"}`} /></button>)}
+          <span className="text-xs text-white/70 ml-2">{active + 1} / {events.length}</span>
         </div>
       </div>
     </section>
   );
 }
 
-// ─────────────────────────────────────────────
-// PLAN FINDER SECTION
-// ─────────────────────────────────────────────
-function PlanFinderSection() {
-  const [, navigate] = useLocation();
-  const [heroCode, setHeroCode] = useState<string>("");
-  const [heroDays, setHeroDays] = useState<number | null>(null);
-  const DURATION_OPTIONS = [1, 3, 5, 7, 30];
-
-  const handleFind = () => {
-    const params = new URLSearchParams();
-    if (heroDays) params.set("days", String(heroDays));
-    if (heroCode && heroCode !== "any") params.set("country", heroCode);
-    navigate(params.toString() ? `/find-plan?${params}` : "/find-plan");
-  };
-
+function AlternativesSection() {
+  const rows = [
+    ["Setup", "Buy online, install with a QR code", "Automatic on arrival", "Find a shop"],
+    ["Contract", "None", "Tied to your home plan", "None"],
+    ["Roaming fees", "None", "Often charged; varies by carrier", "None"],
+    ["Physical SIM", "Not needed", "Your existing SIM", "Required"],
+    ["Your main number", "Stays active alongside your eSIM", "Unchanged", "Often swapped out"],
+    ["Price", "Fixed, shown at checkout", "Varies by carrier", "Varies by seller"],
+  ];
   return (
-    <section className="py-12 sm:py-16 border-b" data-testid="section-plan-finder">
+    <section className="border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-
-          {/* Left: copy */}
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-3">Instant eSIM · 205+ countries</p>
-            <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight mb-4" data-testid="text-plan-finder-title">
-              Find your destination plan
-            </h2>
-            <p className="text-muted-foreground leading-relaxed mb-7 max-w-md">
-              Search any destination and get a QR code delivered to your inbox in seconds. No SIM swap, no queues, no contracts.
-            </p>
-          </div>
-
-          {/* Right: plan finder card */}
-          <div className="rounded-2xl border bg-card shadow-xl p-6 sm:p-7" data-testid="hero-plan-selector">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">Find your plan</p>
-
-            {/* Destination */}
-            <div className="mb-4">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                Where are you travelling?
-              </label>
-              <CountryCombobox
-                value={heroCode}
-                onSelect={code => setHeroCode(code ?? "")}
-                placeholder="Search destination…"
-                allowAny
-                className="h-11 text-sm w-full"
-                data-testid="hero-select-destination"
-              />
-            </div>
-
-            {/* Duration */}
-            <div className="mb-5">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
-                How long?
-              </label>
-              <div className="flex gap-2 flex-wrap" data-testid="hero-duration-buttons">
-                {DURATION_OPTIONS.map((d) => {
-                  const isActive = heroDays === d;
-                  return (
-                    <button
-                      key={d}
-                      onClick={() => setHeroDays(isActive ? null : d)}
-                      className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 cursor-pointer select-none ${
-                        isActive
-                          ? "bg-primary border-primary text-primary-foreground shadow-sm scale-[1.04]"
-                          : "bg-muted border-border text-foreground hover:bg-muted/70 hover:border-border/80"
-                      }`}
-                      data-testid={`hero-duration-${d}`}
-                    >
-                      {d === 30 ? "30 days" : `${d} ${d === 1 ? "day" : "days"}`}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Submit */}
-            <button
-              onClick={handleFind}
-              className="group w-full flex items-center justify-center gap-2.5 h-12 rounded-xl bg-primary font-bold text-primary-foreground text-base shadow-sm hover:bg-primary/90 hover:scale-[1.01] active:scale-[0.99] transition-transform duration-200"
-              data-testid="button-hero-find-plan"
-            >
-              <Search className="w-4 h-4" />
-              Find My Plan
-              <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-            </button>
-          </div>
+        <div className="max-w-2xl mb-9"><p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Know your options</p><h2 className="text-4xl sm:text-5xl font-bold mb-4">Konex vs the alternatives.</h2><p className="text-sm text-muted-foreground leading-relaxed">Choose how you connect, without the guesswork.</p></div>
+        <p id="comparison-scroll-help" className="md:hidden text-xs text-muted-foreground mb-3">Scroll horizontally to compare all options.</p>
+        <div className="overflow-x-auto rounded-2xl border focus-visible:outline-offset-4" tabIndex={0} role="region" aria-label="Travel SIM options comparison" aria-describedby="comparison-note">
+          <table className="w-full min-w-[720px] text-left text-sm border-collapse">
+            <caption className="sr-only">Compare Konex eSIM, carrier roaming and airport or physical travel SIMs</caption>
+            <thead><tr className="bg-muted/60"><th scope="col" className="p-5 font-medium text-muted-foreground w-[18%]">The essentials</th><th scope="col" className="p-5 bg-primary/15 text-primary font-bold w-[29%]">Konex eSIM</th><th scope="col" className="p-5 font-semibold w-[25%]">Carrier roaming</th><th scope="col" className="p-5 font-semibold">Airport or physical travel SIM</th></tr></thead>
+            <tbody>{rows.map(([label, ...cells]) => <tr key={label} className="border-t"><th scope="row" className="p-5 font-semibold bg-card">{label}</th>{cells.map((cell, i) => <td key={i} className={`p-5 leading-relaxed ${i === 0 ? "bg-primary/[.07] font-medium" : "bg-card text-muted-foreground"}`}>{cell}</td>)}</tr>)}</tbody>
+          </table>
+        </div>
+        <div className="flex flex-col md:flex-row justify-between md:items-center gap-5 mt-5">
+          <p id="comparison-note" className="text-xs leading-relaxed text-muted-foreground max-w-2xl">General descriptions only; terms, availability and fees vary by provider and device. Your phone must support eSIM and be carrier-unlocked. Home-carrier charges for calls and texts may still apply.</p>
+          <Button asChild className="self-start font-bold shrink-0"><Link href="/find-plan">Find a plan<ArrowRight aria-hidden className="ml-2 w-4 h-4" /></Link></Button>
         </div>
       </div>
     </section>
   );
 }
 
-// ─────────────────────────────────────────────
-// K. TRAVEL SMARTER (secondary explainer — moved lower)
-// ─────────────────────────────────────────────
-function TravelSmarterSection() {
-  const [, navigate] = useLocation();
+const bundles = [
+  { id: "europe", title: "Europe Pack", label: "Regional travel", icon: Globe, description: "Taking the scenic route? Explore regional plans and check the included destinations before you buy.", href: "/destinations/EUROPE" },
+  { id: "nigeria-arrival", title: "Nigeria Arrival eSIM", label: "Before you fly", icon: QrCode, description: "Arrange your Nigeria data before departure, with digital installation instead of an airport SIM queue.", href: "/nigeria-esim" },
+  { id: "nigeria", title: "UK ↔ Nigeria Frequent Traveller", label: "A familiar journey", icon: Smartphone, description: "Going back and forth? Explore the available Nigeria plans and choose the right fit for your next visit.", href: "/nigeria-esim" },
+  { id: "global", title: "Global Traveller Pack", label: "Further afield", icon: MapPin, description: "Build a connection into your multi-stop itinerary. Check each plan's destinations, data and validity.", href: "/destinations" },
+];
 
+function BundlesSection() {
+  const { data } = useHomepageCatalogue();
   return (
-    <section className="konex-inverse relative overflow-hidden" data-testid="section-travel-smarter">
-      {/* Dark background */}
-      <div className="absolute inset-0">
-        <img
-          src="/images/hero-bg.png"
-          alt=""
-          className="w-full h-full object-cover"
-          style={{ filter: "brightness(0.25) saturate(1.2)" }}
-        />
-        <div className="absolute inset-0 bg-[hsl(var(--inverse)/.94)]" />
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full opacity-10 pointer-events-none"
-          style={{ background: "none" }} />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full opacity-8 pointer-events-none"
-          style={{ background: "none" }} />
-      </div>
-
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-
-          {/* Left: copy */}
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Your global connectivity</p>
-            <h2
-              className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight tracking-tight mb-5"
-              data-testid="text-travel-smarter-title"
-            >
-              Travel smarter<br />with KONEX.
-            </h2>
-            <p className="text-white/55 text-base sm:text-lg leading-relaxed mb-8 max-w-lg" data-testid="text-hero-subtitle">
-              Choose your destination, activate in minutes, and stay connected in 205+ countries with instant eSIM data.
-            </p>
-
-            {/* 2×2 trust grid */}
-            <div className="grid grid-cols-2 gap-3 mb-10">
-              {[
-                { icon: Zap,          text: "Instant delivery" },
-                { icon: Banknote,     text: "No roaming fees" },
-                { icon: CheckCircle2, text: "No contracts" },
-                { icon: Smartphone,   text: "No physical SIM" },
-              ].map(({ icon: Icon, text }) => (
-                <div key={text} className="flex items-center gap-2.5 text-white/70 text-sm">
-                  <div className="w-7 h-7 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0">
-                    <Icon className="w-3.5 h-3.5 text-primary" />
-                  </div>
-                  {text}
-                </div>
-              ))}
-            </div>
-
-            {/* CTAs */}
-            <div className="flex flex-wrap gap-3" data-testid="trust-bullets">
-              <Button
-                onClick={() => navigate("/find-plan")}
-                className="font-bold h-12 px-7"
-                data-testid="button-travel-smarter-find"
-              >
-                <Search className="w-4 h-4 mr-2" />
-                Find My Plan
-              </Button>
-              <Link href="/destinations">
-                <Button
-                  variant="outline"
-                  className="font-bold h-12 px-7 bg-transparent border-white/30 text-white hover:bg-white/10 hover:text-white"
-                  data-testid="button-travel-smarter-browse"
-                >
-                  View Plans
-                </Button>
-              </Link>
-            </div>
-          </div>
-
-          {/* Right: 2×2 feature tiles */}
-          <div className="hidden lg:grid grid-cols-2 gap-4">
-            {[
-              { emoji: "⚡", title: "Instant activation", desc: "QR delivered to your inbox in seconds after payment" },
-              { emoji: "🌍", title: "205+ countries", desc: "From major cities to remote destinations worldwide" },
-              { emoji: "💳", title: "Flat pricing", desc: "One price, no daily fees, no bill shock" },
-              { emoji: "📱", title: "Dual SIM", desc: "Your regular number stays fully active alongside your eSIM" },
-            ].map(f => (
-              <div key={f.title} className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-5">
-                <span className="text-3xl mb-3 block">{f.emoji}</span>
-                <p className="text-white font-semibold text-sm mb-1">{f.title}</p>
-                <p className="text-white/40 text-xs leading-relaxed">{f.desc}</p>
-              </div>
-            ))}
-          </div>
+    <section className="border-t bg-secondary/25">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="max-w-xl mb-9"><p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Travel bundles</p><h2 className="text-4xl sm:text-5xl font-bold mb-4" data-testid="text-bundles-title">Built around<br />your route.</h2><p className="text-sm text-muted-foreground">Start with your journey. Check the plan details before checkout.</p></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {bundles.map((bundle, index) => {
+            const price = data?.bundlePrices?.[bundle.id];
+            return <article key={bundle.id} className={`rounded-2xl border flex flex-col p-6 ${index === 0 ? "border-primary/40 bg-primary/10" : "bg-card"}`} data-testid={`card-bundle-${bundle.id}`}>
+              <bundle.icon aria-hidden className="w-7 h-7 text-primary mb-7" /><p className="text-[10px] uppercase tracking-widest font-bold text-primary mb-3">{bundle.label}</p>
+              <h3 className="text-xl font-bold leading-tight mb-4">{bundle.title}</h3><p className="text-sm text-muted-foreground leading-relaxed mb-6 flex-1">{bundle.description}</p>
+              {validPrice(price) && <p className="font-bold text-lg mb-4">From <Price amount={price} /></p>}
+              <Button asChild variant="outline" className="font-semibold w-full"><Link href={bundle.href} data-testid={`button-bundle-${bundle.id}`}>View Bundle<ArrowRight aria-hidden className="ml-auto w-4 h-4" /></Link></Button>
+            </article>;
+          })}
         </div>
       </div>
     </section>
-  );
-}
-
-// ─────────────────────────────────────────────
-// 2. HOW IT WORKS
-// ─────────────────────────────────────────────
-
-function PhoneMockup({ children, accent = "primary" }: { children: React.ReactNode; accent?: string }) {
-  return (
-    <div className="relative w-32 h-60 mx-auto flex-shrink-0">
-      {/* Outer glow */}
-      {accent === "primary" && (
-        <div className="absolute inset-0 rounded-[28px] bg-primary/5 blur-xl scale-105 -z-10" />
-      )}
-      {/* Phone shell */}
-      <div className={`absolute inset-0 rounded-[28px] border-2 shadow-2xl ${accent === "primary" ? "border-primary/35 shadow-primary/15" : "border-white/10"} bg-[#0d0d12]`} />
-      {/* Side buttons */}
-      <div className="absolute right-[-1px] top-16 w-[3px] h-8 rounded-l-full bg-white/10" />
-      <div className="absolute left-[-1px] top-11 w-[3px] h-5 rounded-r-full bg-white/10" />
-      <div className="absolute left-[-1px] top-20 w-[3px] h-5 rounded-r-full bg-white/10" />
-      {/* Dynamic island */}
-      <div className="absolute top-[10px] left-1/2 -translate-x-1/2 w-11 h-[7px] rounded-full bg-black" />
-      {/* Home indicator */}
-      <div className="absolute bottom-[7px] left-1/2 -translate-x-1/2 w-10 h-[3px] rounded-full bg-white/15" />
-      {/* Screen */}
-      <div className="absolute inset-x-[4px] top-[5px] bottom-[4px] rounded-[24px] overflow-hidden bg-[#080810] flex flex-col">
-        {/* Status bar */}
-        <div className="flex items-center justify-between px-3 pt-3 pb-1 flex-shrink-0">
-          <span className="text-[6px] font-semibold text-white/50 tracking-wide">9:41</span>
-          <div className="flex items-center gap-1">
-            <div className="flex gap-[2px] items-end">
-              {[3,4,5,6].map((h,i) => (
-                <div key={i} className="w-[2px] rounded-sm bg-white/50" style={{ height: `${h}px` }} />
-              ))}
-            </div>
-            <div className="w-3 h-1.5 rounded-[2px] border border-white/40 ml-0.5 flex items-center px-[1px]">
-              <div className="h-[4px] w-2/3 bg-white/50 rounded-[1px]" />
-            </div>
-          </div>
-        </div>
-        <div className="flex-1 flex items-center justify-center pb-1">
-          {children}
-        </div>
-      </div>
-    </div>
   );
 }
 
 function HowItWorks() {
   const steps = [
-    {
-      num: "01",
-      icon: Smartphone,
-      title: "Check compatibility",
-      description: "Make sure your device supports eSIM and is carrier-unlocked. Most modern phones do.",
-      phone: (
-        <div className="flex flex-col items-center gap-3 w-full px-3">
-          {/* eSIM chip card */}
-          <div className="w-full rounded-xl bg-gradient-to-br from-primary/30 to-blue-600/20 border border-primary/25 p-2.5 flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0">
-              <Smartphone className="w-4 h-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-[8px] font-bold text-white leading-tight">eSIM Profile</p>
-              <p className="text-[7px] text-white/50 mt-0.5">Carrier unlocked</p>
-            </div>
-            <div className="ml-auto w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-            </div>
-          </div>
-          {/* Status text */}
-          <div className="text-center">
-            <p className="text-[9px] font-bold text-white">eSIM Ready</p>
-            <p className="text-[7px] text-white/40 mt-0.5">Compatible device detected</p>
-          </div>
-          {/* Animated signal bars */}
-          <div className="flex gap-[3px] items-end">
-            {[5, 7, 9, 11, 13].map((h, i) => (
-              <div
-                key={i}
-                className="w-[5px] rounded-t-[2px] bg-emerald-400"
-                style={{ height: `${h}px`, opacity: i < 4 ? 1 : 0.3, animation: `pulse 2s ease-in-out ${i * 0.15}s infinite` }}
-              />
-            ))}
-          </div>
-        </div>
-      ),
-    },
-    {
-      num: "02",
-      icon: Globe,
-      title: "Choose your plan",
-      description: "Pick your destination and data size. Available for 205+ countries with instant pricing.",
-      phone: (
-        <div className="flex flex-col gap-2 w-full px-2.5">
-          {/* Flag row */}
-          <div className="flex flex-wrap gap-[3px] justify-center">
-            {["🇬🇧","🇺🇸","🇦🇪","🇳🇬","🇫🇷","🇩🇪","🇯🇵","🇪🇸"].map(f => (
-              <span key={f} className="text-[11px]">{f}</span>
-            ))}
-          </div>
-          <p className="text-[7px] text-center text-white/30 font-bold uppercase tracking-widest">205+ Countries</p>
-          {/* Plan cards */}
-          {[
-            { label: "5 GB · 7 days", price: 9.99, highlight: true },
-            { label: "10 GB · 30 days", price: 16.99, highlight: false },
-          ].map(p => (
-            <div
-              key={p.label}
-              className={`flex items-center justify-between px-2 py-1.5 rounded-lg text-[7px] transition-all ${
-                p.highlight
-                  ? "bg-primary text-white shadow-lg shadow-primary/30"
-                  : "bg-white/5 border border-white/10 text-white/60"
-              }`}
-            >
-              <span className="font-semibold">{p.label}</span>
-              <span className={`font-bold ${p.highlight ? "text-white" : "text-white/50"}`}><Price amount={p.price} /></span>
-            </div>
-          ))}
-        </div>
-      ),
-    },
-    {
-      num: "03",
-      icon: QrCode,
-      title: "Get your QR instantly",
-      description: "Your QR code lands in your inbox seconds after payment. No waiting, no shipping.",
-      phone: (
-        <div className="flex flex-col items-center gap-2.5 w-full px-3">
-          <p className="text-[7px] font-bold text-primary uppercase tracking-widest">Your eSIM</p>
-          {/* QR code */}
-          <div className="w-16 h-16 rounded-xl bg-white p-1.5 shadow-lg shadow-primary/20 flex items-center justify-center">
-            <QrCode className="w-12 h-12 text-black" />
-          </div>
-          {/* Delivered pill */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/25">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[7px] font-bold text-emerald-400">Delivered to inbox</span>
-          </div>
-        </div>
-      ),
-    },
-    {
-      num: "04",
-      icon: Wifi,
-      title: "Scan and connect",
-      description: "Open Settings → Cellular → Add eSIM, scan the code, and you're online instantly on landing.",
-      phone: (
-        <div className="flex flex-col items-center gap-2.5 w-full px-3">
-          {/* Pulsing wifi icon */}
-          <div className="relative flex items-center justify-center">
-            <div className="absolute w-12 h-12 rounded-full bg-emerald-500/10 animate-ping" style={{ animationDuration: "2s" }} />
-            <div className="absolute w-9 h-9 rounded-full bg-emerald-500/15" />
-            <div className="relative w-7 h-7 rounded-full bg-emerald-500/25 border border-emerald-500/40 flex items-center justify-center">
-              <Wifi className="w-4 h-4 text-emerald-400" />
-            </div>
-          </div>
-          <div className="text-center">
-            <p className="text-[9px] font-bold text-white">Connected</p>
-            <p className="text-[7px] text-white/40 mt-0.5">Full speed · 5G</p>
-          </div>
-          {/* Full signal bars */}
-          <div className="flex gap-[3px] items-end">
-            {[5, 7, 9, 11, 13].map((h, i) => (
-              <div key={i} className="w-[5px] rounded-t-[2px] bg-emerald-400" style={{ height: `${h}px` }} />
-            ))}
-          </div>
-        </div>
-      ),
-    },
+    { icon: Smartphone, title: "Check compatibility", description: "Confirm your phone supports eSIM and is carrier-unlocked.", href: "/compatibility", link: "Check your device" },
+    { icon: Globe, title: "Choose your plan", description: "Match your destination, trip length and data needs. Review the plan details.", href: "/find-plan", link: "Find a plan" },
+    { icon: Mail, title: "Get your QR code", description: "Your QR is emailed after payment, typically within minutes. Rare cases take up to 24 hours.", href: "/terms", link: "Delivery terms" },
+    { icon: QrCode, title: "Scan and connect", description: "Follow your emailed installation guide. Set Konex as your data line when you're ready to use it.", href: "/orders", link: "Find your eSIM" },
   ];
-
   return (
-    <section id="how-it-works" className="py-16 sm:py-24 border-t">
+    <section id="how-it-works" className="border-t scroll-mt-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <Reveal className="mb-8 sm:mb-14 max-w-xl">
-          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">How it works</p>
-          <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.0]" data-testid="text-how-it-works-title">
-            Online in<br /><span className="text-gradient">60 seconds.</span>
-          </h2>
-          <p className="mt-4 text-muted-foreground text-sm max-w-sm leading-relaxed">
-            Four simple steps from purchase to full-speed data — no store visit, no SIM card, no waiting.
-          </p>
-        </Reveal>
-
-        {/* Steps grid with connecting line */}
-        <div className="relative">
-          {/* Desktop connector line */}
-          <div className="hidden lg:block absolute top-[6.5rem] left-[12.5%] right-[12.5%] h-px bg-gradient-to-r from-transparent via-border to-transparent z-0" />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {steps.map((step, idx) => (
-              <Reveal key={idx} delay={(idx + 1) as 1 | 2 | 3 | 4}>
-                <div
-                  className="bg-card border rounded-2xl p-6 sm:p-7 flex flex-col gap-5 card-gradient-hover relative z-10 h-full"
-                  data-testid={`card-step-${idx + 1}`}
-                >
-                  {/* Phone mockup illustration */}
-                  <div className="flex justify-center">
-                    <PhoneMockup accent={idx === 0 ? "default" : "primary"}>
-                      {step.phone}
-                    </PhoneMockup>
-                  </div>
-
-                  {/* Step number badge */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-xs font-bold flex-shrink-0 shadow-md shadow-primary/25">
-                      {step.num}
-                    </div>
-                    <div className="w-px h-4 bg-border" />
-                    <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <step.icon className="w-3.5 h-3.5 text-primary" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="font-display font-bold text-lg mb-1.5" data-testid={`text-step-title-${idx + 1}`}>{step.title}</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{step.description}</p>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Smart Routing sub-section ─────────────────────────────── */}
-        <Reveal>
-          <div className="mt-16 sm:mt-20 pt-10 border-t">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-3.5 h-3.5 text-primary" />
-              <p className="text-xs font-bold uppercase tracking-widest text-primary">Powered by Smart Routing</p>
-            </div>
-            <h3 className="font-display text-2xl sm:text-3xl font-bold tracking-tight mb-1">
-              The best price, every time.
-            </h3>
-            <p className="text-muted-foreground text-sm max-w-xl leading-relaxed mb-8">
-              Konex doesn't rely on a single network. Our routing engine continuously weighs cost, reliability,
-              and destination performance across every provider — so you always get the optimal plan.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {[
-                {
-                  icon: Network,
-                  title: "Multi-Provider Routing",
-                  description: "Every order is scored across multiple global eSIM networks simultaneously. The engine picks the best combination of price, reliability, and destination coverage — in milliseconds.",
-                  stat: "3+ providers",
-                  statLabel: "evaluated per order",
-                  color: "from-violet-500 to-purple-600",
-                },
-                {
-                  icon: Activity,
-                  title: "Live Health Monitoring",
-                  description: "Providers are continuously monitored with rolling success-rate metrics. If a network degrades, it's automatically deprioritised or paused before it can affect your purchase.",
-                  stat: "< 100 ms",
-                  statLabel: "routing decision time",
-                  color: "from-blue-500 to-cyan-500",
-                },
-                {
-                  icon: Shield,
-                  title: "Automatic Failover",
-                  description: "If a provider fails at the moment of provisioning, the system silently retries the next-best option — so you always receive a working eSIM without ever knowing there was a hiccup.",
-                  stat: "99.9%",
-                  statLabel: "fulfilment success rate",
-                  color: "from-emerald-500 to-teal-500",
-                },
-              ].map((pillar) => (
-                <div
-                  key={pillar.title}
-                  className="bg-card border rounded-2xl p-6 flex flex-col gap-4 card-gradient-hover"
-                >
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${pillar.color} flex items-center justify-center shadow-md`}>
-                    <pillar.icon className="w-4.5 h-4.5 text-white" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-base mb-1.5">{pillar.title}</h4>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{pillar.description}</p>
-                  </div>
-                  <div className="flex items-baseline gap-2 mt-auto pt-2 border-t">
-                    <span className={`text-xl font-black bg-gradient-to-r ${pillar.color} bg-clip-text text-transparent`}>
-                      {pillar.stat}
-                    </span>
-                    <span className="text-muted-foreground text-xs">{pillar.statLabel}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
-
-// ─────────────────────────────────────────────
-// 4. POPULAR DESTINATIONS
-// ─────────────────────────────────────────────
-const regionFromPrice: Record<string, number> = {
-  "Asia": 7.99,
-  "Southeast Asia": 7.99,
-  "Europe": 9.99,
-  "Middle East": 12.99,
-  "North America": 14.99,
-};
-
-function PopularDestinations() {
-  const { data: destinations } = useQuery<Destination[]>({ queryKey: ["/api/destinations"] });
-  const popular = destinations?.filter(d => d.popular).slice(0, 8) ?? [];
-
-  return (
-    <section className="py-12 sm:py-20 lg:py-28 border-t">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6 sm:mb-10">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Popular Destinations</p>
-            <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-3">
-              Where do you<br />want to go?
-            </h2>
-            <p className="text-muted-foreground text-sm">Choose from our most popular destinations and get connected before you land.</p>
-          </div>
-          <Link href="/destinations">
-            <Button variant="outline" size="lg" className="font-bold flex-shrink-0" data-testid="button-popular-browse-all">
-              Browse all destinations
-              <ArrowRight className="ml-2 w-4 h-4" />
-            </Button>
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-          {popular.map((dest) => (
-            <Link key={dest.id} href={`/destinations/${dest.id}`} data-testid={`card-popular-dest-${dest.id}`}>
-              <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[3/4] bg-muted shadow-lg shadow-black/10 hover:shadow-xl hover:shadow-black/20 transition-shadow duration-300">
-                <img
-                  src={dest.imageUrl}
-                  alt={dest.name}
-                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
-                {/* Top badge */}
-                <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm border border-white/15 rounded-lg px-2 py-1">
-                  <p className="text-white/50 text-[9px] uppercase tracking-wide font-bold leading-none mb-0.5">from</p>
-                  <p className="text-white font-bold text-xs"><Price amount={regionFromPrice[dest.region] ?? 9.99} source="GBP" /></p>
-                </div>
-                <div className="absolute bottom-0 left-0 right-0 p-4">
-                  <div className="w-7 h-5 rounded-sm overflow-hidden mb-1.5 shadow-md border border-white/20">
-                    <FlagImg code={dest.countryCode} name={dest.name} className="w-full h-full" />
-                  </div>
-                  <p className="font-bold text-white text-sm leading-tight">{dest.name}</p>
-                  <p className="text-white/50 text-xs mt-0.5">{dest.region}</p>
-                </div>
-              </div>
-            </Link>
-          ))}
+        <div className="max-w-xl mb-10"><p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">How it works</p><h2 className="text-4xl sm:text-5xl font-bold mb-4" data-testid="text-how-it-works-title">A few steps now.<br />An easier arrival.</h2><p className="text-sm text-muted-foreground">No store visit. No physical SIM. Just a little pre-trip preparation.</p></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {steps.map((step, i) => <article key={step.title} className="border rounded-2xl p-6 bg-card flex flex-col" data-testid={`card-step-${i + 1}`}>
+            <div className="flex justify-between items-center mb-8"><step.icon aria-hidden className="w-7 h-7 text-primary" /><span className="font-mono text-sm text-muted-foreground">0{i + 1}</span></div>
+            <h3 className="text-lg font-bold mb-3" data-testid={`text-step-title-${i + 1}`}>{step.title}</h3><p className="text-sm text-muted-foreground leading-relaxed flex-1 mb-6">{step.description}</p>
+            <Link href={step.href} className="text-sm font-semibold text-primary inline-flex gap-2 items-center">{step.link}<ArrowRight aria-hidden className="w-3 h-3" /></Link>
+          </article>)}
         </div>
       </div>
     </section>
   );
 }
 
-// ─────────────────────────────────────────────
-// 5. WHY GLOBESIM
-// ─────────────────────────────────────────────
-function WhyKonex() {
-  const benefits = [
-    {
-      icon: Banknote,
-      accent: "text-emerald-400",
-      bg: "bg-emerald-400/10",
-      title: "No roaming fees — ever",
-      description: "One fixed price. No per-minute charges, no bill shock. What you pay at checkout is all you pay.",
-    },
-    {
-      icon: Zap,
-      accent: "text-amber-400",
-      bg: "bg-amber-400/10",
-      title: "Activated in under 60 seconds",
-      description: "QR code arrives the instant you check out. Scan from your phone settings and you're online.",
-    },
-    {
-      icon: Signal,
-      accent: "text-sky-400",
-      bg: "bg-sky-400/10",
-      title: "Keep your existing number",
-      description: "Your regular SIM stays fully active. Calls, texts, and WhatsApp work normally while your eSIM handles data.",
-    },
-    {
-      icon: Globe,
-      accent: "text-blue-400",
-      bg: "bg-blue-400/10",
-      title: "Regional & global plans",
-      description: "One eSIM, multiple countries. Cover all of Europe, the Middle East, or Southeast Asia with a single purchase.",
-    },
-    {
-      icon: Radio,
-      accent: "text-pink-400",
-      bg: "bg-pink-400/10",
-      title: "Tier 1 global networks",
-      description: "Routed through Vodafone, T-Mobile, Orange, and other Tier 1 carriers for reliable signal everywhere.",
-    },
-    {
-      icon: Smartphone,
-      accent: "text-blue-400",
-      bg: "bg-blue-400/10",
-      title: "100% digital — no plastic",
-      description: "No SIM card. No post. No carrier store. Buy online, install digitally, travel.",
-    },
-  ];
-
-  return (
-    <section className="py-12 sm:py-20 lg:py-28 border-t bg-card">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="mb-8 sm:mb-14 max-w-2xl">
-          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Why Konex</p>
-          <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.0] mb-5" data-testid="text-benefits-title">
-            Built for how<br />people actually travel.
-          </h2>
-          <p className="text-muted-foreground text-lg leading-relaxed">
-            No roaming fees. No lock-in. No plastic SIM. Just fast, reliable data wherever you're heading.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {benefits.map((b, i) => (
-            <Reveal key={b.title} delay={((i % 3) + 1) as 1 | 2 | 3 | 4}>
-              <div
-                className="p-7 rounded-2xl border bg-background card-gradient-hover h-full"
-                data-testid={`card-benefit-${i}`}
-              >
-                <div className={`inline-flex items-center justify-center w-11 h-11 rounded-xl ${b.bg} mb-5`}>
-                  <b.icon className={`w-5 h-5 ${b.accent}`} />
-                </div>
-                <h3 className="font-bold text-base mb-2 leading-snug">{b.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{b.description}</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────
-// 6. BUNDLES
-// ─────────────────────────────────────────────
-const bundles = [
-  {
-    id: "europe",
-    flag: "🇪🇺",
-    label: "Most Popular",
-    highlighted: true,
-    title: "Europe Pack",
-    subtitle: "28 countries · One eSIM",
-    description: "Full coverage across the EU, UK, and beyond. Maps, social, streaming — all without switching SIMs.",
-    features: ["28 European countries", "Up to 30-day validity", "4G/5G speeds"],
-    price: 14,
-    href: "/destinations/EU",
-  },
-  {
-    id: "nigeria-arrival",
-    flag: "🇳🇬",
-    label: "UK Traveller",
-    highlighted: false,
-    title: "Nigeria Arrival eSIM",
-    subtitle: "Land connected · No queues",
-    description: "Buy before you fly, get your QR code instantly, and skip the airport SIM registration entirely.",
-    features: ["Nigeria coverage", "Activates on landing", "No registration needed"],
-    price: 6,
-    href: "/nigeria-esim",
-  },
-  {
-    id: "nigeria",
-    flag: "🇳🇬🇬🇧",
-    label: "Frequent Traveller",
-    highlighted: false,
-    title: "UK ↔ Nigeria Frequent Traveller",
-    subtitle: "Dual-country · Both ends covered",
-    description: "Built for the UK–Nigeria corridor. Stay connected in both countries on a single eSIM plan.",
-    features: ["UK + Nigeria coverage", "5 GB data", "30-day validity"],
-    price: 16,
-    href: "/nigeria-esim",
-  },
-  {
-    id: "global",
-    flag: "🌍",
-    label: "Premium",
-    highlighted: false,
-    title: "Global Traveller Pack",
-    subtitle: "205+ countries · No limits",
-    description: "One eSIM that works everywhere. Ideal for frequent travellers, business trips, or multi-stop tours.",
-    features: ["205+ countries covered", "Unlimited data option", "Multi-trip ready"],
-    price: 29,
-    href: "/destinations",
-  },
-];
-
-// ─────────────────────────────────────────────
-// WORLD COVERAGE MAP
-// ─────────────────────────────────────────────
-function WorldCoverageSection() {
-  const { ref, inView } = useInView(0.15);
-  return (
-    <section
-      className="py-14 sm:py-20 lg:py-28 border-t overflow-hidden"
-      data-testid="section-world-coverage"
-      ref={ref}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        {/* Heading */}
-        <div className={`text-center mb-8 sm:mb-12 reveal ${inView ? "in-view" : ""}`}>
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-semibold uppercase tracking-wider mb-4">
-            <Globe className="w-3.5 h-3.5" />
-            Worldwide Coverage
-          </div>
-          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-3">
-            Stay connected in <span className="text-blue-500">205+ countries</span>
-          </h2>
-          <p className="text-muted-foreground text-base sm:text-lg max-w-xl mx-auto">
-            From downtown Tokyo to a Moroccan riad — if you're travelling there, we've got you covered.
-          </p>
-        </div>
-
-        {/* Globe card */}
-        <div
-          className={`relative rounded-2xl sm:rounded-3xl overflow-hidden border border-blue-500/20 shadow-2xl reveal reveal-delay-1 ${inView ? "in-view" : ""}`}
-          style={{ background: "radial-gradient(ellipse at 50% 60%, rgba(30,40,80,0.85) 0%, rgba(8,12,28,0.97) 100%)" }}
-          data-testid="img-world-coverage-map"
-        >
-          {/* Subtle top edge glow */}
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-400/40 to-transparent" />
-
-          {/* Globe canvas */}
-          <div className="w-full" style={{ height: "480px" }}>
-            <GlobeVisualization />
-          </div>
-
-          {/* Floating city labels */}
-          <div className="absolute inset-0 pointer-events-none select-none">
-            {[
-              { label: "London",      top: "22%", left: "44%" },
-              { label: "New York",    top: "28%", left: "22%" },
-              { label: "Dubai",       top: "38%", right: "28%" },
-              { label: "Tokyo",       top: "26%", right: "14%" },
-              { label: "Singapore",   top: "54%", right: "19%" },
-              { label: "São Paulo",   top: "65%", left: "24%" },
-            ].map(({ label, top, left, right }) => (
-              <div
-                key={label}
-                className="absolute flex items-center gap-1.5"
-                style={{ top, left, right }}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_6px_2px_rgba(96,165,250,0.7)] flex-shrink-0" />
-                <span className="text-[10px] sm:text-xs font-semibold text-blue-200/80 tracking-wide whitespace-nowrap">
-                  {label}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* Bottom gradient fade */}
-          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[rgba(8,12,28,0.7)] to-transparent" />
-
-          {/* Bottom badge */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold tracking-widest uppercase text-blue-300/80 border border-blue-500/25 bg-blue-950/40 backdrop-blur-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-              Live network · 205+ countries
-            </span>
-          </div>
-        </div>
-
-        {/* Stats row under map */}
-        <div className={`mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4 reveal reveal-delay-2 ${inView ? "in-view" : ""}`}>
-          {[
-            { label: "Countries", value: "205+", icon: <MapPin className="w-4 h-4" /> },
-            { label: "Networks", value: "800+", icon: <Signal className="w-4 h-4" /> },
-            { label: "Activates instantly", value: "< 60s", icon: <Zap className="w-4 h-4" /> },
-            { label: "No roaming fees", value: "Ever", icon: <ShieldCheck className="w-4 h-4" /> },
-          ].map(stat => (
-            <div
-              key={stat.label}
-              className="flex flex-col items-center gap-1.5 py-4 px-3 rounded-xl border bg-muted/30 text-center"
-            >
-              <span className="text-blue-500">{stat.icon}</span>
-              <span className="font-bold text-xl sm:text-2xl tracking-tight">{stat.value}</span>
-              <span className="text-xs text-muted-foreground">{stat.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function BundlesSection() {
-  return (
-    <section className="py-12 sm:py-20 lg:py-28 border-t">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="mb-8 sm:mb-14 max-w-xl">
-          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Travel Bundles</p>
-          <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-4" data-testid="text-bundles-title">
-            Bundles built<br />for your route.
-          </h2>
-          <p className="text-muted-foreground leading-relaxed">
-            Pre-configured for the most popular travel corridors — buy once, stay connected throughout.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {bundles.map((bundle) => (
-            <div
-              key={bundle.id}
-              className={`flex flex-col rounded-2xl border p-7 ${bundle.highlighted ? "bg-primary text-primary-foreground border-primary" : "bg-card"}`}
-              data-testid={`card-bundle-${bundle.id}`}
-            >
-              <div className="flex items-start justify-between mb-6">
-                <span className="text-4xl leading-none">{bundle.flag}</span>
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${bundle.highlighted ? "bg-white/20 border-white/30 text-white" : "bg-primary/10 border-primary/20 text-primary"}`}>
-                  {bundle.label}
-                </span>
-              </div>
-              <h3 className="font-display font-bold text-2xl mb-1">{bundle.title}</h3>
-              <p className={`text-xs font-semibold mb-3 ${bundle.highlighted ? "text-white/60" : "text-muted-foreground"}`}>{bundle.subtitle}</p>
-              <p className={`text-sm leading-relaxed mb-6 flex-1 ${bundle.highlighted ? "text-white/75" : "text-muted-foreground"}`}>{bundle.description}</p>
-              <ul className="space-y-2 mb-7">
-                {bundle.features.map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-sm">
-                    <CheckCircle2 className={`w-3.5 h-3.5 flex-shrink-0 ${bundle.highlighted ? "text-white/70" : "text-primary"}`} />
-                    <span className={bundle.highlighted ? "text-white/80" : ""}>{f}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="flex items-center justify-between pt-5 border-t border-current/10">
-                <span className="font-display font-bold text-xl">From <Price amount={bundle.price} /></span>
-                <Link href={bundle.href}>
-                  <Button
-                    size="sm"
-                    variant={bundle.highlighted ? "secondary" : "default"}
-                    className="font-bold"
-                    data-testid={`button-bundle-${bundle.id}`}
-                  >
-                    View Bundle
-                    <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────
-// 7. COMPATIBILITY
-// ─────────────────────────────────────────────
 function CompatibilitySection() {
   const devices = [
-    "iPhone XS and newer — including all iPhone 14, 15, and 16 models",
-    "Samsung Galaxy S20 series and newer",
-    "Google Pixel 3 and newer",
-    "Selected OnePlus, Motorola, and Xiaomi devices",
+    "eSIM-enabled iPhone models, including supported iPhone XS and newer models",
+    "Supported Samsung Galaxy devices",
+    "Supported Google Pixel devices",
+    "Selected OnePlus, Motorola and Xiaomi devices",
   ];
-
   return (
-    <section className="py-12 sm:py-20 lg:py-28 border-t bg-card">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Compatibility</p>
-            <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-5" data-testid="text-compat-title">
-              Works with most<br />modern devices.
-            </h2>
-            <p className="text-muted-foreground mb-7 leading-relaxed">
-              Compatible with most eSIM-enabled iPhones and Android devices released since 2018. Your device must be carrier-unlocked.
-            </p>
-            <ul className="space-y-4 mb-8">
-              {devices.map((d, i) => (
-                <li key={i} className="flex items-start gap-3" data-testid={`compat-device-${i}`}>
-                  <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-                  <span className="text-sm leading-snug">{d}</span>
-                </li>
-              ))}
-            </ul>
-            <Link href="/compatibility">
-              <Button size="lg" className="font-bold" data-testid="button-check-compat">
-                Check your device
-                <ArrowRight className="ml-2 w-4 h-4" />
-              </Button>
-            </Link>
-          </div>
-
-          {/* Travel photo card */}
-          <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-black/30 aspect-[4/3] lg:aspect-auto lg:min-h-[360px]">
-            <img
-              src="https://images.unsplash.com/photo-1512428813834-c702c7702b78?w=900&q=80"
-              alt="Traveller using phone at airport"
-              loading="lazy"
-              className="absolute inset-0 w-full h-full object-cover img-travel-hover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-950/40 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 p-7 text-white">
-              <Smartphone className="w-9 h-9 mb-4 opacity-80" />
-              <h3 className="font-display text-xl font-bold mb-2 leading-snug">Not sure if your phone is compatible?</h3>
-              <p className="text-white/65 text-sm leading-relaxed mb-5">
-                Our device checker covers 60+ models. Takes under 30 seconds.
-              </p>
-              <Link href="/compatibility">
-                <Button variant="outline" size="sm" className="bg-white/10 border-white/25 text-white hover:bg-white/20 font-bold" data-testid="button-device-checker-cta">
-                  Open Device Checker
-                  <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
-                </Button>
-              </Link>
-            </div>
-          </div>
+    <section className="border-t bg-card">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-1 md:grid-cols-2 gap-10 lg:gap-20 items-center">
+        <div><p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Compatibility</p><h2 className="text-4xl sm:text-5xl font-bold mb-5" data-testid="text-compat-title">Your phone.<br />Ready to travel?</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-6">Konex works with supported eSIM-enabled iPhone and Android devices. Compatibility can vary by model and country of purchase, and your device must be carrier-unlocked.</p>
+          <ul className="space-y-4 mb-7">{devices.map((device, i) => <li key={device} className="flex items-start gap-3 text-sm" data-testid={`compat-device-${i}`}><CheckCircle2 aria-hidden className="w-4 h-4 text-primary shrink-0 mt-0.5" />{device}</li>)}</ul>
+          <Button asChild className="font-bold"><Link href="/compatibility" data-testid="button-check-compat">Check your device<ArrowRight aria-hidden className="w-4 h-4 ml-2" /></Link></Button>
+        </div>
+        <div className="rounded-3xl bg-secondary/50 border p-8 sm:p-12">
+          <div className="flex items-center justify-center w-20 h-20 rounded-2xl bg-primary/15 border border-primary/25 mb-8"><Smartphone aria-hidden className="w-10 h-10 text-primary" /></div>
+          <h3 className="text-2xl font-bold mb-4">Check before you check out.</h3><p className="text-sm text-muted-foreground leading-relaxed mb-7">Our device checker lists supported models and helps you know what to look for in your phone's settings.</p>
+          <Button asChild variant="outline" className="font-semibold"><Link href="/compatibility" data-testid="button-device-checker-cta">Open Device Checker<ArrowRight aria-hidden className="w-4 h-4 ml-2" /></Link></Button>
         </div>
       </div>
     </section>
   );
 }
 
-// ─────────────────────────────────────────────
-// 10. GLOBAL EVENTS SECTION
-// ─────────────────────────────────────────────
-const EVENT_CATEGORIES = [
-  { slug: "trade-fairs",     emoji: "🏭", label: "Trade Fairs",        desc: "Canton Fair, GITEX, CES & more" },
-  { slug: "festivals",       emoji: "🎉", label: "Festivals & Carnivals", desc: "Rio, Oktoberfest, Glastonbury" },
-  { slug: "sports",          emoji: "🏆", label: "Sports Events",       desc: "F1, Wimbledon, Grand Prix" },
-  { slug: "fashion-culture", emoji: "👗", label: "Fashion & Culture",   desc: "Milan, Paris, London Fashion Week" },
-  { slug: "luxury",          emoji: "💎", label: "Luxury Events",       desc: "Art Basel, Monaco, Cannes" },
-  { slug: "business",        emoji: "💼", label: "Business Travel",     desc: "Hannover Messe, Maison & Objet" },
-];
-
-function GlobalEventsSection() {
+function ConfidenceRow() {
   return (
-    <section className="py-16 sm:py-20 bg-background border-t border-border/50">
-      <div className="max-w-6xl mx-auto px-4">
-        <Reveal>
-          <div className="text-center mb-10">
-            <Badge className="mb-3 bg-primary/10 text-primary border-primary/20 hover:bg-primary/15">
-              🌍 Travel by Event
-            </Badge>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight mb-3">
-              Stay Connected at the World's Biggest Events
-            </h2>
-            <p className="text-muted-foreground text-base sm:text-lg max-w-2xl mx-auto">
-              From Canton Fair to Rio Carnival, KONEX gives travellers instant data before they land.
-            </p>
-          </div>
-        </Reveal>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-8">
-          {EVENT_CATEGORIES.map((cat, i) => (
-            <Reveal key={cat.slug} delay={Math.min(i + 1, 4) as 1 | 2 | 3 | 4}>
-              <Link href={`/events?category=${cat.slug}`} data-testid={`event-category-${cat.slug}`}>
-                <div className="group flex flex-col gap-2 p-4 sm:p-5 bg-card border border-border rounded-2xl hover:border-primary/40 hover:shadow-md transition-all cursor-pointer h-full">
-                  <span className="text-2xl sm:text-3xl">{cat.emoji}</span>
-                  <p className="font-semibold text-sm sm:text-base leading-tight text-card-foreground group-hover:text-primary transition-colors">
-                    {cat.label}
-                  </p>
-                  <p className="text-xs text-muted-foreground leading-relaxed hidden sm:block">
-                    {cat.desc}
-                  </p>
-                  <div className="flex items-center gap-1 text-xs text-primary font-medium mt-auto pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    Browse <ArrowRight className="w-3 h-3" />
-                  </div>
-                </div>
-              </Link>
-            </Reveal>
-          ))}
-        </div>
-
-        <Reveal>
-          <div className="text-center">
-            <Link href="/events">
-              <Button size="lg" className="rounded-xl font-semibold px-8" data-testid="button-browse-all-events">
-                Browse All Events
-                <ArrowRight className="ml-2 w-4 h-4" />
-              </Button>
-            </Link>
-            <p className="mt-3 text-sm text-muted-foreground">
-              40+ global events · trade fairs · festivals · sports · luxury travel
-            </p>
-          </div>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────
-// 11. TESTIMONIALS
-// ─────────────────────────────────────────────
-function TestimonialsSection() {
-  const testimonials = [
-    {
-      name: "Sarah K.",
-      context: "London → Lisbon, Porto, Seville",
-      quote: "Activated before I even left the airport. Seamless.",
-      full: "I scanned the QR on the plane and had working data before I'd collected my luggage. Far better than queuing at an airport kiosk.",
-      initials: "SK",
-    },
-    {
-      name: "James O.",
-      context: "Manchester → Lagos",
-      quote: "Cut my connectivity costs in half.",
-      full: "I travel back to Nigeria four times a year. Switching to Konex saved me significantly — and the signal is just as reliable as any local SIM.",
-      initials: "JO",
-    },
-    {
-      name: "Priya M.",
-      context: "Birmingham → Dubai, Abu Dhabi",
-      quote: "Fast data, first-time install, zero issues.",
-      full: "The QR worked first try and the setup guide was clear. Recommended it to my whole team before our Dubai conference — everyone was happy.",
-      initials: "PM",
-    },
-  ];
-
-  return (
-    <section className="py-12 sm:py-20 lg:py-28 border-t">
+    <section className="border-t" aria-labelledby="confidence-heading">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="mb-8 sm:mb-14 max-w-xl">
-          <div className="flex items-center gap-0.5 mb-5">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Star key={i} className="w-5 h-5 fill-yellow-500 text-yellow-500" />
-            ))}
-            <span className="ml-2 text-sm text-muted-foreground font-medium">4.9 / 5 · 5,000+ customers</span>
-          </div>
-          <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight" data-testid="text-testimonials-title">
-            Trusted by modern travellers.
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8 sm:mb-14">
-          {testimonials.map((t, idx) => (
-            <Reveal key={idx} delay={(idx + 1) as 1 | 2 | 3}>
-              <div className="flex flex-col p-7 rounded-2xl border bg-card card-gradient-hover h-full" data-testid={`card-testimonial-${idx}`}>
-                <div className="flex items-center gap-0.5 mb-4">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star key={i} className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                  ))}
-                </div>
-                <Quote className="w-6 h-6 text-primary/25 mb-4 flex-shrink-0" />
-                <p className="font-display font-bold text-lg leading-snug mb-3" data-testid={`text-testimonial-headline-${idx}`}>
-                  "{t.quote}"
-                </p>
-                <p className="text-sm text-muted-foreground leading-relaxed flex-1 mb-6">
-                  {t.full}
-                </p>
-                <div className="flex items-center gap-3 pt-4 border-t">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-primary to-blue-700 text-primary-foreground font-bold text-sm flex-shrink-0 shadow-md shadow-primary/20">
-                    {t.initials}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold leading-tight" data-testid={`text-testimonial-name-${idx}`}>{t.name}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5" data-testid={`text-testimonial-context-${idx}`}>{t.context}</p>
-                  </div>
-                </div>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[
-            { icon: Lock,        label: "Secure checkout",   sub: "SSL encrypted payments" },
-            { icon: Zap,         label: "Instant delivery",  sub: "QR code by email" },
-            { icon: Signal,      label: "Reliable coverage", sub: "Tier 1 global carriers" },
-            { icon: ShieldCheck, label: "24/7 support",      sub: "Help when you need it" },
-          ].map(({ icon: Icon, label, sub }) => (
-            <div
-              key={label}
-              className="flex flex-col items-center text-center p-5 rounded-2xl border bg-card gap-3 card-gradient-hover"
-              data-testid={`trust-badge-${label.toLowerCase().replace(/\s/g, '-')}`}
-            >
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Icon className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm font-bold leading-tight">{label}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+      <h2 id="confidence-heading" className="text-3xl sm:text-4xl font-bold tracking-tight mb-9">Why customers can book with confidence</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-7">
+        <div className="flex gap-3" data-testid="trust-badge-secure-checkout"><Lock aria-hidden className="w-5 h-5 text-primary shrink-0" /><div><h3 className="font-bold text-sm">Secure checkout</h3><p className="text-xs text-muted-foreground mt-2">Review your plan before payment.</p></div></div>
+        <div className="flex gap-3" data-testid="trust-badge-instant-delivery"><Mail aria-hidden className="w-5 h-5 text-primary shrink-0" /><div><h3 className="font-bold text-sm">QR emailed after payment</h3><p className="text-xs text-muted-foreground mt-2">Installation details in your inbox.</p></div></div>
+        <div className="flex gap-3"><ShieldCheck aria-hidden className="w-5 h-5 text-primary shrink-0" /><div><h3 className="font-bold text-sm">Need a hand?</h3><a href="mailto:support@konexesim.com" className="block text-xs text-primary underline underline-offset-4 mt-2 break-all">support@konexesim.com</a></div></div>
+        <div className="flex gap-3"><FileText aria-hidden className="w-5 h-5 text-primary shrink-0" /><div><h3 className="font-bold text-sm">Clear refund terms</h3><Link href="/refund-policy" className="block text-xs text-primary underline underline-offset-4 mt-2">Read our refund policy</Link></div></div>
+      </div>
       </div>
     </section>
   );
 }
 
-
-
-
-// ─────────────────────────────────────────────
-// 12. FAQ
-// ─────────────────────────────────────────────
 function FAQSection() {
   const faqs = [
-    {
-      question: "What is an eSIM?",
-      answer: "An eSIM is a digital SIM card built into your phone. Instead of inserting a physical card, you scan a QR code to download your data plan directly onto your device. Setup takes under a minute, and your regular number stays active alongside it.",
-    },
-    {
-      question: "How quickly do I receive my eSIM?",
-      answer: "Instantly. Your QR code is delivered to your email within seconds of completing your purchase. You can install it before you even leave for the airport — no waiting required.",
-    },
-    {
-      question: "Can I keep my regular number?",
-      answer: "Yes. Your existing SIM card and phone number remain fully active. The eSIM adds a separate data line — you'll still receive calls and messages on your regular number while using Konex for data.",
-    },
-    {
-      question: "Does Konex work on iPhone and Android?",
-      answer: "Yes. Konex works with most eSIM-compatible devices: iPhone XS and newer, Samsung Galaxy S20 and newer, Google Pixel 3 and newer, and many others. Your device must be carrier-unlocked. Use our compatibility checker to confirm before you buy.",
-    },
-    {
-      question: "What happens if I run out of data?",
-      answer: "You can purchase a top-up plan for the same destination at any time. Simply find your destination, select a plan, and check out. Your additional data is delivered instantly — no setup needed.",
-    },
-    {
-      question: "Can I use Konex in multiple countries?",
-      answer: "Yes. Our regional plans cover multiple countries in one purchase — ideal for European trips, Middle East travel, or multi-stop tours. Global plans cover 205+ countries with a single eSIM.",
-    },
+    { question: "What is an eSIM?", answer: "An eSIM is a digital SIM built into a compatible phone. Instead of inserting a physical card, you install a data plan using the QR code and instructions we email you." },
+    { question: "How quickly do I receive my eSIM?", answer: "Your QR code is emailed after payment, typically within minutes. In rare cases delivery can take up to 24 hours. Check our terms for delivery details and contact support if you need help." },
+    { question: "Can I keep my regular number?", answer: "On a supported dual-SIM device, your main number can stay active alongside your Konex eSIM. Select Konex for mobile data. Your home carrier may still charge for calls, texts or roaming on your main line, so check your settings and home plan." },
+    { question: "Does Konex work on iPhone and Android?", answer: "Konex works with supported eSIM-enabled iPhone and Android models. Availability varies by model and country of purchase. Your phone must be carrier-unlocked. Use our compatibility checker before buying." },
+    { question: "What happens if I run out of data?", answer: "Browse the available plans for your destination and purchase more data if you need it. Check the plan details and installation instructions: a new purchase may require a new eSIM installation." },
+    { question: "Can I use Konex in multiple countries?", answer: "Regional and global plans may cover multiple destinations. Coverage depends on the individual plan, so check its included destinations, data allowance and validity before checkout." },
   ];
-
   return (
-    <section id="faq" className="py-12 sm:py-20 lg:py-28 border-t">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">FAQ</p>
-            <h2 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mb-6" data-testid="text-faq-title">
-              Questions?<br />We've got answers.
-            </h2>
-            <p className="text-muted-foreground leading-relaxed mb-8">
-              Everything you need to know before you buy. Can't find your answer?{" "}
-              <span className="text-foreground font-medium">Reply to any email from us</span> and we'll get back within a few hours.
-            </p>
-            <Link href="/destinations">
-              <Button size="lg" className="font-bold" data-testid="button-faq-cta">
-                Browse Plans
-                <ArrowRight className="ml-2 w-4 h-4" />
-              </Button>
-            </Link>
-          </div>
-
-          <Accordion type="single" collapsible className="w-full">
-            {faqs.map((faq, idx) => (
-              <AccordionItem key={idx} value={`faq-${idx}`} className="border-b">
-                <AccordionTrigger className="text-left font-bold py-5 hover:no-underline text-base" data-testid={`button-faq-${idx}`}>
-                  {faq.question}
-                </AccordionTrigger>
-                <AccordionContent className="pb-5">
-                  <p className="text-muted-foreground leading-relaxed text-sm">
-                    {faq.answer}
-                  </p>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+    <section id="faq" className="border-t scroll-mt-24">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 grid grid-cols-1 md:grid-cols-2 gap-10 lg:gap-20">
+        <div><p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">FAQ</p><h2 className="text-4xl sm:text-5xl font-bold mb-6" data-testid="text-faq-title">Good questions.<br />Straight answers.</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-7">A few things worth knowing before you buy. For anything else, email <a href="mailto:support@konexesim.com" className="text-primary underline underline-offset-4">support@konexesim.com</a>.</p>
+          <Button asChild className="font-bold"><Link href="/destinations" data-testid="button-faq-cta">Browse Plans<ArrowRight aria-hidden className="w-4 h-4 ml-2" /></Link></Button>
         </div>
+        <Accordion type="single" collapsible>{faqs.map((faq, i) => <AccordionItem key={faq.question} value={`faq-${i}`}><AccordionTrigger className="text-left font-semibold py-5 hover:no-underline" data-testid={`button-faq-${i}`}>{faq.question}</AccordionTrigger><AccordionContent><p className="text-sm text-muted-foreground leading-relaxed pb-2">{faq.answer}</p></AccordionContent></AccordionItem>)}</Accordion>
       </div>
     </section>
   );
 }
 
-// ─────────────────────────────────────────────
-// 13. FINAL CTA
-// ─────────────────────────────────────────────
 function FinalCTA() {
-  const { ref, inView } = useInView(0.15);
   return (
-    <section className="relative overflow-hidden border-t" ref={ref}>
-      {/* Full-bleed background image */}
-      <img
-        src={travelLandmarksImg}
-        alt=""
-        aria-hidden
-        loading="lazy"
-        className={`absolute inset-0 w-full h-full object-cover reveal-img ${inView ? "in-view" : ""}`}
-      />
-      {/* Dark overlay for text contrast */}
-      <div className="absolute inset-0 bg-black/55 pointer-events-none" />
-
-      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-20 sm:py-28 lg:py-36 text-center">
-        <div className={`reveal ${inView ? "in-view" : ""}`}>
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/15 border border-white/30 text-white text-xs font-bold px-4 py-1.5 mb-6 uppercase tracking-widest">
-            <Zap className="w-3 h-3" />
-            Instant Activation
-          </div>
-          <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-6 leading-[1.05] text-white drop-shadow-lg" data-testid="text-final-cta-title">
-            Get travel data<br />before you land.
-          </h2>
-          <p className="text-white/85 text-base sm:text-lg max-w-xl mx-auto mb-8 sm:mb-10 leading-relaxed drop-shadow" data-testid="text-final-cta-subtitle">
-            Choose your destination, activate in minutes, and stay connected in 205+ countries with KONEX eSIM.
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
-            <Link href="/destinations">
-              <Button size="lg" className="h-13 px-8 text-base font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xl shadow-blue-900/50" data-testid="button-final-get-started">
-                Get eSIM Now
-                <ArrowRight className="ml-2 w-4 h-4" />
-              </Button>
-            </Link>
-            <Link href="/destinations">
-              <Button size="lg" variant="outline" className="h-13 px-8 text-base font-bold border-white/40 text-white bg-white/15 hover:bg-white/25" data-testid="button-final-browse-plans">
-                View Plans
-              </Button>
-            </Link>
-          </div>
-          <p className="text-sm text-white/60 drop-shadow" data-testid="text-final-microcopy">
-            Instant delivery &nbsp;·&nbsp; No roaming fees &nbsp;·&nbsp; No contracts
-          </p>
+    <section className="konex-inverse relative overflow-hidden border-t">
+      <img src={travelLandmarksImg} alt="" aria-hidden loading="lazy" className="absolute inset-0 w-full h-full object-cover opacity-20" />
+      <div className="absolute inset-0 bg-[hsl(var(--inverse)/.65)]" />
+      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12 text-center">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary mb-5">One less thing on arrival</p>
+        <h2 className="text-4xl sm:text-6xl font-bold leading-[1.06] mb-6" data-testid="text-final-cta-title">Get travel data<br />before you land.</h2>
+        <p className="text-white/85 max-w-lg mx-auto text-base leading-relaxed mb-8" data-testid="text-final-cta-subtitle">The maps, the messages, the journey ahead. Find the right data plan before you set off.</p>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Button asChild size="lg" className="font-bold"><Link href="/destinations" data-testid="button-final-get-started">Get eSIM Now<ArrowRight aria-hidden className="ml-2 w-4 h-4" /></Link></Button>
+          <Button asChild size="lg" variant="outline" className="font-bold bg-transparent text-inherit border-white/40 hover:bg-white/10 hover:text-inherit"><Link href="/destinations" data-testid="button-final-browse-plans">View Plans</Link></Button>
         </div>
+        <p className="text-xs text-white/85 mt-7" data-testid="text-final-microcopy">QR by email · No roaming fees · No contracts</p>
       </div>
     </section>
   );
 }
 
-// ─────────────────────────────────────────────
-// 14. FOOTER
-// ─────────────────────────────────────────────
 function Footer() {
-  const scrollTo = (id: string) => {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: "smooth" });
-  };
-
+  const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  const linkClass = "text-sm text-muted-foreground hover:text-foreground";
   return (
     <footer className="border-t bg-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-14">
-          <div className="col-span-2 sm:col-span-1">
-            <div className="mb-5" data-testid="text-footer-brand">
-              <KonexLogo size="md" />
-            </div>
-            <p className="text-sm text-muted-foreground leading-relaxed max-w-[200px]" data-testid="text-footer-tagline">
-              Instant global eSIM data for modern travellers.
-            </p>
-          </div>
-
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">Product</p>
-            <ul className="space-y-3">
-              {[
-                { label: "Plans",        action: () => scrollTo("plans"),        testid: "footer-link-plans" },
-                { label: "How It Works", action: () => scrollTo("how-it-works"), testid: "footer-link-how" },
-              ].map((item) => (
-                <li key={item.label}>
-                  <button onClick={item.action} className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium" data-testid={item.testid}>
-                    {item.label}
-                  </button>
-                </li>
-              ))}
-              <li>
-                <Link href="/compatibility">
-                  <span className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer font-medium" data-testid="footer-link-compat">
-                    Compatibility
-                  </span>
-                </Link>
-              </li>
-              <li>
-                <Link href="/orders">
-                  <span className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer font-medium" data-testid="footer-link-my-esims">
-                    My eSIMs
-                  </span>
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">Support</p>
-            <ul className="space-y-3">
-              <li>
-                <button onClick={() => scrollTo("faq")} className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium" data-testid="footer-link-faq">
-                  FAQ
-                </button>
-              </li>
-              <li>
-                <a
-                  href="mailto:support@konexesim.com"
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
-                  data-testid="footer-link-contact"
-                >
-                  support@konexesim.com
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">Legal</p>
-            <ul className="space-y-3">
-              <li>
-                <Link href="/privacy">
-                  <span className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium cursor-pointer" data-testid="text-footer-privacy">Privacy Policy</span>
-                </Link>
-              </li>
-              <li>
-                <Link href="/terms">
-                  <span className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium cursor-pointer" data-testid="text-footer-terms">Terms of Service</span>
-                </Link>
-              </li>
-              <li>
-                <Link href="/refund-policy">
-                  <span className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium cursor-pointer" data-testid="text-footer-refund">Refund Policy</span>
-                </Link>
-              </li>
-            </ul>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-9 mb-12">
+          <div><div className="mb-4" data-testid="text-footer-brand"><KonexLogo size="md" /></div><p className="text-sm text-muted-foreground leading-relaxed max-w-[220px]" data-testid="text-footer-tagline">Travel data, arranged before arrival.</p></div>
+          <div><h3 className="text-xs uppercase tracking-widest font-bold mb-5">Product</h3><ul className="space-y-3">
+            <li><button className={linkClass} onClick={() => scrollTo("plans")} data-testid="footer-link-plans">Plans</button></li>
+            <li><button className={linkClass} onClick={() => scrollTo("how-it-works")} data-testid="footer-link-how">How It Works</button></li>
+            <li><Link href="/compatibility" className={linkClass} data-testid="footer-link-compat">Compatibility</Link></li>
+            <li><Link href="/orders" className={linkClass} data-testid="footer-link-my-esims">My eSIMs</Link></li>
+          </ul></div>
+          <div><h3 className="text-xs uppercase tracking-widest font-bold mb-5">Support</h3><ul className="space-y-3">
+            <li><button className={linkClass} onClick={() => scrollTo("faq")} data-testid="footer-link-faq">FAQ</button></li>
+            <li><a href="mailto:support@konexesim.com" className={`${linkClass} break-all`} data-testid="footer-link-contact">support@konexesim.com</a></li>
+          </ul></div>
+          <div><h3 className="text-xs uppercase tracking-widest font-bold mb-5">Legal</h3><ul className="space-y-3">
+            <li><Link href="/privacy" className={linkClass} data-testid="text-footer-privacy">Privacy Policy</Link></li>
+            <li><Link href="/terms" className={linkClass} data-testid="text-footer-terms">Terms of Service</Link></li>
+            <li><Link href="/refund-policy" className={linkClass} data-testid="text-footer-refund">Refund Policy</Link></li>
+          </ul></div>
+        </div>
+        <div className="border-t py-7 flex flex-wrap gap-x-5 gap-y-4">
+          {flagStrip.map(item => <Link key={item.code} href={`/destinations/${item.code}`} className="flex items-center gap-2 hover:opacity-75" data-testid={`flag-strip-${item.code.toLowerCase()}`}><FlagImg code={item.code} name={item.label} className="w-5 h-3.5 rounded-sm" /><span className="text-xs text-muted-foreground">{item.label}</span></Link>)}
+        </div>
+        <div className="border-t py-6 flex flex-wrap justify-between gap-5">
+          <a href="mailto:support@konexesim.com" className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="trust-bar-support"><ShieldCheck aria-hidden className="w-4 h-4" />Email support</a>
+          <div className="flex items-center gap-4 text-muted-foreground" data-testid="payment-icons">
+            <SiVisa className="h-4 w-auto" title="Visa" data-testid="payment-icon-visa" /><SiMastercard className="h-4 w-auto" title="Mastercard" data-testid="payment-icon-mc" />
+            <SiApplepay className="h-5 w-auto" title="Apple Pay" data-testid="payment-icon-apple-pay" /><SiGooglepay className="h-5 w-auto" title="Google Pay" data-testid="payment-icon-google-pay" /><SiPaypal className="h-4 w-auto" title="PayPal" data-testid="payment-icon-paypal" />
           </div>
         </div>
-
-        {/* Flag strip */}
-        <div className="border-t pt-8 pb-6">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-            <span className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground flex-shrink-0 hidden sm:block">Popular</span>
-            {flagStrip.map((item) => (
-              <Link key={item.code} href={`/destinations/${item.code}`} data-testid={`flag-strip-${item.code.toLowerCase()}`}>
-                <div className="flex items-center gap-1.5 hover:opacity-75 transition-opacity cursor-pointer">
-                  <div className="w-5 h-3.5 rounded-[2px] overflow-hidden flex-shrink-0 shadow-sm">
-                    <FlagImg code={item.code} name={item.label} className="w-full h-full" />
-                  </div>
-                  <span className="text-xs font-medium text-muted-foreground">{item.label}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* Trust & payment bar */}
-        <div className="border-t pt-6 pb-6">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 justify-between">
-            <div className="flex items-center gap-2.5" data-testid="trust-bar-networks">
-              <SiVodafone className="h-3.5 w-auto" style={{ color: "#E60000" }} title="Vodafone" />
-              <SiTmobile  className="h-3.5 w-auto" style={{ color: "#E20074" }} title="T-Mobile" />
-              <SiOrange   className="h-3.5 w-auto" style={{ color: "#FF7900" }} title="Orange" />
-            </div>
-            <div className="flex items-center gap-1.5 text-muted-foreground" data-testid="trust-bar-support">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span className="text-xs font-medium">24/7 support</span>
-            </div>
-            <div className="flex items-center gap-3" data-testid="payment-icons">
-              <SiVisa       className="h-4 w-auto text-muted-foreground" data-testid="payment-icon-visa" />
-              <SiMastercard className="h-4 w-auto" style={{ color: "#EB001B" }} data-testid="payment-icon-mc" />
-              <SiApplepay   className="h-5 w-auto text-foreground" data-testid="payment-icon-apple-pay" />
-              <SiGooglepay  className="h-5 w-auto" style={{ color: "#4285F4" }} data-testid="payment-icon-google-pay" />
-              <SiPaypal     className="h-4 w-auto" style={{ color: "#003087" }} data-testid="payment-icon-paypal" />
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t pt-8">
-          <p className="text-xs text-muted-foreground text-center sm:text-left" data-testid="text-footer-copyright">
-            &copy; 2026 Konex. All rights reserved.
-          </p>
-        </div>
+        <p className="border-t pt-7 text-xs text-muted-foreground" data-testid="text-footer-copyright">&copy; {new Date().getFullYear()} Konex. All rights reserved.</p>
       </div>
     </footer>
   );
 }
 
-// ─────────────────────────────────────────────
-// 15. MOBILE STICKY CTA
-// ─────────────────────────────────────────────
 function MobileStickyCTA() {
   return (
-    <div
-      className="fixed bottom-0 left-0 right-0 z-40 sm:hidden bg-background/96 backdrop-blur-md border-t shadow-2xl px-3 py-2.5"
-      data-testid="mobile-sticky-cta"
-    >
+    <div className="fixed bottom-0 inset-x-0 z-40 sm:hidden bg-background/95 backdrop-blur-md border-t px-3 pt-2.5 pb-[max(.625rem,env(safe-area-inset-bottom))]" data-testid="mobile-sticky-cta">
       <div className="flex gap-2">
-        <Link href="/destinations" className="flex-1">
-          <Button className="w-full font-bold text-sm" size="default" data-testid="button-mobile-sticky-esim">
-            Get eSIM Now
-            <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
-          </Button>
-        </Link>
-        <Link href="/destinations" className="flex-1">
-          <Button variant="outline" className="w-full font-bold text-sm" size="default" data-testid="button-mobile-sticky-plans">
-            View Plans
-          </Button>
-        </Link>
+        <Button asChild className="flex-1 font-bold text-sm"><Link href="/destinations" data-testid="button-mobile-sticky-esim">Get eSIM Now<ArrowRight aria-hidden className="ml-2 w-4 h-4" /></Link></Button>
+        <Button asChild variant="outline" className="flex-1 font-bold text-sm"><Link href="/destinations" data-testid="button-mobile-sticky-plans">View Plans</Link></Button>
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// NIGERIA CAMPAIGN CARD
-// ─────────────────────────────────────────────
-function NigeriaCampaignCard() {
-  const [, navigate] = useLocation();
-  return (
-    <section className="px-4 sm:px-6 py-4" data-testid="section-nigeria-campaign">
-      <div className="max-w-7xl mx-auto">
-        <div
-          className="relative rounded-2xl overflow-hidden border border-emerald-500/25 cursor-pointer group"
-          style={{ background: "linear-gradient(135deg, #061a0c 0%, #0d2818 50%, #0a1f14 100%)" }}
-          onClick={() => navigate("/nigeria-esim")}
-          data-testid="card-nigeria-campaign"
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === "Enter" && navigate("/nigeria-esim")}
-        >
-          {/* glow */}
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute right-0 top-0 w-64 h-64 opacity-20 rounded-full -translate-y-1/2 translate-x-1/2"
-              style={{ background: "radial-gradient(circle, #008751 0%, transparent 70%)" }} />
-          </div>
-
-          <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 py-5">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-2xl flex-shrink-0">
-                🇳🇬
-              </div>
-              <div>
-                <p className="text-white font-bold text-base sm:text-lg leading-snug">
-                  Flying to Nigeria? Get connected before landing.
-                </p>
-                <p className="text-white/50 text-xs sm:text-sm mt-0.5">
-                  Skip the airport SIM queue — buy your eSIM now, scan the QR code, land connected.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              <Button
-                size="sm"
-                className="font-bold text-sm whitespace-nowrap border-0 group-hover:scale-105 transition-transform duration-200"
-                style={{ background: "linear-gradient(135deg, #008751, #00a65e)" }}
-                onClick={(e) => { e.stopPropagation(); navigate("/nigeria-esim"); }}
-                data-testid="button-nigeria-campaign-cta"
-              >
-                Get Nigeria eSIM
-                <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────
-// PAGE
-// ─────────────────────────────────────────────
 export default function Home() {
-  useEffect(() => { document.title = "Konex eSIM – Instant Data Plans for 205+ Countries"; }, []);
-
+  useEffect(() => { document.title = "Konex eSIM – Travel Data Before You Land"; }, []);
   return (
-    <div className="konex-home min-h-screen pb-20 sm:pb-0 overflow-x-hidden">
-      {/* A: Primary hero — Travel smarter */}
+    <div className="konex-home min-h-[100dvh] pb-24 sm:pb-0">
       <TravelSmarterSection />
-      {/* B: Trust stats strip */}
       <StatsStrip />
-      {/* C: Plan finder */}
-      <Reveal><PlanFinderSection /></Reveal>
-      {/* C3: Nigeria campaign card — prominent conversion banner */}
       <NigeriaCampaignCard />
-      {/* D: Popular destinations */}
-      <Reveal><PopularDestinations /></Reveal>
-      {/* E: Events carousel — mid-page feature */}
-      <Reveal><EventsCarousel /></Reveal>
-      {/* F: Travel bundles */}
-      <Reveal><BundlesSection /></Reveal>
-      {/* G: How it works */}
-      <Reveal><HowItWorks /></Reveal>
-      {/* H: Device compatibility */}
-      <Reveal><CompatibilitySection /></Reveal>
-      {/* I: Testimonials */}
-      <Reveal><TestimonialsSection /></Reveal>
-      {/* J: FAQ */}
-      <Reveal><FAQSection /></Reveal>
+      <PopularDestinations />
+      <EventsCarousel />
+      <AlternativesSection />
+      <BundlesSection />
+      <HowItWorks />
+      <CompatibilitySection />
+      <ConfidenceRow />
+      <FAQSection />
+      <FinalCTA />
       <Footer />
       <MobileStickyCTA />
     </div>
