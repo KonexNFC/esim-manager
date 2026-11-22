@@ -1,4 +1,4 @@
-- [Presentation refresh boundaries](presentation-refresh-boundaries.md) — GBP-first display is separate from charging; Stage 1 excludes payment and supplier business logic.
+- [Presentation refresh boundaries](presentation-refresh-boundaries.md) — USD default supersedes GBP; preserve saved choices and keep display changes separate from charging.
 - [Recommendation engine rules](rec-engine-rules.md) — three hard-won rules for RECOMMENDED/CHEAPER/PREMIUM slot logic; violating any causes confusing plan cards
 - [Production DB auto-pause](prod-db-pause.md) — site "down"/empty finder usually means the prod Postgres endpoint auto-paused; unpause in Database pane, don't redeploy
 - [Homepage event staleness](homepage-events-staleness.md) — hero carousel events are hardcoded with fixed dates and go stale; events page dataset is evergreen/self-filtering

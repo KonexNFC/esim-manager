@@ -357,7 +357,7 @@ export default function NigeriaEsim() {
             </div>
 
             <p className="text-center text-xs text-muted-foreground mt-5">
-              Prices shown in USD · Converted at checkout to your preferred currency
+              Charged in USD. Other display currencies are approximate conversions.
             </p>
           </div>
         </section>

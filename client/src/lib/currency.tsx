@@ -10,7 +10,7 @@ export interface CurrencyDef {
 
 // Approximate rates — display only. Checkout processes in USD via Stripe.
 export const CURRENCIES: CurrencyDef[] = [
-  { code: "USD", symbol: "$",    name: "US Dollar",         rate: 1,      decimals: 2 },
+  { code: "USD", symbol: "US$",  name: "US Dollar",         rate: 1,      decimals: 2 },
   { code: "GBP", symbol: "£",    name: "British Pound",     rate: 0.79,   decimals: 2 },
   { code: "EUR", symbol: "€",    name: "Euro",              rate: 0.93,   decimals: 2 },
   { code: "NGN", symbol: "₦",    name: "Nigerian Naira",    rate: 1620,   decimals: 0 },
@@ -27,14 +27,15 @@ export const CURRENCIES: CurrencyDef[] = [
 const STORAGE_KEY = "konex_currency";
 
 export function resolveCurrency(code: string | null | undefined): CurrencyDef {
-  return CURRENCIES.find(c => c.code === code) ?? CURRENCIES.find(c => c.code === "GBP")!;
+  return CURRENCIES.find(c => c.code === code) ?? CURRENCIES.find(c => c.code === "USD")!;
 }
 
 export function readDisplayCurrency(read: () => string | null): string {
-  try { return resolveCurrency(read()).code; } catch { return "GBP"; }
+  try { return resolveCurrency(read()).code; } catch { return "USD"; }
 }
 
 export function formatCharge(amount: number, code = "USD"): string {
+  if (code.toUpperCase() === "USD") return formatDisplay(amount, "USD");
   return new Intl.NumberFormat("en-GB", {
     style: "currency", currency: code, currencyDisplay: "code",
   }).format(amount);

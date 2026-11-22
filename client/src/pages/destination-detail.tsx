@@ -1368,7 +1368,7 @@ function PlanComparison({ data, bucket, onBucketChange, onSelect }: {
       <div className="mb-5">
         <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-2">Your trip, compared</p>
         <h2 id="compare-options-title" className="text-2xl sm:text-3xl font-bold">Compare your options</h2>
-        <p className="text-sm text-muted-foreground mt-2">Choose a duration to compare the available tiers side by side.</p>
+        <p className="text-sm text-muted-foreground mt-2">Choose a duration to compare the available tiers side by side. You are charged in USD; other display currencies are approximate.</p>
       </div>
       <div role="group" aria-label="Comparison duration" className="flex flex-wrap gap-2 mb-5">
         {data.availableDurations.map(b => (
