@@ -2,6 +2,8 @@
 // Central data file for the "Travel by Event" feature.
 // Categories: trade-fairs | festivals | sports | fashion-culture | luxury | business
 
+import { newFeaturedEvents } from "@shared/featured-events";
+
 export type EventCategory =
   | "trade-fairs"
   | "festivals"
@@ -13,6 +15,9 @@ export type EventCategory =
 export type TravellerType = "business" | "tourist" | "festival" | "luxury" | "sports";
 
 export interface TravelEvent {
+  startDate?: string;
+  endDate?: string;
+  ctaPath?: string;
   id: string;
   slug: string;
   name: string;
@@ -739,6 +744,38 @@ const events: TravelEvent[] = [
   },
 ];
 
+// Keep established detail-page slugs while sharing exact campaign copy/dates.
+for (const featured of newFeaturedEvents) {
+  const existing = events.find(event => event.id === featured.id);
+  const campaign: TravelEvent = {
+    id: featured.id, slug: existing?.slug ?? featured.id,
+    name: featured.name, category: featured.category,
+    country: featured.country, countryCode: featured.countryCode, city: featured.city,
+    month: featured.dates, monthIndex: [...new Set([Number(featured.startDate.slice(5, 7)), Number(featured.endDate.slice(5, 7))])],
+    travellerType: ["tourist"], description: featured.subtitle,
+    whyNeedData: "Use mobile data for maps, messages and travel information.",
+    recommendedDurations: [], countryPlanSlug: null, countryDestId: featured.countryCode,
+    airportHint: "", seoTitle: `${featured.name} | Konex eSIM`, seoDescription: featured.subtitle,
+    emoji: "", startDate: featured.startDate, endDate: featured.endDate, ctaPath: featured.href,
+  };
+  // Include intervening months, including cross-year events.
+  campaign.monthIndex = [];
+  const cursor = new Date(`${featured.startDate}T00:00:00Z`);
+  cursor.setUTCDate(1);
+  while (cursor.getTime() <= Date.parse(`${featured.endDate}T23:59:59Z`)) {
+    campaign.monthIndex.push(cursor.getUTCMonth() + 1);
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+  if (existing) Object.assign(existing, campaign);
+  else events.push(campaign);
+}
+for (const [id, startDate, endDate, month] of [
+  ["art-basel-miami", "2026-12-01", "2026-12-31", "December 2026"],
+  ["dubai-shopping-festival", "2026-12-01", "2027-01-31", "Dec 2026 – Jan 2027"],
+]) {
+  const event = events.find(e => e.id === id);
+  if (event) Object.assign(event, { startDate, endDate, month, monthIndex: id === "dubai-shopping-festival" ? [12, 1] : [12] });
+}
 export default events;
 
 // ─── Lookup helpers ───────────────────────────────────────────────────────────
@@ -755,6 +792,7 @@ export default events;
  *   CES Las Vegas  [1]      → false  (only January, already passed)
  */
 export function isEventUpcoming(event: TravelEvent, now = new Date()): boolean {
+  if (event.endDate) return Date.parse(`${event.endDate}T23:59:59.999Z`) >= now.getTime();
   const currentMonth = now.getMonth() + 1; // getMonth() is 0-based
   return event.monthIndex.some(m => m >= currentMonth);
 }

@@ -184,8 +184,10 @@ export default function EventsPage() {
   const [activeMonth, setActiveMonth] = useState<number | null>(null);
   const [activeTraveller, setActiveTraveller] = useState<TravellerType | null>(null);
 
+  const [chinaOnly, setChinaOnly] = useState(false);
   const filtered = useMemo(() => {
     let result = events.filter(e => isEventUpcoming(e));
+    if (chinaOnly) result = result.filter(e => e.countryCode === "CN");
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -210,12 +212,13 @@ export default function EventsPage() {
       result = result.filter(e => e.travellerType.includes(activeTraveller));
     }
 
-    return result;
-  }, [search, activeCategory, activeMonth, activeTraveller]);
+    return result.sort((a, b) => (a.startDate ?? "9999").localeCompare(b.startDate ?? "9999"));
+  }, [search, activeCategory, activeMonth, activeTraveller, chinaOnly]);
 
-  const hasFilters = !!activeCategory || activeMonth !== null || !!activeTraveller || !!search.trim();
+  const hasFilters = chinaOnly || !!activeCategory || activeMonth !== null || !!activeTraveller || !!search.trim();
 
   function clearFilters() {
+    setChinaOnly(false);
     setSearch("");
     setActiveCategory(null);
     setActiveMonth(null);
@@ -266,6 +269,7 @@ export default function EventsPage() {
       {/* ── Filters ── */}
       <div className="border-b bg-white sticky top-0 z-20 shadow-sm">
         <div className="max-w-6xl mx-auto px-4">
+          <button type="button" aria-pressed={chinaOnly} onClick={() => setChinaOnly(!chinaOnly)} data-testid="filter-china" className={`rounded-full border px-4 py-2 mt-3 text-sm font-semibold ${chinaOnly ? "bg-primary text-primary-foreground" : "bg-background text-foreground"}`}>China</button>
           {/* Category row */}
           <div className="flex gap-2 py-3 overflow-x-auto scrollbar-hide">
             <CategoryChip

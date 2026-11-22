@@ -9,7 +9,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { ArrowRight, Globe, Smartphone, Search, Lock, CheckCircle2, QrCode, MapPin, Banknote, ShieldCheck, Timer, Mail, FileText } from "lucide-react";
 import { SiVisa, SiMastercard, SiApplepay, SiPaypal, SiGooglepay } from "react-icons/si";
 import type { Destination } from "@shared/schema";
-import { eventHasNotEnded } from "@shared/event-dates";
+import { newFeaturedEvents, upcomingEvents } from "@shared/featured-events";
 import travelLandmarksImg from "@assets/Travel_Image__1776723002223.jpeg";
 
 // The catalogue is the sole source of homepage prices. Missing prices stay absent.
@@ -211,9 +211,11 @@ function PopularDestinations() {
   );
 }
 
-const FESTIVAL_EVENTS = [
+const FESTIVAL_EVENTS: Array<{ id: string; name: string; subtitle: string; location: string; dates: string; countryCode: string; bgFrom: string; bgTo: string; accent: string; photo: string; cta: string; startDate: string; endDate: string; href?: string }> = [
+  ...newFeaturedEvents,
   {
     id: "notting-hill-2026",
+    startDate: "2026-08-30", endDate: "2026-08-31",
     name: "Notting Hill Carnival",
     subtitle: "Europe's biggest street festival",
     location: "London, United Kingdom",
@@ -225,6 +227,7 @@ const FESTIVAL_EVENTS = [
   },
   {
     id: "oktoberfest",
+    startDate: "2026-09-19", endDate: "2026-10-04",
     name: "Oktoberfest 2026",
     subtitle: "Six million visitors, 16 days of Bavarian tradition. Munich's legendary celebration returns.",
     location: "Munich, Germany",
@@ -236,6 +239,7 @@ const FESTIVAL_EVENTS = [
   },
   {
     id: "singapore-gp-2026",
+    startDate: "2026-10-01", endDate: "2026-10-31",
     name: "Singapore Grand Prix",
     subtitle: "F1 night race under the lights",
     location: "Marina Bay, Singapore",
@@ -247,6 +251,7 @@ const FESTIVAL_EVENTS = [
   },
   {
     id: "canton-fair-2026",
+    startDate: "2026-10-15", endDate: "2026-11-04",
     name: "Canton Fair Autumn",
     subtitle: "The world's largest trade fair",
     location: "Guangzhou, China",
@@ -258,6 +263,7 @@ const FESTIVAL_EVENTS = [
   },
   {
     id: "art-basel-2026",
+    startDate: "2026-12-01", endDate: "2026-12-31",
     name: "Art Basel Miami Beach",
     subtitle: "The world's premier art fair",
     location: "Miami Beach, USA",
@@ -269,6 +275,7 @@ const FESTIVAL_EVENTS = [
   },
   {
     id: "dsf-2026",
+    startDate: "2026-12-01", endDate: "2027-01-31",
     name: "Dubai Shopping Festival",
     subtitle: "A month of shopping, shows & fireworks",
     location: "Dubai, UAE",
@@ -286,7 +293,7 @@ function EventsCarousel() {
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
-  const events = FESTIVAL_EVENTS.filter(event => eventHasNotEnded(event.dates, now));
+  const events = upcomingEvents(FESTIVAL_EVENTS, now, 8);
   if (!events.length) return null;
   // Reset the active index only when the visible event set changes.
   return <EventsSlides key={events.map(event => event.id).join(",")} events={events} />;
@@ -309,7 +316,8 @@ function EventsSlides({ events }: { events: typeof FESTIVAL_EVENTS }) {
     <section className="konex-inverse relative overflow-hidden" data-testid="section-events-carousel" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} aria-label="Travel for an event">
       {events.map((event, i) => (
         <div key={event.id} aria-hidden className={`absolute inset-0 transition-opacity duration-700 motion-reduce:transition-none ${i === active ? "opacity-100 z-10" : "opacity-0 z-0"}`} style={{ background: "hsl(var(--inverse))" }}>
-          <img src={event.photo} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover opacity-40" />
+          <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${event.bgFrom}, ${event.bgTo})` }} />
+          {event.photo && <img src={event.photo} alt="" loading="lazy" onError={e => { e.currentTarget.style.display = "none"; }} className="absolute inset-0 w-full h-full object-cover opacity-40" />}
           <div className="absolute inset-0 bg-[hsl(var(--inverse)/.85)]" />
         </div>
       ))}
@@ -323,7 +331,10 @@ function EventsSlides({ events }: { events: typeof FESTIVAL_EVENTS }) {
           </div>
           <div className="rounded-2xl border border-white/20 bg-white/[.04] p-6 sm:p-9">
             <div className="relative aspect-video overflow-hidden rounded-xl border border-white/20 mb-7">
-              {FESTIVAL_EVENTS.map((event, i) => <img key={event.id} src={event.photo} alt={i === active ? event.name : ""} aria-hidden={i !== active} loading="lazy" className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 motion-reduce:transition-none ${i === active ? "opacity-100" : "opacity-0"}`} />)}
+              {events.map((event, i) => <div key={event.id} aria-hidden={i !== active} className={`absolute inset-0 flex items-center justify-center transition-opacity duration-700 motion-reduce:transition-none ${i === active ? "opacity-100" : "opacity-0"}`} style={{ background: `linear-gradient(135deg, ${event.bgFrom}, ${event.bgTo})`, borderBottom: `3px solid ${event.accent}` }}>
+                <FlagImg code={event.countryCode} name={event.location} className="w-20 h-14 rounded shadow-sm" />
+                {event.photo && <img src={event.photo} alt={i === active ? event.name : ""} onError={e => { e.currentTarget.style.display = "none"; }} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
+              </div>)}
             </div>
             <div className="flex justify-between items-center mb-7"><span className="text-xs font-semibold uppercase tracking-widest text-primary">Upcoming event</span><FlagImg code={ev.countryCode} name={ev.location} className="w-8 h-6 rounded" /></div>
             <h3 className="text-2xl sm:text-3xl font-bold mb-3" data-testid="text-event-title">{ev.name}</h3>
@@ -332,7 +343,7 @@ function EventsSlides({ events }: { events: typeof FESTIVAL_EVENTS }) {
               <span className="flex items-center gap-2"><MapPin aria-hidden className="w-4 h-4 text-primary" />{ev.location}</span>
               <span className="flex items-center gap-2"><Timer aria-hidden className="w-4 h-4 text-primary" />{ev.dates}</span>
             </div>
-            <Button onClick={() => navigate(`/destinations/${ev.countryCode}`)} className="font-bold" data-testid={`button-event-cta-${ev.id}`}>{ev.cta}<ArrowRight aria-hidden className="w-4 h-4 ml-2" /></Button>
+            <Button onClick={() => navigate(ev.href ?? `/destinations/${ev.countryCode}`)} className="font-bold" data-testid={`button-event-cta-${ev.id}`}>{ev.cta}<ArrowRight aria-hidden className="w-4 h-4 ml-2" /></Button>
             <p className="text-xs text-white/70 mt-4">QR by email · No physical SIM needed</p>
           </div>
         </div>

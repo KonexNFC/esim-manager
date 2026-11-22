@@ -30,11 +30,11 @@ function DurationCard({
   event: TravelEvent;
   recommended: boolean;
 }) {
-  const destPath = event.countryDestId
+  const destPath = event.ctaPath ?? (event.countryDestId
     ? `/destinations/${event.countryDestId}`
     : event.countryPlanSlug
     ? `/destinations?country=${event.countryPlanSlug}`
-    : "/destinations";
+    : "/destinations");
 
   return (
     <Link href={destPath}>
@@ -165,9 +165,9 @@ export default function EventDetail() {
 
   if (!event) return <NotFound />;
 
-  const destPath = event.countryDestId
+  const destPath = event.ctaPath ?? (event.countryDestId
     ? `/destinations/${event.countryDestId}`
-    : `/destinations`;
+    : `/destinations`);
 
   const whyBullets =
     WHY_BULLETS[event.category] ?? WHY_BULLETS["business"];
@@ -213,7 +213,7 @@ export default function EventDetail() {
             <div className="flex items-center gap-1.5">
               <Clock className="w-4 h-4" />
               <span>
-                {event.recommendedDurations[0]}–{event.recommendedDurations[event.recommendedDurations.length - 1]} day plans available
+                {event.recommendedDurations.length ? `${event.recommendedDurations[0]}–${event.recommendedDurations[event.recommendedDurations.length - 1]} day plans available` : "Check available destination plans"}
               </span>
             </div>
           </div>
@@ -299,7 +299,7 @@ export default function EventDetail() {
                   {
                     step: "1",
                     title: "Choose your plan",
-                    desc: `Select a ${event.recommendedDurations[0]}–${event.recommendedDurations[event.recommendedDurations.length - 1]} day plan for ${event.country} based on how long you're travelling.`,
+                    desc: `Choose an available plan for ${event.country} based on how long you're travelling.`,
                   },
                   {
                     step: "2",
@@ -414,7 +414,7 @@ export default function EventDetail() {
                   },
                   {
                     label: "Suggested plans",
-                    value: event.recommendedDurations.map(d => `${d}d`).join(", "),
+                    value: event.recommendedDurations.map(d => `${d}d`).join(", ") || "See destination plans",
                     icon: Clock,
                   },
                 ].map(({ label, value, icon: Icon }) => (
