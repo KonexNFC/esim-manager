@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState } from "react";
 
 export interface CurrencyDef {
   code: string;
@@ -26,6 +26,36 @@ export const CURRENCIES: CurrencyDef[] = [
 
 const STORAGE_KEY = "konex_currency";
 
+export function resolveCurrency(code: string | null | undefined): CurrencyDef {
+  return CURRENCIES.find(c => c.code === code) ?? CURRENCIES.find(c => c.code === "GBP")!;
+}
+
+export function readDisplayCurrency(read: () => string | null): string {
+  try { return resolveCurrency(read()).code; } catch { return "GBP"; }
+}
+
+export function formatCharge(amount: number, code = "USD"): string {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency", currency: code, currencyDisplay: "code",
+  }).format(amount);
+}
+
+/** Conversion is presentation only; never use this result to create a charge. */
+export function formatDisplay(amount: number, targetCode: string, sourceCode = "USD"): string {
+  const source = CURRENCIES.find(c => c.code === sourceCode.toUpperCase());
+  const target = resolveCurrency(targetCode);
+  if (!source) return formatCharge(amount, sourceCode); // Never invent an exchange rate.
+  const converted = amount / source.rate * target.rate;
+  const fixed = converted.toFixed(target.decimals);
+  const [whole, fraction] = fixed.split(".");
+  return `${source.code === target.code ? "" : "≈ "}${target.symbol}${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${fraction === undefined ? "" : `.${fraction}`}`;
+}
+
+export function Price({ amount, source = "USD" }: { amount: number; source?: string }) {
+  const { currency } = useCurrency();
+  return <>{formatDisplay(amount, currency.code, source)}</>;
+}
+
 interface CurrencyContextValue {
   currency: CurrencyDef;
   setCurrencyCode: (code: string) => void;
@@ -33,7 +63,7 @@ interface CurrencyContextValue {
   fmt: (usd: number) => string;
   /**
    * Whether the displayed currency is approximate (show a "≈" prefix when true).
-   * False for USD (source currency) and GBP (native store currency — exact round-trip).
+   * USD-source amounts converted to any other currency are estimates.
    */
   isApprox: boolean;
 }
@@ -42,14 +72,15 @@ const CurrencyContext = createContext<CurrencyContextValue | null>(null);
 
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const [currencyCode, setCurrencyCodeState] = useState<string>(() => {
-    try { return localStorage.getItem(STORAGE_KEY) ?? "USD"; } catch { return "USD"; }
+    return readDisplayCurrency(() => localStorage.getItem(STORAGE_KEY));
   });
 
-  const currency = CURRENCIES.find(c => c.code === currencyCode) ?? CURRENCIES[0];
+  const currency = resolveCurrency(currencyCode);
 
   const setCurrencyCode = (code: string) => {
-    setCurrencyCodeState(code);
-    try { localStorage.setItem(STORAGE_KEY, code); } catch {}
+    const validCode = resolveCurrency(code).code;
+    setCurrencyCodeState(validCode);
+    try { localStorage.setItem(STORAGE_KEY, validCode); } catch {}
   };
 
   const fmt = (usd: number): string => {
@@ -61,9 +92,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     return `${currency.symbol}${parts.join(".")}`;
   };
 
-  // USD is the source currency (exact), GBP is the native store currency (exact round-trip).
-  // All other currencies are approximations converted from USD.
-  const isApprox = currency.code !== "USD" && currency.code !== "GBP";
+  const isApprox = currency.code !== "USD";
 
   return (
     <CurrencyContext.Provider value={{ currency, setCurrencyCode, fmt, isApprox }}>

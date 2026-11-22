@@ -1,3 +1,4 @@
+import { Price } from "@/lib/currency";
 import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -52,7 +53,7 @@ function OrderCard({ order }: { order: Order & { planName?: string; destinationN
           <div className="flex items-center gap-3 flex-shrink-0">
             <div className="text-right">
               <p className="font-semibold text-sm" data-testid={`text-order-price-${order.id}`}>
-                ${order.totalPrice.toFixed(2)}
+                <Price amount={order.totalPrice} source={order.currency} />
               </p>
               <Badge variant="outline" className={`text-xs ${badge.className}`}>
                 {badge.label}

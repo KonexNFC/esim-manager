@@ -1,3 +1,4 @@
+import { Price } from "@/lib/currency";
 import { Link, useLocation } from "wouter";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,7 @@ const NG_PLANS = [
     id: "starter",
     data: "1 GB",
     days: 7,
-    price: "From $6",
+    price: 6,
     label: null,
     desc: "Perfect for a short visit or arrival connection",
   },
@@ -36,7 +37,7 @@ const NG_PLANS = [
     id: "popular",
     data: "3 GB",
     days: 15,
-    price: "From $11",
+    price: 11,
     label: "Popular",
     desc: "Great for a two-week trip with regular usage",
   },
@@ -44,7 +45,7 @@ const NG_PLANS = [
     id: "explorer",
     data: "5 GB",
     days: 30,
-    price: "From $16",
+    price: 16,
     label: null,
     desc: "Best value for a full month of travel",
   },
@@ -52,7 +53,7 @@ const NG_PLANS = [
     id: "heavy",
     data: "10 GB",
     days: 30,
-    price: "From $24",
+    price: 24,
     label: "Best Data",
     desc: "For content creators, video calls & heavy users",
   },
@@ -325,7 +326,7 @@ export default function NigeriaEsim() {
                     </div>
 
                     <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{plan.price}</span>
+                      <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400">From <Price amount={plan.price} /></span>
                     </div>
                     <p className="text-xs text-muted-foreground leading-relaxed mb-5 flex-1">{plan.desc}</p>
 

@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { EsimQrDisplay } from "@/components/EsimQrDisplay";
+import { Price, formatCharge, formatDisplay, useCurrency, CURRENCIES } from "@/lib/currency";
 
 // ─── Types ────────────────────────────────────────────
 type EnrichedOrder = {
@@ -274,7 +275,7 @@ function TopupModal({ order, open, onClose }: { order: EnrichedOrder; open: bool
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {opt.dataAddedMb ? `+${(opt.dataAddedMb / 1024).toFixed(0)} GB` : opt.validityAddedDays ? `+${opt.validityAddedDays} days` : "Unlimited"}
                   </p>
-                  <p className="text-base font-bold mt-2">${opt.price.toFixed(2)}</p>
+                  <p className="text-base font-bold mt-2"><Price amount={opt.price} source={opt.currency} /></p>
                 </button>
               ))}
             </div>
@@ -285,7 +286,7 @@ function TopupModal({ order, open, onClose }: { order: EnrichedOrder; open: bool
               <span className="text-sm font-medium">
                 <span className="text-muted-foreground">Adding</span> {selectedOption.name}
               </span>
-              <span className="font-bold">${selectedOption.price.toFixed(2)}</span>
+              <span className="font-bold"><Price amount={selectedOption.price} source={selectedOption.currency} /></span>
             </div>
           )}
 
@@ -299,7 +300,7 @@ function TopupModal({ order, open, onClose }: { order: EnrichedOrder; open: bool
             {redirecting
               ? "Redirecting to payment…"
               : selectedOption
-                ? `Pay ${selectedOption.name} — $${selectedOption.price.toFixed(2)}`
+                ? `Pay ${selectedOption.name} — ${formatCharge(selectedOption.price, selectedOption.currency)}`
                 : "Select an option"}
           </Button>
           <p className="text-xs text-center text-muted-foreground">
@@ -417,7 +418,7 @@ function OrderRow({ order }: { order: EnrichedOrder }) {
       </div>
       <div className="flex items-center gap-3 flex-shrink-0 ml-3">
         <div className="text-right hidden sm:block">
-          <p className="font-bold text-sm" data-testid={`text-order-price-${order.id}`}>${order.totalPrice.toFixed(2)}</p>
+          <p className="font-bold text-sm" data-testid={`text-order-price-${order.id}`}><Price amount={order.totalPrice} source={order.currency} /></p>
           <p className={`text-xs ${sc.color}`}>{sc.label}</p>
         </div>
         <Link href={`/orders/${order.id}`}>
@@ -585,6 +586,7 @@ function EsimCardSkeleton() {
 type Tab = "esims" | "orders" | "settings";
 
 export default function Dashboard() {
+  const { currency } = useCurrency();
   useEffect(() => { document.title = "My eSIMs | Konex eSIM"; }, []);
   const [, navigate] = useLocation();
   const { user, isLoading: authLoading, logout } = useAuth();
@@ -652,7 +654,8 @@ export default function Dashboard() {
   const activeEsims = (dashOrders ?? []).filter(o => ["issued", "active", "installed"].includes(o.esimStatus));
   const expiredEsims = (dashOrders ?? []).filter(o => !["issued", "active", "installed"].includes(o.esimStatus));
   const allOrders = dashOrders ?? [];
-  const totalSpent = allOrders.reduce((s, o) => s + o.totalPrice, 0);
+  const knownCurrencies = allOrders.every(o => CURRENCIES.some(c => c.code === o.currency.toUpperCase()));
+  const totalSpent = allOrders.reduce((s, o) => s + o.totalPrice / (CURRENCIES.find(c => c.code === o.currency.toUpperCase())?.rate ?? 1), 0);
 
   const tabs: { id: Tab; label: string; icon: any; count?: number }[] = [
     { id: "esims",    label: "My eSIMs",      icon: LayoutGrid,  count: activeEsims.length },
@@ -683,7 +686,7 @@ export default function Dashboard() {
         {[
           { label: "Active eSIMs",  value: ordersLoading ? "—" : activeEsims.length.toString(), icon: Wifi,        color: "text-primary"       },
           { label: "Total orders",  value: ordersLoading ? "—" : allOrders.length.toString(),   icon: ShoppingBag, color: "text-blue-500"      },
-          { label: "Total spent",   value: ordersLoading ? "—" : `$${totalSpent.toFixed(2)}`,   icon: Gauge,       color: "text-violet-500"    },
+          { label: "Total spent",   value: ordersLoading || !knownCurrencies ? "—" : formatDisplay(totalSpent, currency.code),   icon: Gauge,       color: "text-violet-500"    },
         ].map(stat => (
           <div
             key={stat.label}

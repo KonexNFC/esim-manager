@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { useCurrency } from "@/lib/currency";
+import { useCurrency, Price } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { KonexLogo } from "@/components/konex-logo";
@@ -739,8 +739,8 @@ function HowItWorks() {
           <p className="text-[7px] text-center text-white/30 font-bold uppercase tracking-widest">205+ Countries</p>
           {/* Plan cards */}
           {[
-            { label: "5 GB · 7 days", price: "$9.99", highlight: true },
-            { label: "10 GB · 30 days", price: "$16.99", highlight: false },
+            { label: "5 GB · 7 days", price: 9.99, highlight: true },
+            { label: "10 GB · 30 days", price: 16.99, highlight: false },
           ].map(p => (
             <div
               key={p.label}
@@ -751,7 +751,7 @@ function HowItWorks() {
               }`}
             >
               <span className="font-semibold">{p.label}</span>
-              <span className={`font-bold ${p.highlight ? "text-white" : "text-white/50"}`}>{p.price}</span>
+              <span className={`font-bold ${p.highlight ? "text-white" : "text-white/50"}`}><Price amount={p.price} /></span>
             </div>
           ))}
         </div>
@@ -932,12 +932,12 @@ function HowItWorks() {
 // ─────────────────────────────────────────────
 // 4. POPULAR DESTINATIONS
 // ─────────────────────────────────────────────
-const regionFromPrice: Record<string, string> = {
-  "Asia": "£7.99",
-  "Southeast Asia": "£7.99",
-  "Europe": "£9.99",
-  "Middle East": "£12.99",
-  "North America": "£14.99",
+const regionFromPrice: Record<string, number> = {
+  "Asia": 7.99,
+  "Southeast Asia": 7.99,
+  "Europe": 9.99,
+  "Middle East": 12.99,
+  "North America": 14.99,
 };
 
 function PopularDestinations() {
@@ -976,7 +976,7 @@ function PopularDestinations() {
                 {/* Top badge */}
                 <div className="absolute top-3 right-3 bg-black/50 backdrop-blur-sm border border-white/15 rounded-lg px-2 py-1">
                   <p className="text-white/50 text-[9px] uppercase tracking-wide font-bold leading-none mb-0.5">from</p>
-                  <p className="text-white font-bold text-xs">{regionFromPrice[dest.region] ?? "£9.99"}</p>
+                  <p className="text-white font-bold text-xs"><Price amount={regionFromPrice[dest.region] ?? 9.99} source="GBP" /></p>
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 p-4">
                   <div className="w-7 h-5 rounded-sm overflow-hidden mb-1.5 shadow-md border border-white/20">
@@ -1090,7 +1090,7 @@ const bundles = [
     subtitle: "28 countries · One eSIM",
     description: "Full coverage across the EU, UK, and beyond. Maps, social, streaming — all without switching SIMs.",
     features: ["28 European countries", "Up to 30-day validity", "4G/5G speeds"],
-    price: "From $14",
+    price: 14,
     href: "/destinations/EU",
   },
   {
@@ -1102,7 +1102,7 @@ const bundles = [
     subtitle: "Land connected · No queues",
     description: "Buy before you fly, get your QR code instantly, and skip the airport SIM registration entirely.",
     features: ["Nigeria coverage", "Activates on landing", "No registration needed"],
-    price: "From $6",
+    price: 6,
     href: "/nigeria-esim",
   },
   {
@@ -1114,7 +1114,7 @@ const bundles = [
     subtitle: "Dual-country · Both ends covered",
     description: "Built for the UK–Nigeria corridor. Stay connected in both countries on a single eSIM plan.",
     features: ["UK + Nigeria coverage", "5 GB data", "30-day validity"],
-    price: "From $16",
+    price: 16,
     href: "/nigeria-esim",
   },
   {
@@ -1126,7 +1126,7 @@ const bundles = [
     subtitle: "205+ countries · No limits",
     description: "One eSIM that works everywhere. Ideal for frequent travellers, business trips, or multi-stop tours.",
     features: ["205+ countries covered", "Unlimited data option", "Multi-trip ready"],
-    price: "From $29",
+    price: 29,
     href: "/destinations",
   },
 ];
@@ -1268,7 +1268,7 @@ function BundlesSection() {
                 ))}
               </ul>
               <div className="flex items-center justify-between pt-5 border-t border-current/10">
-                <span className="font-display font-bold text-xl">{bundle.price}</span>
+                <span className="font-display font-bold text-xl">From <Price amount={bundle.price} /></span>
                 <Link href={bundle.href}>
                   <Button
                     size="sm"

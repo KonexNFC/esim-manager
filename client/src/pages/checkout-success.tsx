@@ -1,3 +1,4 @@
+import { Price, formatCharge } from "@/lib/currency";
 import { useRef, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -389,7 +390,8 @@ export default function CheckoutSuccess() {
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Amount charged</span>
               <span className="font-semibold">
-                ${order.totalPrice.toFixed(2)} {order.currency}
+                <Price amount={order.totalPrice} source={order.currency} />
+                <span className="block text-xs text-muted-foreground">Charged: {formatCharge(order.totalPrice, order.currency)}</span>
               </span>
             </div>
           )}

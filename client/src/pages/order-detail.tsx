@@ -1,3 +1,4 @@
+import { Price, formatCharge } from "@/lib/currency";
 import { useEffect, useState } from "react";
 import { useRoute, Link } from "wouter";
 import { Card } from "@/components/ui/card";
@@ -501,7 +502,7 @@ export default function OrderDetail() {
         <div className="px-6 py-4 bg-muted/10">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Order total</span>
-            <span className="font-bold text-base">${order.totalPrice.toFixed(2)} {order.currency}</span>
+            <span className="font-bold text-base"><Price amount={order.totalPrice} source={order.currency} /><span className="block text-xs text-muted-foreground">Charged: {formatCharge(order.totalPrice, order.currency)}</span></span>
           </div>
           <div className="flex items-center justify-between text-xs mt-1.5">
             <span className="text-muted-foreground">Order ID</span>

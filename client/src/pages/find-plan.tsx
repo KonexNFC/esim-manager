@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CountryCombobox } from "@/components/country-combobox";
 import { PlanCard, PlanCardGrid, type PlanBadgeVariant } from "@/components/plan-card";
 import { cn } from "@/lib/utils";
-import { useCurrency } from "@/lib/currency";
+import { useCurrency, formatDisplay } from "@/lib/currency";
 import { ChevronRight, Sparkles, TrendingDown } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -110,7 +110,8 @@ function PlanCardSkeleton() {
 
 export default function FindPlan() {
   const [, navigate] = useLocation();
-  const { fmt } = useCurrency();
+  const { currency } = useCurrency();
+  const fmt = (usd: number) => formatDisplay(usd, currency.code);
 
   const searchParams = new URLSearchParams(
     typeof window !== "undefined" ? window.location.search : ""

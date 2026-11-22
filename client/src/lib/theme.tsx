@@ -10,7 +10,9 @@ const ThemeContext = createContext<{
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem("globe_theme") as Theme) || "light";
+      try {
+        return localStorage.getItem("globe_theme") === "dark" ? "dark" : "light";
+      } catch { return "light"; }
     }
     return "light";
   });
@@ -19,7 +21,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const root = document.documentElement;
     root.classList.remove("light", "dark");
     if (theme === "dark") root.classList.add("dark");
-    localStorage.setItem("globe_theme", theme);
+    try { localStorage.setItem("globe_theme", theme); } catch {}
   }, [theme]);
 
   const toggleTheme = () => {

@@ -1,6 +1,6 @@
 import { useRoute, Link, useLocation } from "wouter";
 import { SiVisa, SiMastercard, SiApplepay, SiGooglepay, SiPaypal } from "react-icons/si";
-import { useCurrency } from "@/lib/currency";
+import { useCurrency, Price, formatCharge } from "@/lib/currency";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -516,7 +516,7 @@ export default function Checkout() {
                   data-testid="button-complete-purchase"
                 >
                   <Lock className="w-4 h-4 mr-2" />
-                  Continue to Payment — US${totalPriceUsd.toFixed(2)}
+                  Continue to Payment — <Price amount={totalPriceUsd} />
                 </Button>
               </div>
             </Card>
@@ -564,7 +564,7 @@ export default function Checkout() {
                               <SiApplepay className="h-5 w-auto" />
                               <SiGooglepay className="h-5 w-auto" />
                             </div>
-                            Pay US${totalPriceUsd.toFixed(2)}
+                            Pay {formatCharge(totalPriceUsd, plan.quote.currency)}
                           </>
                         )}
                       </Button>
@@ -619,7 +619,7 @@ export default function Checkout() {
                         ) : (
                           <>
                             <Lock className="w-4 h-4 mr-2" />
-                            Pay US${totalPriceUsd.toFixed(2)} via Paddle
+                            Pay {formatCharge(totalPriceUsd, plan.quote.currency)} via Paddle
                           </>
                         )}
                       </Button>
@@ -692,19 +692,19 @@ export default function Checkout() {
             <div className="space-y-2 mb-4">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Base plan</span>
-                <span>US${plan.quote.amount.toFixed(2)}</span>
+                <span><Price amount={plan.quote.amount} /></span>
               </div>
             </div>
 
             <div className="flex items-center justify-between mb-2 pt-2 border-t">
               <span className="font-semibold">Total</span>
               <div className="text-right">
-                <span className="text-xl font-bold" data-testid="text-total-price">US${totalPriceUsd.toFixed(2)}</span>
+                <span className="text-xl font-bold" data-testid="text-total-price"><Price amount={totalPriceUsd} /></span>
               </div>
             </div>
             <p className="text-[11px] text-muted-foreground flex items-center gap-1 mb-4">
                 <Lock className="w-3 h-3 flex-shrink-0" />
-                Checkout is processed in USD
+                Actual charge: {formatCharge(totalPriceUsd, plan.quote.currency)}{currency.code !== plan.quote.currency ? ` · ${currency.code} display is approximate` : ""}
               </p>
 
             <div>

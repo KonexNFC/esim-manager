@@ -1,3 +1,4 @@
+import { Price } from "@/lib/currency";
 import { useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -149,7 +150,7 @@ const tiers = [
     id: "basic",
     name: "Basic",
     tagline: "The classic black card",
-    price: "£19.99",
+    price: 19.99,
     label: null,
     highlighted: false,
     features: [
@@ -166,7 +167,7 @@ const tiers = [
     id: "pro",
     name: "Pro",
     tagline: "Custom brand, premium feel",
-    price: "£39.99",
+    price: 39.99,
     label: "Most Popular",
     highlighted: true,
     features: [
@@ -183,7 +184,7 @@ const tiers = [
     id: "metal",
     name: "Metal",
     tagline: "Heavyweight impression",
-    price: "£79.99",
+    price: 79.99,
     label: "Premium",
     highlighted: false,
     features: [
@@ -472,7 +473,7 @@ export default function NfcCard() {
                 </div>
 
                 <div className="mb-6">
-                  <span className="font-display text-4xl font-bold tracking-tight">{tier.price}</span>
+                  <span className="font-display text-4xl font-bold tracking-tight"><Price amount={tier.price} source="GBP" /></span>
                   <span className={`text-sm ml-1.5 ${tier.highlighted ? "text-white/60" : "text-muted-foreground"}`}>one-time</span>
                 </div>
 
@@ -555,7 +556,7 @@ export default function NfcCard() {
               <ArrowRight className="ml-2 w-4 h-4" />
             </Button>
           </a>
-          <p className="text-xs text-muted-foreground mt-4">From £19.99 · Free UK delivery · 30-day guarantee</p>
+          <p className="text-xs text-muted-foreground mt-4">From <Price amount={19.99} source="GBP" /> · Free UK delivery · 30-day guarantee</p>
         </div>
       </section>
     </main>
