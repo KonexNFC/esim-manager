@@ -17,6 +17,7 @@ async function getCredentials() {
   connectionSettings = await fetch(
     'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=sendgrid',
     {
+      signal: AbortSignal.timeout(10_000),
       headers: {
         'Accept': 'application/json',
         'X-Replit-Token': xReplitToken,
@@ -35,5 +36,6 @@ async function getCredentials() {
 export async function getUncachableSendGridClient() {
   const { apiKey, fromEmail } = await getCredentials();
   sgMail.setApiKey(apiKey);
+  sgMail.setTimeout(20_000);
   return { client: sgMail, fromEmail };
 }

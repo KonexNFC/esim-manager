@@ -319,6 +319,8 @@ app.use((req, res, next) => {
   startProviderBalanceScheduler();
   const { startZenditReconciliationScheduler } = await import("./services/fulfillment");
   startZenditReconciliationScheduler();
+  const { startEsimNotificationScheduler } = await import("./services/esimNotificationOutbox");
+  startEsimNotificationScheduler();
 
   // ── Startup recovery: re-trigger orders stuck in "fulfilling" ─────────────
   // These are orders where capture succeeded but the async fulfillment task

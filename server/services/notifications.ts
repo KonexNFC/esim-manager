@@ -107,6 +107,7 @@ async function sendViaResend(to: string, from: string, subject: string, html: st
   if (!apiKey) throw new Error('RESEND_API_KEY not set');
   const res = await fetch(RESEND_API, {
     method: 'POST',
+    signal: AbortSignal.timeout(20_000),
     headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from, to: [to], subject, html }),
   });
@@ -396,11 +397,12 @@ export async function sendEsimReadyEmail(data: EsimReadyData): Promise<void> {
     </div>
   `;
 
-  await sendEmail(
+  const delivered = await sendEmail(
     data.email,
     `Your Konex eSIM for ${data.destination} is ready — install now`,
     darkLayout(content, 'Your eSIM is Ready'),
   );
+  if (!delivered) throw new Error('eSIM ready email was not accepted by either provider');
 }
 
 // ─── Purchase Confirmation (sent immediately after payment, before eSIM is ready) ──

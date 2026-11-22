@@ -14,13 +14,14 @@
 
 import { db } from '../storage';
 import { randomUUID } from 'node:crypto';
+import { esimReadyNotifications } from '@shared/schema';
 import { orders, esims, users, topups, plans, destinations, normalizedPlans, providerSyncLogs, providerAttempts, providers, providerOffers } from '@shared/schema';
 import { eq, sql, and, inArray, lt, isNull } from 'drizzle-orm';
 import { getProviderAdapterByKey } from '../providers/adapters';
 import type { ProviderAdapter, ProviderPurchaseParams, CustomerContext, EsimProvisionResult } from '../providers/adapters';
 import { ZenditPurchasePendingError } from '../providers/adapters/zendit';
 import {
-  sendPurchaseConfirmation, sendEsimReadyEmail, sendTopupConfirmation,
+  sendPurchaseConfirmation, sendTopupConfirmation,
   sendFulfillmentFailedEmail,
 } from './notifications';
 import { recordFulfillmentOutcome } from './destinationStats';
@@ -604,7 +605,7 @@ async function resolvePlanDataForOrder(order: typeof orders.$inferSelect): Promi
  * the normal and reconciliation paths. The caller must have claimed the order
  * first; the order/provider IDs make the operation auditable and idempotent.
  */
-async function completeInitialFulfillment(
+export async function completeInitialFulfillment(
   order: typeof orders.$inferSelect,
   user: typeof users.$inferSelect | null,
   planData: PlanData,
@@ -641,6 +642,25 @@ async function completeInitialFulfillment(
     // Another worker completed this claim first. Do not insert a duplicate
     // eSIM or send duplicate customer emails.
     if (!completedOrder) return null;
+
+    // This insert must commit (or roll back) with the issued eSIM and order.
+    // Repeated fulfillment cannot reset an already-delivered notification.
+    await tx.insert(esimReadyNotifications).values({
+      orderId: order.id,
+      payload: {
+        email: order.email, name: user?.name, orderId: order.id,
+        qrCodeUrl: result.qrCodeUrl,
+        iccid: result.iccid,
+        destination: planData.destination,
+        manualCode: result.manualCode,
+        planName: planData.name,
+        dataAmount: planData.dataAmount,
+        validity: planData.validity,
+        totalPrice: order.totalPrice,
+        currency: order.currency,
+        paymentMethod: order.paypalOrderId ? 'PayPal' : 'Card',
+      },
+    }).onConflictDoNothing();
 
     const [existingEsim] = await tx.select().from(esims).where(eq(esims.orderId, order.id));
     if (existingEsim) return existingEsim;
@@ -679,9 +699,8 @@ async function completeInitialFulfillment(
     `iccid=${result.iccid} status=${result.activationStatus}`,
     'ok');
 
-  // Fire-and-forget notifications. If a process restarts after the DB write,
-  // the eSIM remains issued and the existing order can still be re-sent by
-  // support; email delivery must not roll back fulfillment.
+  // The separate purchase receipt remains best-effort. The QR email above is
+  // durable and is delivered independently by the notification worker.
   sendPurchaseConfirmation({
     email: order.email, name: user?.name, orderId: order.id,
     planName: planData.name,
@@ -690,20 +709,6 @@ async function completeInitialFulfillment(
     validity: planData.validity,
     totalPrice: order.totalPrice,
     currency: order.currency,
-  }).catch(console.error);
-
-  sendEsimReadyEmail({
-    email: order.email, name: user?.name, orderId: order.id,
-    qrCodeUrl: result.qrCodeUrl,
-    iccid: result.iccid,
-    destination: planData.destination,
-    manualCode: result.manualCode,
-    planName: planData.name,
-    dataAmount: planData.dataAmount,
-    validity: planData.validity,
-    totalPrice: order.totalPrice,
-    currency: order.currency,
-    paymentMethod: order.paypalOrderId ? 'PayPal' : 'Card',
   }).catch(console.error);
 
   console.log(`[Fulfillment] ✓ Order ${order.id} fulfilled via ${resolvedProviderKey} — ICCID: ${result.iccid}`);

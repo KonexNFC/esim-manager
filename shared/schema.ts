@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, timestamp, doublePrecision, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, doublePrecision, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -109,6 +109,18 @@ export const orders = pgTable("orders", {
   // eSIM connectivity
   apn: text("apn"),
 });
+
+// Transactional outbox: one automatic QR notification per fulfilled order.
+export const esimReadyNotifications = pgTable("esim_ready_notifications", {
+  orderId: varchar("order_id").primaryKey().references(() => orders.id),
+  payload: jsonb("payload").$type<import("../server/services/notifications").EsimReadyData>().notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at").notNull().defaultNow(),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, table => [
+  index("esim_ready_notifications_pending_idx").on(table.nextAttemptAt).where(sql`${table.sentAt} IS NULL`),
+]);
 
 // ─── PROVIDER SYNC RUNS ───────────────────────────────
 // One row per catalogue sync run (fetching live plans from providers).
