@@ -226,22 +226,30 @@ export async function validateCheckoutQuoteForPayment(token: unknown): Promise<C
  * has a 500-character value limit that can be too small for a full token. */
 export async function validateCheckoutQuoteOfferSnapshot(
   quote: Pick<CheckoutQuote, "normalizedPlanId" | "selectedOfferId" | "fallbackChain">,
-): Promise<void> {
+): Promise<number> {
   const eligible = await getOffersForNormalizedPlan(quote.normalizedPlanId);
   const byId = new Map(eligible.map(offer => [offer.id, offer]));
   const selected = byId.get(quote.selectedOfferId);
   if (!selected) throw new PriceFloorError("The selected offer is no longer available. Please refresh the price.");
 
+  if (!Array.isArray(quote.fallbackChain) || quote.fallbackChain.length === 0) {
+    throw new PriceFloorError("The checkout quote has no supplier cost evidence.");
+  }
+  const currentCosts: number[] = [];
   for (const item of quote.fallbackChain) {
     const current = [...byId.values()].find(offer =>
       offer.providerKey === item.k &&
       offer.providerPlanCode === item.c &&
+      Number.isFinite(offer.wholesalePriceUsd) &&
+      offer.wholesalePriceUsd > 0 &&
       Math.abs(offer.wholesalePriceUsd - item.w) < 0.0001,
     );
     if (!current) {
       throw new PriceFloorError("The supplier price changed. Please refresh the price.");
     }
+    currentCosts.push(current.wholesalePriceUsd);
   }
+  return Math.max(...currentCosts);
 }
 
 export function quoteCharge(quote: CheckoutQuote): { amount: number; amountMinor: number; currency: "USD" } {

@@ -18,6 +18,7 @@ import {
   assertChargeMeetsFloor,
   maxChainWholesaleUsd,
   getMaxWholesaleUsd,
+  getPinnedWholesaleUsd,
   evaluateCapturedPayment,
   GBP_PER_USD as FLOOR_GBP_PER_USD,
   PriceFloorError,
@@ -578,49 +579,7 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
   // A hosted payment must still map to the same selected supplier offer and
   // exactly the signed price at completion. Do not silently reroute to a
   // broader normalized plan if a supplier sync changed after Checkout opened.
-  let quoteFailure: string | null = null;
-  if (metadata.checkoutQuoteId) {
-    try {
-      await validateCheckoutQuoteOfferSnapshot({
-        normalizedPlanId: metadata.normalizedPlanId,
-        selectedOfferId: metadata.checkoutSelectedOfferId,
-        fallbackChain: fallbackProvidersJson,
-      });
-      if (
-        !quoteMatchesCapture(
-          {
-            amountMinor: Number(metadata.checkoutQuoteAmountMinor),
-            currency: metadata.checkoutQuoteCurrency,
-          },
-          session.amount_total ?? 0,
-          session.currency ?? "",
-        )
-      ) {
-        quoteFailure = "Captured amount or currency differs from the approved checkout quote.";
-      }
-    } catch (error: any) {
-      quoteFailure = error.message || "Checkout quote expired or changed before payment completed.";
-    }
-  }
-
-  // ── Wholesale price floor guard: never fulfill a below-floor payment ─────
-  // The amount ACTUALLY paid must clear the selected offer's floor. The quote
-  // snapshot above has already revalidated the live selected supplier mapping;
-  // never broaden this to unrelated offers in the normalized group.
-  const salePriceUsd = (session.currency || 'usd').toLowerCase() === 'gbp'
-    ? salePrice / FLOOR_GBP_PER_USD
-    : salePrice;
-  const quotedWholesaleUsd = maxChainWholesaleUsd(fallbackProvidersJson);
-  const verdict = quoteFailure
-    ? { ok: false, reason: quoteFailure }
-    : evaluateCapturedPayment({
-    paidUsd: salePriceUsd,
-    hasNormalizedPlan: !!metadata.normalizedPlanId,
-    liveMaxUsd: quotedWholesaleUsd,
-    liveLookupFailed: quotedWholesaleUsd == null,
-    chainMaxUsd: maxChainWholesaleUsd(fallbackProvidersJson),
-    metadataCostUsd: providerCost,
-  });
+  const verdict = await evaluateStripeCompletion(session, fallbackProvidersJson, providerCost);
 
   if (!verdict.ok) {
     console.error(
@@ -642,7 +601,7 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
       wholesaleCostUsd: providerCost > 0 ? providerCost : null,
     }).returning();
     await refundRejectedPayment(rejectedOrder);
-    return; // do NOT fulfill — payment was automatically refunded
+    return; // do NOT fulfill — refund flow owns this payment
   }
 
   const [order] = await db.insert(orders).values({
@@ -656,14 +615,11 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
     stripePaymentIntentId: session.payment_intent || null,
     stripeCustomerId: session.customer || null,
     purchaseType: 'initial_purchase',
-    // Provider tracking (always set)
     providerName: providerUsed,
     selectedProviderKey: metadata.selectedProviderKey || null,
-    // Routing metadata
     normalizedPlanId: metadata.normalizedPlanId || null,
     routingDecisionId: metadata.routingDecisionId || null,
     fallbackProvidersJson,
-    // Cost & profit (always populated — routing cost preferred, plan cost as fallback)
     wholesaleCostUsd: providerCost > 0 ? providerCost : null,
     profit,
     marginPercent,
@@ -678,6 +634,71 @@ async function handleInitialPurchaseCompleted(session: any): Promise<void> {
     ` | profit=$${(profit ?? 0).toFixed(2)} margin=${(marginPercent ?? 0).toFixed(1)}%`
   );
   await fulfillInitialPurchase(order.id);
+}
+
+/** Fresh completion evidence is mandatory; metadata is not a live lookup.
+ * Quote sessions stay scoped to their purchased SKU, never the entire group.
+ */
+export async function evaluateStripeCompletion(
+  session: { metadata?: Record<string, string>; amount_total?: number | null; currency?: string | null },
+  fallbackProvidersJson: any,
+  providerCost: number,
+  dependencies = { getPinnedWholesaleUsd, validateCheckoutQuoteOfferSnapshot },
+) {
+  const metadata = session.metadata || {};
+  let liveMaxUsd: number | null = null;
+  let liveLookupFailed = false;
+  let quoteFailure: string | null = null;
+  if (metadata.checkoutQuoteId) {
+    try {
+      liveMaxUsd = await dependencies.validateCheckoutQuoteOfferSnapshot({
+        normalizedPlanId: metadata.normalizedPlanId,
+        selectedOfferId: metadata.checkoutSelectedOfferId,
+        fallbackChain: fallbackProvidersJson,
+      });
+      if (
+        metadata.checkoutQuoteCurrency !== "USD" ||
+        !quoteMatchesCapture(
+          {
+            amountMinor: Number(metadata.checkoutQuoteAmountMinor),
+            currency: metadata.checkoutQuoteCurrency,
+          },
+          session.amount_total ?? 0,
+          session.currency ?? "",
+        )
+      ) {
+        quoteFailure = "Captured amount or currency differs from the approved checkout quote.";
+      }
+    } catch (error: any) {
+      quoteFailure = error.message || "Checkout quote expired or changed before payment completed.";
+    }
+  } else if (metadata.normalizedPlanId) {
+    try {
+      liveMaxUsd = await dependencies.getPinnedWholesaleUsd(metadata.normalizedPlanId, fallbackProvidersJson);
+    } catch {
+      liveLookupFailed = true;
+    }
+  }
+
+  // ── Wholesale price floor guard: never fulfill a below-floor payment ─────
+  // The amount ACTUALLY paid must clear the selected offer's floor. The quote
+  // snapshot above has already revalidated the live selected supplier mapping;
+  // never broaden this to unrelated offers in the normalized group.
+  const salePrice = (session.amount_total ?? 0) / 100;
+  const currency = session.currency?.toLowerCase();
+  const salePriceUsd = currency === 'gbp' ? salePrice / FLOOR_GBP_PER_USD
+    : currency === 'usd' ? salePrice : null;
+  return quoteFailure
+    ? { ok: false, reason: quoteFailure }
+    : evaluateCapturedPayment({
+    paidUsd: salePriceUsd,
+    hasNormalizedPlan: !!metadata.normalizedPlanId,
+    liveMaxUsd,
+    liveLookupFailed,
+    chainMaxUsd: maxChainWholesaleUsd(fallbackProvidersJson),
+    metadataCostUsd: providerCost,
+  });
+
 }
 
 async function handleTopupCompleted(session: any): Promise<void> {

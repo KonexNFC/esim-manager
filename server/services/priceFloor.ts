@@ -12,6 +12,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "../storage";
 import { getOffersForNormalizedPlan } from "./providerRegistry";
+import { canonicalProviderKey } from "./providerHealth";
 
 /** Minimum gross margin percentage: (sell - cost) / sell */
 export const MIN_MARGIN_PCT = 20;
@@ -66,6 +67,34 @@ export async function getMaxWholesaleUsd(normalizedPlanId: string): Promise<numb
     )
     .map(offer => offer.wholesalePriceUsd);
   return costs.length ? Math.max(...costs) : null;
+}
+
+/** Re-query only persisted fulfillment identities; unrelated group offers are
+ * neither substitutes for missing evidence nor costs this purchase can incur. */
+export async function getPinnedWholesaleUsd(
+  normalizedPlanId: string,
+  chain: unknown,
+  lookup: (id: string) => Promise<Array<{
+    providerKey: string; providerPlanCode: string; wholesalePriceUsd: number;
+  }>> = getOffersForNormalizedPlan,
+): Promise<number | null> {
+  if (!Array.isArray(chain) || chain.length === 0) return null;
+  const offers = await lookup(normalizedPlanId);
+  const costs: number[] = [];
+  for (const entry of chain) {
+    if (!entry || typeof entry.k !== "string" || !entry.k ||
+        typeof entry.c !== "string" || !entry.c) return null;
+    const matches = offers.filter(offer =>
+      canonicalProviderKey(offer.providerKey) === canonicalProviderKey(entry.k) &&
+      offer.providerPlanCode === entry.c,
+    );
+    if (!matches.length || matches.some(offer =>
+      !FULFILLABLE_PROVIDERS.includes(canonicalProviderKey(offer.providerKey)) ||
+      !Number.isFinite(offer.wholesalePriceUsd) || offer.wholesalePriceUsd <= 0
+    )) return null;
+    costs.push(...matches.map(offer => offer.wholesalePriceUsd));
+  }
+  return Math.max(...costs);
 }
 
 /**
