@@ -201,9 +201,9 @@ export default function FindPlan() {
   return (
     <main className="min-h-screen bg-background">
       {/* ── Hero / input section ─────────────────────────────────────────── */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-blue-950/20 via-background to-background pt-10 pb-12 sm:pt-16 sm:pb-16">
+      <section className="relative overflow-hidden bg-muted/50 pt-10 pb-12 sm:pt-16 sm:pb-16">
         <div className="absolute inset-0 pointer-events-none" aria-hidden>
-          <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full bg-blue-600/10 blur-[120px]" />
+          <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full bg-transparent" />
         </div>
 
         <div className="relative max-w-3xl mx-auto px-4 sm:px-6 text-center">
@@ -214,7 +214,7 @@ export default function FindPlan() {
 
           <h1 className="text-3xl sm:text-5xl font-bold tracking-tight mb-3">
             Find Your{" "}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-cyan-400">
+            <span className="text-primary">
               Perfect eSIM
             </span>
           </h1>
@@ -258,7 +258,7 @@ export default function FindPlan() {
                     className={cn(
                       "min-w-[44px] h-10 rounded-xl text-sm font-semibold border transition-all duration-150",
                       tripDays === d
-                        ? "bg-primary border-primary text-white shadow-md scale-[1.05]"
+                        ? "bg-primary border-primary text-primary-foreground shadow-sm scale-[1.05]"
                         : "bg-background border-border text-muted-foreground hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400",
                     )}
                   >
@@ -278,7 +278,7 @@ export default function FindPlan() {
 
             <Button
               data-testid="button-find-plan"
-              className="w-full bg-primary hover:bg-primary/90 text-white font-semibold h-11 text-base shadow-md shadow-primary/25 transition-all"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-11 text-base shadow-sm transition-transform"
               onClick={handleSearch}
               disabled={!countryCode}
             >

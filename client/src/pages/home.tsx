@@ -253,10 +253,10 @@ const QUICK_COUNTRIES = [
 // STATS STRIP
 // ─────────────────────────────────────────────
 const STATS = [
-  { value: "205+",   label: "Countries covered",   accent: "text-blue-500 dark:text-blue-400" },
-  { value: "5,000+", label: "Happy travellers",     accent: "text-emerald-500 dark:text-emerald-400" },
-  { value: "800+",   label: "Networks",             accent: "text-amber-500 dark:text-amber-400" },
-  { value: "Instant", label: "Activation",          accent: "text-sky-500 dark:text-sky-400" },
+  { value: "205+",   label: "Countries covered",   accent: "text-primary" },
+  { value: "5,000+", label: "Happy travellers",     accent: "text-primary" },
+  { value: "800+",   label: "Networks",             accent: "text-primary" },
+  { value: "Instant", label: "Activation",          accent: "text-primary" },
 ];
 
 function StatsStrip() {
@@ -303,7 +303,7 @@ function EventsCarousel() {
 
   return (
     <section
-      className="relative overflow-hidden min-h-[70vh] flex flex-col"
+      className="konex-inverse relative overflow-hidden min-h-[70vh] flex flex-col"
       data-testid="section-events-carousel"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
@@ -313,7 +313,7 @@ function EventsCarousel() {
         <div
           key={event.id}
           className={`absolute inset-0 transition-opacity duration-700 ${i === active ? "opacity-100 z-10" : "opacity-0 z-0"}`}
-          style={{ background: `linear-gradient(135deg, ${event.bgFrom} 0%, ${event.bgTo} 100%)` }}
+          style={{ background: "hsl(var(--inverse))" }}
         >
           <img
             src={event.photo}
@@ -322,8 +322,8 @@ function EventsCarousel() {
             loading="lazy"
           />
           {/* Stronger overlay for readability */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/20" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
+          <div className="absolute inset-0 bg-[hsl(var(--inverse)/.85)]" />
+          <div className="absolute inset-0 bg-transparent" />
         </div>
       ))}
 
@@ -388,7 +388,7 @@ function EventsCarousel() {
               <Button
                 onClick={() => navigate(`/destinations/${ev.countryCode}`)}
                 className="font-bold h-11 px-6 text-sm"
-                style={{ backgroundColor: ev.accent, color: "#fff", border: "none" }}
+                style={{ backgroundColor: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))", border: "none" }}
                 data-testid={`button-event-cta-${ev.id}`}
               >
                 {ev.cta}
@@ -402,7 +402,7 @@ function EventsCarousel() {
           <div className="hidden lg:flex justify-center items-center">
             <div className="relative w-full max-w-lg">
               <div
-                className="absolute -inset-4 rounded-2xl blur-3xl opacity-30"
+                className="absolute -inset-4 rounded-2xl opacity-0"
                 style={{ backgroundColor: ev.accent }}
               />
               <div
@@ -510,7 +510,7 @@ function PlanFinderSection() {
                       onClick={() => setHeroDays(isActive ? null : d)}
                       className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 cursor-pointer select-none ${
                         isActive
-                          ? "bg-primary border-primary text-white shadow-lg shadow-primary/30 scale-[1.04]"
+                          ? "bg-primary border-primary text-primary-foreground shadow-sm scale-[1.04]"
                           : "bg-muted border-border text-foreground hover:bg-muted/70 hover:border-border/80"
                       }`}
                       data-testid={`hero-duration-${d}`}
@@ -525,7 +525,7 @@ function PlanFinderSection() {
             {/* Submit */}
             <button
               onClick={handleFind}
-              className="group w-full flex items-center justify-center gap-2.5 h-12 rounded-xl bg-primary font-bold text-white text-base shadow-xl shadow-primary/25 hover:bg-primary/90 hover:shadow-primary/40 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200"
+              className="group w-full flex items-center justify-center gap-2.5 h-12 rounded-xl bg-primary font-bold text-primary-foreground text-base shadow-sm hover:bg-primary/90 hover:scale-[1.01] active:scale-[0.99] transition-transform duration-200"
               data-testid="button-hero-find-plan"
             >
               <Search className="w-4 h-4" />
@@ -546,7 +546,7 @@ function TravelSmarterSection() {
   const [, navigate] = useLocation();
 
   return (
-    <section className="relative overflow-hidden" data-testid="section-travel-smarter">
+    <section className="konex-inverse relative overflow-hidden" data-testid="section-travel-smarter">
       {/* Dark background */}
       <div className="absolute inset-0">
         <img
@@ -555,11 +555,11 @@ function TravelSmarterSection() {
           className="w-full h-full object-cover"
           style={{ filter: "brightness(0.25) saturate(1.2)" }}
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0A0A0A]/97 via-black/88 to-blue-950/90" />
+        <div className="absolute inset-0 bg-[hsl(var(--inverse)/.94)]" />
         <div className="absolute top-0 right-0 w-[600px] h-[600px] rounded-full opacity-10 pointer-events-none"
-          style={{ background: "radial-gradient(circle, #2563eb 0%, transparent 65%)" }} />
+          style={{ background: "none" }} />
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full opacity-8 pointer-events-none"
-          style={{ background: "radial-gradient(circle, #4f46e5 0%, transparent 70%)" }} />
+          style={{ background: "none" }} />
       </div>
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
@@ -567,7 +567,7 @@ function TravelSmarterSection() {
 
           {/* Left: copy */}
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-primary/80 mb-4">Your global connectivity</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">Your global connectivity</p>
             <h2
               className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight tracking-tight mb-5"
               data-testid="text-travel-smarter-title"
@@ -608,7 +608,7 @@ function TravelSmarterSection() {
               <Link href="/destinations">
                 <Button
                   variant="outline"
-                  className="font-bold h-12 px-7 border-white/20 text-white hover:bg-white/10 hover:text-white"
+                  className="font-bold h-12 px-7 bg-transparent border-white/30 text-white hover:bg-white/10 hover:text-white"
                   data-testid="button-travel-smarter-browse"
                 >
                   View Plans
@@ -1886,7 +1886,7 @@ export default function Home() {
   useEffect(() => { document.title = "Konex eSIM – Instant Data Plans for 205+ Countries"; }, []);
 
   return (
-    <div className="min-h-screen pb-20 sm:pb-0 overflow-x-hidden">
+    <div className="konex-home min-h-screen pb-20 sm:pb-0 overflow-x-hidden">
       {/* A: Primary hero — Travel smarter */}
       <TravelSmarterSection />
       {/* B: Trust stats strip */}

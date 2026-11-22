@@ -18,7 +18,7 @@ export function KonexLogo({ size = "md", showWordmark = true, className = "" }: 
       {/* Icon mark */}
       <div
         className={`${s.mark} ${s.radius} flex-shrink-0 flex items-center justify-center`}
-        style={{ background: "linear-gradient(135deg, #6d28d9 0%, #7c3aed 60%, #4f46e5 100%)" }}
+        style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}
         aria-hidden="true"
       >
         {/* Signal arc connectivity mark */}
@@ -29,12 +29,12 @@ export function KonexLogo({ size = "md", showWordmark = true, className = "" }: 
           className="w-[62%] h-[62%]"
         >
           {/* Transmit dot */}
-          <circle cx="4" cy="16" r="2.2" fill="white" />
+          <circle cx="4" cy="16" r="2.2" fill="currentColor" />
 
           {/* Inner arc */}
           <path
             d="M4 11 A5 5 0 0 1 9 16"
-            stroke="white"
+            stroke="currentColor"
             strokeWidth="2.2"
             strokeLinecap="round"
             fill="none"
@@ -43,7 +43,7 @@ export function KonexLogo({ size = "md", showWordmark = true, className = "" }: 
           {/* Middle arc */}
           <path
             d="M4 7 A9 9 0 0 1 13 16"
-            stroke="white"
+            stroke="currentColor"
             strokeWidth="1.9"
             strokeLinecap="round"
             fill="none"
@@ -53,7 +53,7 @@ export function KonexLogo({ size = "md", showWordmark = true, className = "" }: 
           {/* Outer arc */}
           <path
             d="M4 3 A13 13 0 0 1 17 16"
-            stroke="white"
+            stroke="currentColor"
             strokeWidth="1.6"
             strokeLinecap="round"
             fill="none"

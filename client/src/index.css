@@ -10,46 +10,50 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 0 0% 100%;
-  --foreground: 220 30% 8%;
+  --background: 210 33% 98%;
+  --foreground: 213 65% 16%;
 
-  --border: 220 20% 88%;
-  --input: 220 15% 78%;
+  --border: 211 25% 84%;
+  --input: 211 22% 57%;
 
-  --card: 0 0% 100%;
-  --card-foreground: 220 30% 8%;
-  --card-border: 220 15% 90%;
+  --card: 210 40% 99%;
+  --card-foreground: 213 65% 16%;
+  --card-border: 211 25% 84%;
 
-  --popover: 0 0% 100%;
-  --popover-foreground: 220 30% 8%;
+  --popover: 210 40% 99%;
+  --popover-foreground: 213 65% 16%;
   --popover-border: 220 15% 88%;
 
-  /* Electric blue accent */
-  --primary: 217 91% 48%;
-  --primary-foreground: 0 0% 100%;
+  /* Sky blue is a surface accent; ink on sky keeps actions accessible. */
+  --primary: 199 93% 60%;
+  --primary-foreground: 213 65% 16%;
+  --primary-text: 202 90% 30%;
+  --inverse: 213 65% 16%;
+  --inverse-foreground: 210 40% 96%;
+  --section-space: 3.5rem;
 
-  --secondary: 217 12% 90%;
-  --secondary-foreground: 220 30% 8%;
+  --secondary: 207 45% 92%;
+  --secondary-foreground: 213 65% 16%;
 
-  --muted: 220 15% 95%;
-  --muted-foreground: 220 12% 44%;
+  --muted: 210 30% 94%;
+  --muted-foreground: 213 23% 38%;
 
-  --accent: 217 14% 92%;
-  --accent-foreground: 220 30% 8%;
+  --accent: 205 50% 91%;
+  --accent-foreground: 213 65% 16%;
 
-  --destructive: 0 84% 42%;
+  --destructive: 0 72% 39%;
   --destructive-foreground: 0 0% 98%;
 
-  --ring: 217 91% 48%;
+  --ring: 202 90% 30%;
 
-  --sidebar: 220 20% 97%;
-  --sidebar-foreground: 220 30% 8%;
+  --sidebar: 210 30% 94%;
+  --sidebar-foreground: 213 65% 16%;
   --sidebar-border: 220 15% 88%;
-  --sidebar-primary: 217 91% 48%;
-  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-primary: 199 93% 60%;
+  --sidebar-primary-foreground: 213 65% 16%;
   --sidebar-accent: 217 12% 88%;
-  --sidebar-accent-foreground: 220 30% 8%;
-  --sidebar-ring: 217 91% 48%;
+  --sidebar-accent-foreground: 213 65% 16%;
+  --sidebar-ring: 202 90% 30%;
 
   --chart-1: 217 91% 48%;
   --chart-2: 173 58% 38%;
@@ -57,11 +61,11 @@
   --chart-4: 43 74% 48%;
   --chart-5: 27 87% 52%;
 
-  --font-sans: 'Space Grotesk', Inter, sans-serif;
-  --font-display: 'Syne', 'Space Grotesk', Inter, sans-serif;
+  --font-sans: 'Space Grotesk', sans-serif;
+  --font-display: 'Space Grotesk', sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: 'JetBrains Mono', Menlo, monospace;
-  --radius: .625rem;
+  --radius: .875rem;
 
   --shadow-2xs: 0px 1px 2px 0px hsl(220 30% 8% / 0.07);
   --shadow-xs: 0px 1px 3px 0px hsl(220 30% 8% / 0.09);
@@ -90,6 +94,68 @@
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
+/* Brand text is deliberately darker than the sky-blue action fill in light mode.
+   These are shared utility corrections, not changes to page structure. */
+@layer utilities {
+  .text-primary { color: hsl(var(--primary-text)); }
+  .hover\:text-primary:hover { color: hsl(var(--primary-text)); }
+  .text-muted-foreground\/30,
+  .text-muted-foreground\/60 {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .bg-primary.text-white,
+  .bg-primary [class*="text-white"] {
+    color: hsl(var(--primary-foreground));
+  }
+
+  .konex-inverse {
+    --primary-text: 199 93% 72%;
+    --ring: 199 93% 72%;
+    color: hsl(var(--inverse-foreground));
+    background-color: hsl(var(--inverse));
+  }
+
+  .konex-home section:not([data-testid="section-nigeria-campaign"]) {
+    padding-block: var(--section-space);
+  }
+  .konex-home [data-testid="section-travel-smarter"] > .relative {
+    padding-block: 0;
+  }
+
+  .konex-home .text-white\/30,
+  .konex-home .text-white\/40,
+  .konex-home .text-white\/50,
+  .konex-home .text-white\/55,
+  .konex-home .text-white\/60,
+  .konex-home .text-white\/65 {
+    color: hsl(var(--inverse-foreground) / .85);
+  }
+
+  .konex-home .bg-primary [class*="text-white"] {
+    color: hsl(var(--primary-foreground));
+  }
+
+  /* Keep all controls, including raw links and Radix triggers, visibly focused. */
+  :is(a, button, input, select, textarea, [tabindex], [role="button"]):focus-visible {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 3px;
+  }
+}
+
+@media (min-width: 640px) {
+  :root { --section-space: 5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .reveal-img {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .stat-animate { animation: none; }
+}
+
 /* ─── DARK MODE ───────────────────────────────────────────────────── */
 .dark {
   --button-outline: rgba(255,255,255, .10);
@@ -98,47 +164,47 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  /* Deep navy-black premium background */
-  --background: 220 45% 4%;
-  --foreground: 210 20% 96%;
+  /* Deep navy, not neutral black. */
+  --background: 215 58% 10%;
+  --foreground: 210 40% 96%;
 
-  --border: 220 20% 13%;
-  --input: 220 18% 20%;
+  --border: 212 30% 30%;
+  --input: 211 25% 53%;
 
-  --card: 220 35% 7%;
-  --card-foreground: 210 20% 96%;
-  --card-border: 220 22% 11%;
+  --card: 214 49% 15%;
+  --card-foreground: 210 40% 96%;
+  --card-border: 212 30% 30%;
 
-  --popover: 220 30% 9%;
-  --popover-foreground: 210 20% 96%;
-  --popover-border: 220 22% 13%;
+  --popover: 214 49% 15%;
+  --popover-foreground: 210 40% 96%;
+  --popover-border: 212 30% 30%;
 
-  /* Electric blue — bright on dark */
-  --primary: 217 91% 62%;
-  --primary-foreground: 0 0% 100%;
+  --primary: 199 93% 60%;
+  --primary-foreground: 213 65% 16%;
+  --primary-text: 199 93% 72%;
 
-  --secondary: 217 18% 17%;
-  --secondary-foreground: 210 20% 96%;
+  --secondary: 213 36% 23%;
+  --secondary-foreground: 210 40% 96%;
 
-  --muted: 220 20% 12%;
-  --muted-foreground: 210 12% 52%;
+  --muted: 214 38% 20%;
+  --muted-foreground: 210 24% 76%;
 
-  --accent: 217 20% 15%;
-  --accent-foreground: 210 20% 96%;
+  --accent: 212 42% 25%;
+  --accent-foreground: 210 40% 96%;
 
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 0 0% 100%;
+  --destructive: 0 76% 70%;
+  --destructive-foreground: 215 58% 10%;
 
-  --ring: 217 91% 62%;
+  --ring: 199 93% 72%;
 
-  --sidebar: 220 40% 5%;
-  --sidebar-foreground: 210 20% 96%;
-  --sidebar-border: 220 22% 11%;
-  --sidebar-primary: 217 91% 62%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 217 20% 13%;
-  --sidebar-accent-foreground: 210 20% 96%;
-  --sidebar-ring: 217 91% 62%;
+  --sidebar: 214 49% 15%;
+  --sidebar-foreground: 210 40% 96%;
+  --sidebar-border: 212 30% 30%;
+  --sidebar-primary: 199 93% 60%;
+  --sidebar-primary-foreground: 213 65% 16%;
+  --sidebar-accent: 213 36% 23%;
+  --sidebar-accent-foreground: 210 40% 96%;
+  --sidebar-ring: 199 93% 72%;
 
   --chart-1: 217 91% 62%;
   --chart-2: 173 58% 48%;
@@ -177,7 +243,7 @@
   }
 
   html {
-    background-color: hsl(220 45% 4%);
+    background-color: hsl(var(--background));
   }
 
   body {
@@ -187,6 +253,16 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
     letter-spacing: -0.03em;
+  }
+
+  :focus-visible {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
   }
 }
 
@@ -260,25 +336,19 @@
     inset: -1px;
   }
 
-  /* Electric blue glow utility */
+  /* Quiet depth replaces decorative electric glows. */
   .glow-primary {
-    box-shadow: 0 0 40px hsl(217 91% 52% / 0.22), 0 0 80px hsl(217 91% 52% / 0.09);
+    box-shadow: var(--shadow-sm);
   }
 
   /* Gradient text utility — electric blue → cyan */
   .text-gradient {
-    background: linear-gradient(135deg, hsl(217 91% 55%), hsl(197 90% 60%));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: hsl(var(--primary-text));
   }
 
   /* Bright gradient text for dark hero backgrounds */
   .text-gradient-bright {
-    background: linear-gradient(120deg, #60a5fa 0%, #38bdf8 50%, #67e8f9 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: hsl(199 93% 72%);
   }
 
   /* Display font helper */
@@ -316,10 +386,11 @@
   .card-gradient-hover {
     position: relative;
     z-index: 0;
-    transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    transition: transform 0.2s ease;
   }
   .card-gradient-hover:hover {
-    box-shadow: 0 0 0 1.5px hsl(var(--primary) / 0.30), 0 8px 24px -4px hsl(var(--primary) / 0.12);
+    border-color: hsl(var(--primary-text));
+    box-shadow: var(--shadow-sm);
     transform: translateY(-2px);
   }
 
@@ -338,12 +409,7 @@
     to   { background-position: -200% center; }
   }
   .shimmer-text {
-    background: linear-gradient(90deg, hsl(217 91% 55%) 0%, hsl(197 90% 70%) 30%, hsl(217 91% 55%) 60%);
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: shimmer-slide 3s linear infinite;
+    color: hsl(var(--primary-text));
   }
 
   /* ── Travel image parallax hover ────────────────────── */
@@ -361,7 +427,7 @@
     66%       { transform: translate(-12px, 10px) scale(0.97); }
   }
   .blob-drift {
-    animation: blob-drift 10s ease-in-out infinite;
+    opacity: 0;
   }
 
   /* Prevent horizontal scroll from absolute-positioned decorative elements */

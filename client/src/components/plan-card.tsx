@@ -35,28 +35,28 @@ const BADGE_CONFIG: Record<
   { bg: string; text: string; icon: React.ReactNode; bar: string }
 > = {
   recommended: {
-    bg: "bg-blue-600 dark:bg-blue-500",
-    text: "text-white",
-    icon: <Star className="w-3 h-3 fill-white/90" />,
-    bar: "from-blue-500 to-cyan-400",
+    bg: "bg-primary",
+    text: "text-primary-foreground",
+    icon: <Star className="w-3 h-3 fill-current" />,
+    bar: "bg-primary",
   },
   popular: {
-    bg: "bg-sky-500 dark:bg-sky-400",
-    text: "text-white",
+    bg: "bg-primary",
+    text: "text-primary-foreground",
     icon: <Flame className="w-3 h-3" />,
-    bar: "from-sky-400 to-cyan-500",
+    bar: "bg-primary",
   },
   budget: {
-    bg: "bg-emerald-600 dark:bg-emerald-500",
-    text: "text-white",
+    bg: "bg-secondary",
+    text: "text-secondary-foreground",
     icon: <TrendingDown className="w-3 h-3" />,
-    bar: "from-emerald-400 to-teal-500",
+    bar: "bg-primary",
   },
   premium: {
-    bg: "bg-amber-500 dark:bg-amber-400",
-    text: "text-white",
+    bg: "bg-secondary",
+    text: "text-secondary-foreground",
     icon: <Award className="w-3 h-3" />,
-    bar: "from-amber-400 to-orange-500",
+    bar: "bg-primary",
   },
 };
 
@@ -113,17 +113,14 @@ export function PlanCard({
       className={cn(
         // Base card
         "relative flex flex-col rounded-2xl bg-card border border-border",
-        "overflow-visible transition-all duration-300 ease-out",
+        "overflow-visible transition-transform duration-300 ease-out",
         // Recommended: elevated, glowing accent border
         isRecommended
           ? [
-              "ring-2 ring-blue-500 dark:ring-blue-400",
-              "shadow-[0_8px_32px_-4px_rgba(37,99,235,0.22),0_4px_12px_-4px_rgba(37,99,235,0.14)]",
-              "dark:shadow-[0_8px_32px_-4px_rgba(96,165,250,0.30),0_4px_12px_-4px_rgba(96,165,250,0.18)]",
+              "ring-2 ring-primary",
+              "shadow-sm",
               "scale-[1.02]",
               "hover:scale-[1.035]",
-              "hover:shadow-[0_16px_48px_-8px_rgba(37,99,235,0.28),0_8px_20px_-6px_rgba(37,99,235,0.18)]",
-              "dark:hover:shadow-[0_16px_48px_-8px_rgba(96,165,250,0.38),0_8px_20px_-6px_rgba(96,165,250,0.22)]",
             ]
           : [
               "shadow-[var(--shadow-sm)]",
@@ -136,7 +133,7 @@ export function PlanCard({
       )}
     >
       {/* ── Gradient accent bar at top ── */}
-      <div className={cn("h-1 w-full rounded-t-2xl bg-gradient-to-r flex-shrink-0", cfg.bar)} />
+      <div className={cn("h-1 w-full rounded-t-2xl flex-shrink-0", cfg.bar)} />
 
       {/* ── Floating badge ── */}
       {hasBadge && (
@@ -175,7 +172,7 @@ export function PlanCard({
               className={cn(
                 "text-4xl font-bold tracking-tight",
                 isRecommended
-                  ? "text-blue-600 dark:text-blue-400"
+                  ? "text-primary"
                   : "text-foreground",
               )}
             >
@@ -191,7 +188,7 @@ export function PlanCard({
                 {pricePerDay}
               </span>
             )}
-            <span className="text-xs text-muted-foreground/60">
+            <span className="text-xs text-muted-foreground">
               · one-time payment
             </span>
           </div>
@@ -240,7 +237,7 @@ export function PlanCard({
           className={cn(
             "w-full font-semibold mt-auto",
             isRecommended
-              ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/25"
+              ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
               : "bg-background border border-border text-foreground hover:bg-accent hover:text-accent-foreground",
           )}
           variant={isRecommended ? "default" : "outline"}

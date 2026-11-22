@@ -237,7 +237,7 @@ export function Navbar() {
   };
 
   return (
-    <header className={isHome ? "relative border-b border-white/[0.06] bg-background" : "sticky top-0 z-50 border-b border-white/[0.06] bg-background/70 backdrop-blur-xl"}>
+    <header className={isHome ? "relative border-b border-border bg-background" : "sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur"}>
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 px-4 py-3">
 
         {/* Logo */}
