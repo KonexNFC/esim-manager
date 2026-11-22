@@ -133,6 +133,7 @@ export function normalizePlan(plan: SupplierPlan): NormalizedOffer | null {
     countryCode: plan.countryCode,
     supplier: plan.supplier,
     bucket,
+    validityDays: plan.validityDays,
     category: plan.category,
     offerType,
     visibility,

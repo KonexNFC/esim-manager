@@ -18,7 +18,7 @@ interface RecommendedOffer {
   offerType: "UNLIMITED" | "ESSENTIAL" | "PLUS" | "MAX";
   dataGb: number | null;
   isUnlimited: boolean;
-  hotspotSupported: boolean;
+  hotspotSupported: boolean | null;
   isSynthetic: boolean;
   priceGbp: number;
   priceUsd: number;

@@ -77,7 +77,8 @@ export async function getDbSupplierPlans(
       validityDays: row.validity_days,
       dataMb,
       isUnlimited: row.is_unlimited,
-      hotspotSupported: false,
+      // The stored offer has no supplier-confirmed tethering information.
+      hotspotSupported: null,
       wholesaleCostUsd: row.wholesale_price_usd,
       category: Category.TRAVEL,
       status: PlanStatus.ACTIVE,

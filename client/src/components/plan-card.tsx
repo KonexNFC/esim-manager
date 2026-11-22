@@ -18,7 +18,7 @@ export interface PlanCardProps {
   dataAmount: string;
   coverage: string;
   validity: string;
-  hotspot?: boolean;
+  hotspot?: boolean | null;
   isRecommended?: boolean;
   savings?: string;
   onSelect?: () => void;

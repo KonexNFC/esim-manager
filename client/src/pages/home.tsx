@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Price } from "@/lib/currency";
+import { useChinaPlans } from "@/hooks/use-china-plans";
 import { Button } from "@/components/ui/button";
 import { KonexLogo } from "@/components/konex-logo";
 import { CountryCombobox } from "@/components/country-combobox";
@@ -168,6 +169,30 @@ function NigeriaCampaignCard() {
           </div>
           <Button className="font-bold shrink-0" onClick={e => { e.stopPropagation(); navigate("/nigeria-esim"); }} data-testid="button-nigeria-campaign-cta">Get Nigeria eSIM<ArrowRight aria-hidden className="ml-2 w-4 h-4" /></Button>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function ChinaCampaignCard() {
+  const { fromPrice, isLoading, isError, isFetching, refetch } = useChinaPlans();
+  return (
+    <section className="px-4 sm:px-6 !py-6" data-testid="section-china-campaign">
+      <div className="max-w-7xl mx-auto rounded-2xl border border-primary/30 bg-primary/10 px-6 py-6 flex flex-col md:flex-row md:items-center justify-between gap-5">
+        <div className="flex gap-4 items-start">
+          <Smartphone aria-hidden className="w-6 h-6 text-primary shrink-0 mt-1" />
+          <div>
+            <h2 className="font-bold text-base sm:text-lg">Heading to China? Get your eSIM before you fly</h2>
+            <p className="text-muted-foreground text-sm mt-1">Check your phone, choose your data, and install on Wi-Fi before departure.</p>
+            <div className="text-sm mt-3" aria-live="polite">
+              {isLoading ? <span role="status" className="inline-block h-5 w-32 rounded bg-muted motion-safe:animate-pulse"><span className="sr-only">Checking China prices</span></span>
+                : isError ? <span className="text-muted-foreground">Live prices unavailable. <button type="button" className="underline underline-offset-4 font-semibold" disabled={isFetching} onClick={() => void refetch()}>{isFetching ? "Checking…" : "Retry"}</button></span>
+                : fromPrice !== undefined ? <span className="font-bold">From <Price amount={fromPrice} /><span className="font-normal text-muted-foreground"> · live quoted plans</span></span>
+                : <span className="text-muted-foreground">Check the guide for current plan availability.</span>}
+            </div>
+          </div>
+        </div>
+        <Button asChild className="font-bold shrink-0 self-start md:self-auto"><Link href="/china-esim" data-testid="button-china-campaign-cta">China eSIM guide<ArrowRight aria-hidden className="ml-2 w-4 h-4" /></Link></Button>
       </div>
     </section>
   );
@@ -579,6 +604,7 @@ export default function Home() {
       <TravelSmarterSection />
       <StatsStrip />
       <NigeriaCampaignCard />
+      <ChinaCampaignCard />
       <PopularDestinations />
       <EventsCarousel />
       <AlternativesSection />

@@ -30,6 +30,7 @@ import NfcCard from "@/pages/nfc-card";
 import Events from "@/pages/events";
 import EventDetail from "@/pages/event-detail";
 import NigeriaEsim from "@/pages/nigeria-esim";
+import ChinaEsim from "@/pages/china-esim";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -58,6 +59,7 @@ function Router() {
       <Route path="/events" component={Events} />
       <Route path="/events/:slug" component={EventDetail} />
       <Route path="/nigeria-esim" component={NigeriaEsim} />
+      <Route path="/china-esim" component={ChinaEsim} />
       <Route component={NotFound} />
     </Switch>
   );

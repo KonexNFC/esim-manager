@@ -463,7 +463,7 @@ interface TripBucket {
 function getTripBuckets(profile: DestinationProfile): TripBucket[] {
   const unlimitedBucket: TripBucket = {
     id: "unlimited", label: "Heavy usage", icon: Flame,
-    description: "Unlimited data — stream, hotspot, remote work",
+    description: "Unlimited data — check the plan terms before buying",
     daysMin: 1, daysMax: 999, isUnlimited: true,
   };
   if (profile === "holiday_travel") {
@@ -499,8 +499,8 @@ interface CuratedPlan extends CountryPlan {
 
 function getUseCase(plan: CountryPlan, bucketId: string, profile: DestinationProfile): string {
   if (plan.isUnlimited) {
-    if (plan.validityDays <= 3)  return "No data limits — stream, hotspot, and stay connected without counting GBs";
-    if (plan.validityDays <= 7)  return "Full-speed data all week — video calls, streaming, and hotspot whenever you need it";
+    if (plan.validityDays <= 3)  return "Unlimited data for your trip — check the plan terms before buying";
+    if (plan.validityDays <= 7)  return "Unlimited data for your week away — check the plan terms before buying";
     if (plan.validityDays <= 14) return "Two weeks of unlimited data — ideal for remote work, streaming, and heavy use";
     return "Month-long unlimited data — use as much as you need, no restrictions";
   }
@@ -1246,7 +1246,7 @@ function travelCopy(plan: PublicPlan, durationDays: number): string {
     if (durationDays <= 1) return "Full-speed data all day — maps, streaming, video calls, no limits.";
     if (durationDays <= 3) return "No data caps for your whole trip — stream, navigate, and stay in touch freely.";
     if (durationDays <= 5) return "Five days of unlimited data — perfect for an extended break or city trip.";
-    return "A full week of unlimited data — ideal for business travel, streaming, and hotspot.";
+    return "Unlimited data for your trip — check the plan terms before buying.";
   }
   const gb = plan.dataGb ?? 0;
   if (gb < 0.5) return "Essential connectivity — messaging apps and light browsing for the trip.";
@@ -1361,7 +1361,7 @@ function PlanComparison({ data, bucket, onBucketChange, onSelect }: {
     { label: "Total price", render: p => p.quote ? quotePrice(p) : "Not available" },
     { label: "Price per day", render: p => p.quote && BUCKET_DAYS[p.bucket] ? <><Price amount={p.quote.amount / BUCKET_DAYS[p.bucket]} />/day</> : "Not stated" },
     { label: "Price per GB", render: p => p.isUnlimited ? "Unlimited" : p.quote && p.dataGb != null && p.dataGb > 0 ? <><Price amount={p.quote.amount / p.dataGb} />/GB</> : "Not stated" },
-    { label: "Hotspot", render: p => p.hotspotSupported === true ? "Supported" : p.hotspotSupported === false ? "Not supported" : "Not stated" },
+    { label: "Hotspot", render: p => p.hotspotSupported === true ? "Supported" : p.hotspotSupported === false ? "Not supported" : "Check before buying" },
   ];
   return (
     <section aria-labelledby="compare-options-title" className="mb-10">
@@ -2347,6 +2347,11 @@ function CountryHero({ countryCode, name, region, isRegion, planCount, fromPrice
             <p className="text-xs text-muted-foreground mb-1" data-testid="text-destination-region">{isRegion ? "Multi-country plan" : region}</p>
             <h1 className="text-2xl sm:text-3xl font-bold leading-tight" data-testid="text-destination-title">{name}</h1>
             <p className="text-sm text-muted-foreground mt-1">{planCount} plan{planCount !== 1 ? "s" : ""} available</p>
+            {countryCode.toUpperCase() === "CN" && (
+              <Link href="/china-esim" className="inline-block mt-2 text-sm font-semibold text-primary underline underline-offset-4" data-testid="link-china-guide">
+                Before you fly: China eSIM guide
+              </Link>
+            )}
           </div>
         </div>
         {fromPrice !== undefined && (

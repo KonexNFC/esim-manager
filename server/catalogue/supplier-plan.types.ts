@@ -74,7 +74,7 @@ export interface SupplierPlan {
   validityDays: number;         // raw days from supplier
   dataMb: number | null;        // null → unlimited
   isUnlimited: boolean;
-  hotspotSupported: boolean;
+  hotspotSupported: boolean | null;
   wholesaleCostUsd: number;
   category: Category;
   status: PlanStatus;
@@ -93,12 +93,14 @@ export interface NormalizedOffer {
   countryCode: string;
   supplier: string;
   bucket: DurationBucket;
+  /** Actual supplier validity, independent of the storefront duration bucket. */
+  validityDays?: number;
   category: Category;
   offerType: OfferType;
   visibility: Visibility;
   dataGb: number | null;        // null → unlimited
   isUnlimited: boolean;
-  hotspotSupported: boolean;
+  hotspotSupported: boolean | null;
 
   /** True when built from multiple DAY_1 plans rather than a native supply */
   isSynthetic: boolean;

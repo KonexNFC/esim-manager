@@ -38,6 +38,31 @@ const supplierPlans: SupplierPlan[] = [
   },
 ];
 
+test("quoted plans preserve unknown hotspot and actual validity without changing prices or selection", async () => {
+  for (const validityDays of [10, 15]) {
+    for (const hotspotSupported of [null, false, true]) {
+      const native: SupplierPlan = { ...supplierPlans[0], validityDays, hotspotSupported };
+      const catalogue = buildPublicCatalogue("GB", [native]);
+      const response = await attachPublicCatalogueQuotes(catalogue, {
+        selectBestProviderForPlan: async () => ({ fallbackChain: [{ providerKey: "esimgo", providerPlanCode: "native" }] }),
+        getOffersForNormalizedPlan: async () => [{ id: native.id, providerKey: "esimgo", providerPlanCode: "native" }],
+        createCheckoutQuoteForOffer: async id => {
+          assert.equal(id, native.id);
+          return { amount: 12.34, currency: "USD", token: "test" };
+        },
+        toPublicCheckoutQuote: quote => quote,
+      });
+      const offers = Object.values(response.durations).flatMap(s => [s.recommended, s.cheaper, s.premium, ...s.browseAll]).filter(Boolean);
+      assert.ok(offers.length);
+      for (const offer of offers) {
+        assert.equal(offer!.validityDays, validityDays);
+        assert.equal(offer!.hotspotSupported, hotspotSupported);
+        assert.equal(offer!.quote.amount, 12.34);
+      }
+    }
+  }
+});
+
 test("synthetic-only 3/5/7 day gaps disappear after quotes and default to a purchasable day", async () => {
   const native = { ...supplierPlans[0], id: "native-day", normalizedPlanId: "one-day", validityDays: 1 };
   const catalogue = buildPublicCatalogue("GB", [native]);
