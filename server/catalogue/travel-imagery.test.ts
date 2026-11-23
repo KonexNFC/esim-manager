@@ -25,7 +25,15 @@ test("all events resolve to photographs and missing destinations get labelled re
   for (const event of [...events, ...newFeaturedEvents]) assert.ok(getEventPhoto(event).source);
   assert.equal(getEventPhoto({ id: "art-basel-2026", countryCode: "US" }).id, "miami");
   assert.equal(getDestinationPhoto("CN").id, "china");
-  assert.equal(getDestinationPhoto("KE", "Africa").id, "africa");
-  assert.equal(getDestinationPhoto("KE", "Africa").isRegional, true);
+  assert.equal(getDestinationPhoto("AO", "Africa").id, "africa");
+  assert.equal(getDestinationPhoto("AO", "Africa").isRegional, true);
   assert.equal(getDestinationPhoto("UNKNOWN").id, "airport");
+});
+
+test("priority countries have dedicated photographs rather than regional fallbacks", () => {
+  for (const code of ["ES", "PT", "CA", "MX", "ZA", "KE"]) {
+    const photo = getDestinationPhoto(code);
+    assert.notEqual(photo.id, "airport", code);
+    assert.notEqual(photo.isRegional, true, code);
+  }
 });

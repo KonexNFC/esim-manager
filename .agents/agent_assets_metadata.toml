@@ -11,39 +11,74 @@ id = "Pi8u7w5Qn0Y6OHh_4vGGR"
 uri = "file://attached_assets/generated_videos/konex-intro-brand.mp4"
 type = "video"
 title = "Clip 1 — KONEX Brand Intro (6s)"
+logical_id = "20cdc627-6f7a-4a7a-99d1-11228e4665bc"
 
 [[outputs]]
 id = "uYCoZV3hTTcXNTws62u0T"
 uri = "file://attached_assets/generated_videos/konex-airport-travel.mp4"
 type = "video"
 title = "Clip 2 — Airport Travel Scene (6s)"
+logical_id = "5bcaa68b-54a0-4ded-956d-7d59cf1ecb6f"
 
 [[outputs]]
 id = "EZY9MDyZzXd-SGjg7Yxgv"
 uri = "file://attached_assets/generated_videos/konex-happy-traveller.mp4"
 type = "video"
 title = "Clip 3 — Happy Traveller (6s)"
+logical_id = "ce72523d-1df6-4310-aae6-a6c416645a89"
 
 [[outputs]]
 id = "BPHavV-KcBkkFAiP5NEou"
 uri = "file://attached_assets/generated_videos/konex-globe-connections.mp4"
 type = "video"
 title = "Clip 1 — Global Connectivity (8s)"
+logical_id = "a444ded7-47ee-4ee0-bcc2-4dfa2e4a7cac"
 
 [[outputs]]
 id = "vxHCAnjZ6bu1pF83NDcEc"
 uri = "file://attached_assets/generated_videos/konex-esim-activation.mp4"
 type = "video"
 title = "Clip 2 — eSIM Activation (8s)"
+logical_id = "b6222bff-dbe9-47af-8b33-7f13183517fb"
 
 [[outputs]]
 id = "qOUV6R3tljowa7lYjbngM"
 uri = "file://attached_assets/generated_videos/konex-happy-traveller-abroad.mp4"
 type = "video"
 title = "Clip 3 — Happy Traveller Abroad (8s)"
+logical_id = "b48e7ce8-bad4-4942-a770-6d1e8c212265"
 
 [[outputs]]
 id = "9G9WEnKQQ8knwy4tqxYrC"
 uri = "file://attached_assets/generated_videos/konex-airport-terminal.mp4"
 type = "video"
 title = "Clip 4 — Airport Terminal (8s)"
+logical_id = "e87b26b4-7076-4a61-b915-bbb7a3af4032"
+
+[[outputs]]
+id = "y9DwaC7gAzAx5Mk9PEqUe"
+uri = "file://generated-artifacts/country-photo-coverage.html"
+type = "html"
+title = "Ranked country photo audit"
+description = "All 182 initially missing destinations, ranked by live catalogue plan count, with added photos and remaining fallbacks."
+logical_id = "24afde38-31e2-44a0-b88f-822822299a7b"
+content_hash = "sha256:9e985b9e17da7dedac7978c3ae72e08cd1df7bbe0d34268e15758dfbcf6eda59"
+size = 43836
+mtime_ms = 1795440055964
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:16a08a41-0645-4798-8443-874c9792e3ee/24afde38-31e2-44a0-b88f-822822299a7b/ed3cd373-d3fe-4673-be03-112c85fe1add"
+storage_version_token = "1795440145611487"
+content_type = "text/html"
+
+[[outputs]]
+id = "JFmgyOyOHK-aIAqojfp1M"
+uri = "file://generated-artifacts/country-photo-coverage.csv"
+type = "table"
+title = "Country photo audit spreadsheet"
+description = "Download the complete ranked list and image source links."
+logical_id = "6ea82361-1988-49b8-9b21-2d78ab87d7be"
+content_hash = "sha256:239b61dc922e3b8c5bb75fab009a898a8342744e1193b412d1e3adf299c15ef0"
+size = 33232
+mtime_ms = 1795440055960
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:16a08a41-0645-4798-8443-874c9792e3ee/6ea82361-1988-49b8-9b21-2d78ab87d7be/c57f28b2-3325-4980-a1df-775f918c8e80"
+storage_version_token = "1795440146921302"
+content_type = "text/csv"

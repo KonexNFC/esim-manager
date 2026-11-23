@@ -3,7 +3,10 @@
 import fs from "node:fs/promises";
 import sharp from "sharp";
 
-const photos = JSON.parse(await fs.readFile("client/src/data/travel-photos.json", "utf8"));
+const photos = [
+  ...JSON.parse(await fs.readFile("client/src/data/travel-photos.json", "utf8")),
+  ...JSON.parse(await fs.readFile("client/src/data/country-photos.json", "utf8")),
+];
 await fs.mkdir("client/public/images/travel", { recursive: true });
 for (const photo of photos) {
   const outputs = [640, 1280].map(width => `client/public/images/travel/${photo.id}-${width}.webp`);

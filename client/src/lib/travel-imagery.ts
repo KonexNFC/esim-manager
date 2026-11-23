@@ -1,10 +1,12 @@
 import sources from "@/data/travel-photos.json";
+import countrySources from "@/data/country-photos.json";
 
 export type TravelPhoto = (typeof sources)[number] & { isRegional?: boolean };
-export const travelPhotos: TravelPhoto[] = sources;
-const byId = Object.fromEntries(sources.map(photo => [photo.id, photo])) as Record<string, TravelPhoto>;
+export const travelPhotos: TravelPhoto[] = [...sources, ...countrySources];
+const byId = Object.fromEntries(travelPhotos.map(photo => [photo.id, photo])) as Record<string, TravelPhoto>;
 
 const countryPhotos: Record<string, string> = {
+  ...Object.fromEntries(countrySources.map(photo => [photo.code, photo.id])),
   CN: "china", NG: "lagos", BR: "rio", AE: "dubai", GB: "london", UK: "london",
   US: "newyork", FR: "paris", SG: "singapore", TH: "bangkok", JP: "tokyo",
   TZ: "africa", TC: "beach", IN: "india", PE: "peru", HK: "hongkong",
