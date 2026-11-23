@@ -12,7 +12,8 @@ import { SiVisa, SiMastercard, SiApplepay, SiPaypal, SiGooglepay } from "react-i
 import type { Destination } from "@shared/schema";
 import { newFeaturedEvents, upcomingEvents } from "@shared/featured-events";
 import { TravelImage } from "@/components/travel-image";
-import { getDestinationPhoto, getEventPhoto, getTravelPhoto } from "@/lib/travel-imagery";
+import { DestinationImage } from "@/components/destination-image";
+import { getEventPhoto, getTravelPhoto } from "@/lib/travel-imagery";
 
 // The catalogue is the sole source of homepage prices. Missing prices stay absent.
 interface HomepageCatalogue {
@@ -218,12 +219,11 @@ function PopularDestinations() {
             {popular.map(dest => {
               const price = catalogue?.popularPrices?.[dest.id];
               return (
-                <Link key={dest.id} href={`/destinations/${dest.countryCode}`} data-testid={`card-popular-dest-${dest.id}`} className="group relative block overflow-hidden rounded-2xl aspect-[3/4] bg-muted">
-                  <TravelImage photo={getDestinationPhoto(dest.countryCode, dest.region ?? "")} className="w-full h-full object-cover travel-card-photo" sizes="(max-width: 640px) 50vw, 25vw" />
+                <Link key={dest.id} href={`/destinations/${dest.countryCode}`} data-testid={`card-popular-dest-${dest.id}`} className="group relative block min-w-0 w-full max-w-full overflow-hidden rounded-2xl aspect-[3/4] bg-muted">
+                  <DestinationImage countryCode={dest.countryCode} className="absolute inset-0 w-full h-full object-cover travel-card-photo" sizes="(max-width: 767px) 50vw, 25vw" />
                   <div className="absolute inset-0 bg-gradient-to-t from-[hsl(var(--inverse))] via-[hsl(var(--inverse)/.15)] to-transparent" />
                   {validPrice(price) && <div className="absolute top-3 right-3 rounded-lg bg-[hsl(var(--inverse)/.85)] text-[hsl(var(--inverse-foreground))] px-3 py-2 text-xs"><span className="block text-[10px] mb-0.5">From</span><strong><Price amount={price} /></strong></div>}
                   <div className="absolute bottom-0 inset-x-0 p-3 sm:p-5 text-[hsl(var(--inverse-foreground))]">
-                    {getDestinationPhoto(dest.countryCode, dest.region ?? "").isRegional && <p className="travel-photo-caption mb-2">Regional inspiration · {getDestinationPhoto(dest.countryCode, dest.region ?? "").alt}</p>}
                     <p className="font-bold text-sm sm:text-lg pr-3">{dest.name}</p><p className="text-xs opacity-85 mt-1">{dest.region}</p>
                     <ArrowRight aria-hidden className="absolute bottom-6 right-3 sm:right-5 w-3 h-3 sm:w-4 sm:h-4" />
                   </div>

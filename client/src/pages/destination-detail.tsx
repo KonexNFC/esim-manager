@@ -1,5 +1,6 @@
 import { useRoute, Link, useLocation } from "wouter";
 import { TravelImage } from "@/components/travel-image";
+import { DestinationImage } from "@/components/destination-image";
 import { getDestinationPhoto } from "@/lib/travel-imagery";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -2331,10 +2332,12 @@ function CountryHero({ countryCode, name, region, isRegion, planCount, fromPrice
   planCount: number;
   fromPrice?: number;
 }) {
-  const photo = getDestinationPhoto(countryCode, region);
+  const photo = isRegion ? getDestinationPhoto(countryCode, region) : undefined;
   return (
     <section aria-label={`${name} eSIM summary`} className="travel-photo-surface mb-8 rounded-3xl border border-white/20">
-      <TravelImage photo={photo} priority className="travel-photo" sizes="(max-width: 1024px) 100vw, 1024px" />
+      {photo
+        ? <TravelImage photo={photo} priority className="travel-photo" sizes="(max-width: 1024px) 100vw, 1024px" />
+        : <DestinationImage countryCode={countryCode} priority className="travel-photo" sizes="(max-width: 1024px) 100vw, 1024px" />}
       <div className="flex flex-col gap-7 px-6 pt-20 pb-8 sm:flex-row sm:items-end sm:justify-between sm:px-10 sm:pt-28 sm:pb-10">
         <div className="flex items-center gap-4">
           <div>
@@ -2346,7 +2349,7 @@ function CountryHero({ countryCode, name, region, isRegion, planCount, fromPrice
                 Before you fly: China eSIM guide
               </Link>
             )}
-            {photo.isRegional && <p className="travel-photo-caption mt-4">Regional inspiration · {photo.alt}</p>}
+            {photo?.isRegional && <p className="travel-photo-caption mt-4">Regional inspiration · {photo.alt}</p>}
           </div>
         </div>
         {fromPrice !== undefined && (

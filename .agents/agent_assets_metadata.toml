@@ -82,3 +82,31 @@ mtime_ms = 1795440055960
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:16a08a41-0645-4798-8443-874c9792e3ee/6ea82361-1988-49b8-9b21-2d78ab87d7be/c57f28b2-3325-4980-a1df-775f918c8e80"
 storage_version_token = "1795440146921302"
 content_type = "text/csv"
+
+[[outputs]]
+id = "U4Kc_PABjrFxoI-q4Gd80"
+uri = "file://generated-artifacts/country-imagery-status.html"
+type = "html"
+title = "Remaining country photography coverage"
+description = "All 118 destinations still using designed fallbacks, ranked by catalogue plan count."
+logical_id = "e8537a33-2ec7-468b-9fdb-45b3b7ac580f"
+content_hash = "sha256:bede7f271773424bc0412163966cef39e2d558bbc91326e01a5067303d34178b"
+size = 8192
+mtime_ms = 1795442114443
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:16a08a41-0645-4798-8443-874c9792e3ee/e8537a33-2ec7-468b-9fdb-45b3b7ac580f/2e9c160a-fee7-42af-beb9-e0e430f05c47"
+storage_version_token = "1795442236549630"
+content_type = "text/html"
+
+[[outputs]]
+id = "4uFKkCpserad8PIYGVZXA"
+uri = "file://generated-artifacts/remaining-country-photos.csv"
+type = "table"
+title = "Remaining country photos — spreadsheet"
+description = "Complete ranked list of countries and territories still needing verified photos."
+logical_id = "fc6cdfde-69cf-4402-bb10-ad07e7059a7f"
+content_hash = "sha256:fbbb47ecc00fa6d2d1edc9b7db2a9663cc6865ad2cbc11aa148981d14ad21b63"
+size = 8578
+mtime_ms = 1795442114439
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:16a08a41-0645-4798-8443-874c9792e3ee/fc6cdfde-69cf-4402-bb10-ad07e7059a7f/17616a78-37a9-412e-84c7-7ad8adcb66a5"
+storage_version_token = "1795442237790754"
+content_type = "text/csv"

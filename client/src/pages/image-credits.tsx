@@ -20,7 +20,7 @@ export default function ImageCredits() {
         <div className="mt-7 p-5 rounded-2xl border bg-secondary/40 text-sm leading-relaxed">
           Images are resized, converted to WebP and displayed with responsive cropping and colour overlays. Each image and its derivatives remain under its source licence, including applicable ShareAlike requirements. These licences apply to the photographs, not to the Konex website as a whole.
         </div>
-        <p className="text-sm text-muted-foreground mt-5 leading-relaxed">Event photographs may show the host destination rather than the event itself. “Regional inspiration” means the pictured location is illustrative: it is not a claim that the photograph was taken in the country being browsed. Refer to each photograph’s caption and source below.</p>
+        <p className="text-sm text-muted-foreground mt-5 leading-relaxed">Individual country cards and heroes use photographs from that country, or navy-and-sky globe artwork when no dedicated photograph is available. Regional and global plans may use illustrative regional photography. Event photographs may show the host destination rather than the event itself. Refer to each photograph’s caption and source below.</p>
       </header>
       <section aria-label="Photography sources" className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-12">
         {travelPhotos.map(photo => (

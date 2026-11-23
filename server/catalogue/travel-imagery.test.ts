@@ -25,8 +25,8 @@ test("all events resolve to photographs and missing destinations get labelled re
   for (const event of [...events, ...newFeaturedEvents]) assert.ok(getEventPhoto(event).source);
   assert.equal(getEventPhoto({ id: "art-basel-2026", countryCode: "US" }).id, "miami");
   assert.equal(getDestinationPhoto("CN").id, "china");
-  assert.equal(getDestinationPhoto("AO", "Africa").id, "africa");
-  assert.equal(getDestinationPhoto("AO", "Africa").isRegional, true);
+  assert.equal(getDestinationPhoto("UNKNOWN", "Africa").id, "africa");
+  assert.equal(getDestinationPhoto("UNKNOWN", "Africa").isRegional, true);
   assert.equal(getDestinationPhoto("UNKNOWN").id, "airport");
 });
 

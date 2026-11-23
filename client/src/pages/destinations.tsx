@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { TravelImage } from "@/components/travel-image";
+import { DestinationImage } from "@/components/destination-image";
 import { getDestinationPhoto } from "@/lib/travel-imagery";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -33,14 +34,14 @@ const POPULAR_CODES = [
 
 /** Card for a single country */
 function CountryCard({ country }: { country: AvailableCountry }) {
-  const photo = getDestinationPhoto(country.countryCode, country.region);
   return (
     <Link
       href={`/destinations/${country.countryCode}`}
+      className="block min-w-0 w-full max-w-full"
       data-testid={`card-destination-${country.countryCode}`}
     >
-      <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[3/2] bg-muted shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02]">
-        <TravelImage photo={photo} className="absolute inset-0 w-full h-full object-cover travel-card-photo" sizes="(max-width: 640px) 100vw, 25vw" />
+      <div className="group relative min-w-0 w-full max-w-full overflow-hidden rounded-2xl cursor-pointer aspect-[3/2] bg-muted shadow-md">
+        <DestinationImage countryCode={country.countryCode} className="absolute inset-0 w-full h-full object-cover travel-card-photo" sizes="(max-width: 767px) 100vw, (max-width: 1023px) 33vw, 25vw" />
         {/* Subtle bottom gradient only — keeps flag colours vivid */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
 
@@ -69,7 +70,6 @@ function CountryCard({ country }: { country: AvailableCountry }) {
           >
             {country.region}
           </p>
-          {photo.isRegional && <p className="travel-photo-caption mt-2">Regional inspiration · {photo.alt}</p>}
         </div>
       </div>
     </Link>
@@ -86,9 +86,10 @@ function RegionCard({ entry }: { entry: AvailableCountry }) {
   return (
     <Link
       href={`/destinations/${entry.countryCode}`}
+      className="block min-w-0 w-full max-w-full"
       data-testid={`card-destination-${entry.countryCode}`}
     >
-      <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[4/5] bg-muted shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02]">
+      <div className="group relative min-w-0 w-full max-w-full overflow-hidden rounded-2xl cursor-pointer aspect-[4/5] bg-muted shadow-md">
         {/* Landmark photo */}
         <TravelImage photo={photo} className="absolute inset-0 w-full h-full object-cover travel-card-photo" />
 
@@ -136,7 +137,7 @@ function CountryGrid({ countries }: { countries: AvailableCountry[] }) {
   }, [countries]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
+    <div className="grid min-w-0 w-full grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
       {deduped.map(c => (
         c.type === "region" || c.type === "global"
           ? <RegionCard key={`${c.type}-${c.countryCode}`} entry={c} />

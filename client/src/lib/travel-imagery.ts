@@ -22,6 +22,21 @@ export function getTravelPhoto(id: string): TravelPhoto {
   return byId[id] ?? byId.airport;
 }
 
+export type CountryVisual =
+  | { kind: "photo"; photo: TravelPhoto; background: string }
+  | { kind: "designed"; background: string };
+
+/** Stable country artwork, independent of region labels and available regional photos. */
+export function getCountryVisual(code: string): CountryVisual {
+  const key = code.trim().toUpperCase();
+  const seed = Array.from(key).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7);
+  const hue = 199 + seed % 17;
+  const background = `linear-gradient(${125 + seed % 35}deg, hsl(215 65% 12%) 0%, hsl(${hue} 58% 23%) 57%, hsl(${hue} 64% 43%) 100%)`;
+  const photo = byId[countryPhotos[key]];
+  return photo ? { kind: "photo", photo, background } : { kind: "designed", background };
+}
+
+/** Regional/event photography resolver. Country surfaces must use getCountryVisual. */
 export function getDestinationPhoto(code: string, region = ""): TravelPhoto {
   const key = code.toUpperCase();
   if (countryPhotos[key]) return byId[countryPhotos[key]];

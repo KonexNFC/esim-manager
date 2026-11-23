@@ -473,7 +473,10 @@
 .konex-customer [data-testid="section-travel-smarter"] { border-radius: 0 0 2.5rem 2.5rem; }
 .konex-customer [data-testid="section-travel-smarter"]::before { background: linear-gradient(90deg,hsl(215 65% 10% / .94),hsl(215 65% 10% / .35)),linear-gradient(0deg,hsl(215 65% 10% / .45),transparent); }
 .konex-customer [data-testid="hero-plan-selector"] { box-shadow: 0 24px 70px hsl(215 65% 5% / .22); }
-.konex-customer [data-testid^="card-destination-"] > .group { min-height: 230px; }
+/* Explicit width containment stops min-height + aspect-ratio transferring an
+   oversized intrinsic width into the link/grid item at tablet breakpoints. */
+.konex-customer [data-testid^="card-destination-"] { display: block; min-width: 0; width: 100%; max-width: 100%; }
+.konex-customer [data-testid^="card-destination-"] > .group { width: 100%; min-width: 0; max-width: 100%; min-height: 230px; }
 .konex-customer [data-testid^="card-destination-"] h3 { font-size: 1.15rem; }
 .konex-customer [data-testid^="card-destination-"] .absolute.bottom-0 { padding: 1.25rem; }
 .konex-customer [data-testid="text-destinations-title"] { font-size: clamp(2.5rem,5vw,4.5rem); }
