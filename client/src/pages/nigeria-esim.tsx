@@ -1,4 +1,6 @@
 import { Price } from "@/lib/currency";
+import { TravelImage } from "@/components/travel-image";
+import { getTravelPhoto } from "@/lib/travel-imagery";
 import { Link, useLocation } from "wouter";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -147,22 +149,16 @@ export default function NigeriaEsim() {
 
       {/* ── Hero ──────────────────────────────────────────────────────────────── */}
       <section
-        className="relative overflow-hidden"
+        className="travel-photo-surface relative overflow-hidden"
         data-testid="section-nigeria-hero"
-        style={{ background: "linear-gradient(135deg, #0a1f0e 0%, #0d2818 40%, #061422 100%)" }}
+        style={{ background: "hsl(var(--inverse))" }}
       >
-        {/* Background glow */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-[700px] h-[700px] rounded-full opacity-20"
-            style={{ background: "radial-gradient(circle, #008751 0%, transparent 70%)" }} />
-          <div className="absolute bottom-0 left-0 w-[500px] h-[400px] opacity-10"
-            style={{ background: "radial-gradient(circle, #008751 0%, transparent 70%)" }} />
-        </div>
+        <TravelImage photo={getTravelPhoto("lagos")} priority className="travel-photo" sizes="100vw" />
 
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 pt-16 pb-20 sm:pt-24 sm:pb-28">
           {/* Top flag pill */}
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/8 border border-white/15 text-white/80 text-xs font-semibold uppercase tracking-widest mb-7">
-            <span>🇳🇬</span>
+            <MapPin aria-hidden className="w-4 h-4" />
             <span>Nigeria eSIM for UK Travellers</span>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           </div>
@@ -170,7 +166,7 @@ export default function NigeriaEsim() {
           <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-[1.05] tracking-tight mb-5 max-w-3xl" data-testid="text-nigeria-hero-headline">
             Nigeria eSIM for<br className="hidden sm:block" /> UK travellers.
           </h1>
-          <p className="text-white/60 text-lg sm:text-xl max-w-2xl leading-relaxed mb-10" data-testid="text-nigeria-hero-sub">
+          <p className="text-white/90 text-lg sm:text-xl max-w-2xl leading-relaxed mb-10" data-testid="text-nigeria-hero-sub">
             Land in Lagos, Abuja or Port Harcourt already connected.
             Buy before you fly, receive your QR code instantly, and avoid airport SIM queues.
           </p>
@@ -178,8 +174,7 @@ export default function NigeriaEsim() {
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
               size="lg"
-              className="font-bold h-12 px-8 text-base shadow-xl shadow-emerald-900/40 hover:scale-[1.02] transition-all duration-200 border-0"
-              style={{ background: "linear-gradient(135deg, #008751, #00a65e)" }}
+              className="font-bold h-12 px-8 text-base hover:scale-[1.02] transition-transform duration-200 border-0"
               onClick={() => navigate("/find-plan?country=NG")}
               data-testid="button-nigeria-hero-primary"
             >
@@ -206,7 +201,7 @@ export default function NigeriaEsim() {
               { icon: <Clock className="w-3.5 h-3.5" />, label: "No registration queue" },
             ].map(item => (
               <div key={item.label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/8 border border-white/12 text-white/65 text-xs font-medium">
-                <span className="text-emerald-400">{item.icon}</span>
+                <span className="text-sky-300">{item.icon}</span>
                 {item.label}
               </div>
             ))}

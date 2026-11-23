@@ -1,4 +1,6 @@
 import { Link } from "wouter";
+import { TravelImage } from "@/components/travel-image";
+import { getDestinationPhoto } from "@/lib/travel-imagery";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,26 +31,16 @@ const POPULAR_CODES = [
   "SG", "KR", "MX", "BR", "IN", "TR", "GR", "PT", "NL", "CA",
 ];
 
-function flagSrc(code: string) {
-  return `https://flagcdn.com/w320/${code.toLowerCase()}.png`;
-}
-
 /** Card for a single country */
 function CountryCard({ country }: { country: AvailableCountry }) {
+  const photo = getDestinationPhoto(country.countryCode, country.region);
   return (
     <Link
       href={`/destinations/${country.countryCode}`}
       data-testid={`card-destination-${country.countryCode}`}
     >
       <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[3/2] bg-muted shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02]">
-        <img
-          src={flagSrc(country.countryCode)}
-          alt={country.name}
-          className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-          onError={e => {
-            (e.currentTarget as HTMLImageElement).style.display = "none";
-          }}
-        />
+        <TravelImage photo={photo} className="absolute inset-0 w-full h-full object-cover travel-card-photo" sizes="(max-width: 640px) 100vw, 25vw" />
         {/* Subtle bottom gradient only — keeps flag colours vivid */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
 
@@ -77,6 +69,7 @@ function CountryCard({ country }: { country: AvailableCountry }) {
           >
             {country.region}
           </p>
+          {photo.isRegional && <p className="travel-photo-caption mt-2">Regional inspiration · {photo.alt}</p>}
         </div>
       </div>
     </Link>
@@ -84,23 +77,11 @@ function CountryCard({ country }: { country: AvailableCountry }) {
 }
 
 /** Landmark/region imagery for each canonical region slug */
-const REGION_IMAGES: Record<string, { url: string; credit: string }> = {
-  EUROPE:    { url: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=600&q=80", credit: "Paris, France" },
-  LATAM:     { url: "https://images.unsplash.com/photo-1526392060635-9d6019884377?auto=format&fit=crop&w=600&q=80", credit: "Machu Picchu, Peru" },
-  CARIBBEAN: { url: "https://images.unsplash.com/photo-1548574505-5e239809ee19?auto=format&fit=crop&w=600&q=80", credit: "Caribbean Sea" },
-  APAC:      { url: "https://images.unsplash.com/photo-1480796927426-f609979314bd?auto=format&fit=crop&w=600&q=80", credit: "Mount Fuji, Japan" },
-  SOUTHASIA: { url: "https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=600&q=80", credit: "Taj Mahal, India" },
-  MENA:      { url: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=600&q=80", credit: "Dubai, UAE" },
-  AFRICA:    { url: "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&w=600&q=80", credit: "Serengeti, Tanzania" },
-  NORTHAM:   { url: "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?auto=format&fit=crop&w=600&q=80", credit: "New York City, USA" },
-  SEASIA:    { url: "https://images.unsplash.com/photo-1528360983277-13d401cdc186?auto=format&fit=crop&w=600&q=80", credit: "Angkor Wat, Cambodia" },
-  GLOBAL:    { url: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80", credit: "Planet Earth" },
-};
 
 /** Card for a region or global plan — uses landmark photography */
 function RegionCard({ entry }: { entry: AvailableCountry }) {
   const isGlobal = entry.type === "global";
-  const img = REGION_IMAGES[entry.countryCode.toUpperCase()];
+  const photo = getDestinationPhoto(entry.countryCode, entry.region);
 
   return (
     <Link
@@ -109,16 +90,7 @@ function RegionCard({ entry }: { entry: AvailableCountry }) {
     >
       <div className="group relative overflow-hidden rounded-2xl cursor-pointer aspect-[4/5] bg-muted shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02]">
         {/* Landmark photo */}
-        {img ? (
-          <img
-            src={img.url}
-            alt={img.credit}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-            loading="lazy"
-          />
-        ) : (
-          <div className={`absolute inset-0 ${isGlobal ? "bg-gradient-to-br from-violet-600/60 via-blue-600/40 to-indigo-700/60" : "bg-gradient-to-br from-primary/60 via-primary/30 to-primary/70"}`} />
-        )}
+        <TravelImage photo={photo} className="absolute inset-0 w-full h-full object-cover travel-card-photo" />
 
         {/* Dark overlay for text legibility */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/10" />
@@ -145,9 +117,7 @@ function RegionCard({ entry }: { entry: AvailableCountry }) {
           <p className="text-white/70 text-xs mt-0.5 drop-shadow-sm">
             {isGlobal ? "Worldwide coverage" : "Multi-country plan"}
           </p>
-          {img && (
-            <p className="text-white/40 text-[9px] mt-1">{img.credit}</p>
-          )}
+          <p className="travel-photo-caption mt-2">Regional inspiration · {photo.alt}</p>
         </div>
       </div>
     </Link>
@@ -166,7 +136,7 @@ function CountryGrid({ countries }: { countries: AvailableCountry[] }) {
   }, [countries]);
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
       {deduped.map(c => (
         c.type === "region" || c.type === "global"
           ? <RegionCard key={`${c.type}-${c.countryCode}`} entry={c} />
@@ -379,7 +349,7 @@ export default function Destinations() {
                 </span>
                 <div className="flex-1 h-px bg-border" />
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-5">
                 {multiCountryPlans.map(entry => (
                   <RegionCard key={entry.countryCode} entry={entry} />
                 ))}

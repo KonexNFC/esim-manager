@@ -11,7 +11,8 @@ import { ArrowRight, Globe, Smartphone, Search, Lock, CheckCircle2, QrCode, MapP
 import { SiVisa, SiMastercard, SiApplepay, SiPaypal, SiGooglepay } from "react-icons/si";
 import type { Destination } from "@shared/schema";
 import { newFeaturedEvents, upcomingEvents } from "@shared/featured-events";
-import travelLandmarksImg from "@assets/Travel_Image__1776723002223.jpeg";
+import { TravelImage } from "@/components/travel-image";
+import { getDestinationPhoto, getEventPhoto, getTravelPhoto } from "@/lib/travel-imagery";
 
 // The catalogue is the sole source of homepage prices. Missing prices stay absent.
 interface HomepageCatalogue {
@@ -58,10 +59,8 @@ function TravelSmarterSection() {
   };
 
   return (
-    <section className="konex-inverse relative overflow-hidden" data-testid="section-travel-smarter">
-      <div className="absolute inset-0 pointer-events-none">
-        <img src="/images/hero-bg.png" alt="" className="w-full h-full object-cover opacity-[0.07]" />
-      </div>
+    <section className="konex-inverse travel-photo-surface relative overflow-hidden" data-testid="section-travel-smarter">
+      <TravelImage photo={getTravelPhoto("airport")} priority sizes="100vw" className="travel-photo" />
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10 lg:gap-20 items-center py-4 sm:py-8">
           <div>
@@ -159,11 +158,11 @@ function NigeriaCampaignCard() {
   return (
     <section className="px-4 sm:px-6 py-6" data-testid="section-nigeria-campaign">
       <div className="max-w-7xl mx-auto">
-        <div className="konex-inverse rounded-2xl border border-primary/25 cursor-pointer group px-6 py-6 flex flex-col md:flex-row md:items-center justify-between gap-5"
+        <div className="konex-inverse travel-photo-surface rounded-2xl border border-primary/25 cursor-pointer group px-6 py-10 sm:px-10 sm:py-14 flex flex-col md:flex-row md:items-center justify-between gap-5"
           onClick={() => navigate("/nigeria-esim")} data-testid="card-nigeria-campaign" role="button" tabIndex={0}
           onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate("/nigeria-esim"); } }}>
+          <TravelImage photo={getTravelPhoto("lagos")} className="travel-photo travel-card-photo" />
           <div className="flex items-center gap-4">
-            <FlagImg code="NG" name="Nigeria" className="w-10 h-7 rounded shrink-0" />
             <div><p className="font-bold text-base sm:text-lg">Flying to Nigeria? Get connected before landing.</p>
               <p className="text-white/85 text-sm mt-1">Skip the airport SIM queue. Buy before you fly and follow your QR installation guide.</p></div>
           </div>
@@ -178,7 +177,8 @@ function ChinaCampaignCard() {
   const { fromPrice, isLoading, isError, isFetching, refetch } = useChinaPlans();
   return (
     <section className="px-4 sm:px-6 !py-6" data-testid="section-china-campaign">
-      <div className="max-w-7xl mx-auto rounded-2xl border border-primary/30 bg-primary/10 px-6 py-6 flex flex-col md:flex-row md:items-center justify-between gap-5">
+      <div className="travel-photo-surface max-w-7xl mx-auto rounded-2xl border border-primary/30 px-6 py-10 sm:px-10 sm:py-14 flex flex-col md:flex-row md:items-center justify-between gap-5">
+        <TravelImage photo={getTravelPhoto("china")} className="travel-photo" />
         <div className="flex gap-4 items-start">
           <Smartphone aria-hidden className="w-6 h-6 text-primary shrink-0 mt-1" />
           <div>
@@ -219,11 +219,11 @@ function PopularDestinations() {
               const price = catalogue?.popularPrices?.[dest.id];
               return (
                 <Link key={dest.id} href={`/destinations/${dest.countryCode}`} data-testid={`card-popular-dest-${dest.id}`} className="group relative block overflow-hidden rounded-2xl aspect-[3/4] bg-muted">
-                  <img src={dest.imageUrl} alt={dest.name} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 motion-reduce:transition-none group-hover:scale-[1.03]" />
+                  <TravelImage photo={getDestinationPhoto(dest.countryCode, dest.region ?? "")} className="w-full h-full object-cover travel-card-photo" sizes="(max-width: 640px) 50vw, 25vw" />
                   <div className="absolute inset-0 bg-gradient-to-t from-[hsl(var(--inverse))] via-[hsl(var(--inverse)/.15)] to-transparent" />
                   {validPrice(price) && <div className="absolute top-3 right-3 rounded-lg bg-[hsl(var(--inverse)/.85)] text-[hsl(var(--inverse-foreground))] px-3 py-2 text-xs"><span className="block text-[10px] mb-0.5">From</span><strong><Price amount={price} /></strong></div>}
                   <div className="absolute bottom-0 inset-x-0 p-3 sm:p-5 text-[hsl(var(--inverse-foreground))]">
-                    <FlagImg code={dest.countryCode} name={dest.name} className="w-7 h-5 rounded-sm mb-3 border border-white/20" />
+                    {getDestinationPhoto(dest.countryCode, dest.region ?? "").isRegional && <p className="travel-photo-caption mb-2">Regional inspiration · {getDestinationPhoto(dest.countryCode, dest.region ?? "").alt}</p>}
                     <p className="font-bold text-sm sm:text-lg pr-3">{dest.name}</p><p className="text-xs opacity-85 mt-1">{dest.region}</p>
                     <ArrowRight aria-hidden className="absolute bottom-6 right-3 sm:right-5 w-3 h-3 sm:w-4 sm:h-4" />
                   </div>
@@ -236,7 +236,7 @@ function PopularDestinations() {
   );
 }
 
-const FESTIVAL_EVENTS: Array<{ id: string; name: string; subtitle: string; location: string; dates: string; countryCode: string; bgFrom: string; bgTo: string; accent: string; photo: string; cta: string; startDate: string; endDate: string; href?: string }> = [
+export const FESTIVAL_EVENTS: Array<{ id: string; name: string; subtitle: string; location: string; dates: string; countryCode: string; bgFrom: string; bgTo: string; accent: string; photo: string; cta: string; startDate: string; endDate: string; href?: string }> = [
   ...newFeaturedEvents,
   {
     id: "notting-hill-2026",
@@ -247,7 +247,7 @@ const FESTIVAL_EVENTS: Array<{ id: string; name: string; subtitle: string; locat
     dates: "Aug 30 – 31, 2026",
     countryCode: "GB",
     bgFrom: "#2e1065", bgTo: "#5b21b6", accent: "#f0abfc",
-    photo: "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&w=700&q=80",
+    photo: "",
     cta: "Get UK eSIM",
   },
   {
@@ -259,7 +259,7 @@ const FESTIVAL_EVENTS: Array<{ id: string; name: string; subtitle: string; locat
     dates: "Sep 19 – Oct 4, 2026",
     countryCode: "DE",
     bgFrom: "#0c1f3c", bgTo: "#1e3a5f", accent: "#60a5fa",
-    photo: "https://images.unsplash.com/photo-1567327613485-fbd5f472a1c0?auto=format&fit=crop&w=700&q=80",
+    photo: "",
     cta: "Get Germany eSIM",
   },
   {
@@ -271,7 +271,7 @@ const FESTIVAL_EVENTS: Array<{ id: string; name: string; subtitle: string; locat
     dates: "October 2026",
     countryCode: "SG",
     bgFrom: "#2d0a0a", bgTo: "#4a1010", accent: "#f87171",
-    photo: "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?auto=format&fit=crop&w=700&q=80",
+    photo: "",
     cta: "Get Singapore eSIM",
   },
   {
@@ -283,7 +283,7 @@ const FESTIVAL_EVENTS: Array<{ id: string; name: string; subtitle: string; locat
     dates: "Oct 15 – Nov 4, 2026",
     countryCode: "CN",
     bgFrom: "#450a0a", bgTo: "#7f1d1d", accent: "#fbbf24",
-    photo: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=700&q=80",
+    photo: "",
     cta: "Get China eSIM",
   },
   {
@@ -295,7 +295,7 @@ const FESTIVAL_EVENTS: Array<{ id: string; name: string; subtitle: string; locat
     dates: "December 2026",
     countryCode: "US",
     bgFrom: "#083344", bgTo: "#155e75", accent: "#f472b6",
-    photo: "https://images.unsplash.com/photo-1506966953602-c20cc11f75e3?auto=format&fit=crop&w=700&q=80",
+    photo: "",
     cta: "Get USA eSIM",
   },
   {
@@ -307,7 +307,7 @@ const FESTIVAL_EVENTS: Array<{ id: string; name: string; subtitle: string; locat
     dates: "Dec 2026 – Jan 2027",
     countryCode: "AE",
     bgFrom: "#1c1917", bgTo: "#44403c", accent: "#facc15",
-    photo: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=700&q=80",
+    photo: "",
     cta: "Get UAE eSIM",
   },
 ];
@@ -342,8 +342,8 @@ function EventsSlides({ events }: { events: typeof FESTIVAL_EVENTS }) {
       {events.map((event, i) => (
         <div key={event.id} aria-hidden className={`absolute inset-0 transition-opacity duration-700 motion-reduce:transition-none ${i === active ? "opacity-100 z-10" : "opacity-0 z-0"}`} style={{ background: "hsl(var(--inverse))" }}>
           <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${event.bgFrom}, ${event.bgTo})` }} />
-          {event.photo && <img src={event.photo} alt="" loading="lazy" onError={e => { e.currentTarget.style.display = "none"; }} className="absolute inset-0 w-full h-full object-cover opacity-40" />}
-          <div className="absolute inset-0 bg-[hsl(var(--inverse)/.85)]" />
+          <TravelImage photo={getEventPhoto(event)} className="absolute inset-0 w-full h-full object-cover" sizes="100vw" />
+          <div className="absolute inset-0 bg-[hsl(var(--inverse)/.78)]" />
         </div>
       ))}
       <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-6">
@@ -357,18 +357,20 @@ function EventsSlides({ events }: { events: typeof FESTIVAL_EVENTS }) {
           <div className="rounded-2xl border border-white/20 bg-white/[.04] p-6 sm:p-9">
             <div className="relative aspect-video overflow-hidden rounded-xl border border-white/20 mb-7">
               {events.map((event, i) => <div key={event.id} aria-hidden={i !== active} className={`absolute inset-0 flex items-center justify-center transition-opacity duration-700 motion-reduce:transition-none ${i === active ? "opacity-100" : "opacity-0"}`} style={{ background: `linear-gradient(135deg, ${event.bgFrom}, ${event.bgTo})`, borderBottom: `3px solid ${event.accent}` }}>
-                <FlagImg code={event.countryCode} name={event.location} className="w-20 h-14 rounded shadow-sm" />
-                {event.photo && <img src={event.photo} alt={i === active ? event.name : ""} onError={e => { e.currentTarget.style.display = "none"; }} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
+                <span className="absolute bottom-12 left-4 right-4 z-10 text-white font-bold drop-shadow-md">{event.name}</span>
+                <TravelImage photo={getEventPhoto(event)} className="absolute inset-0 w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
+                <span className="absolute bottom-3 left-4 right-4 travel-photo-caption">{getEventPhoto(event).isRegional ? "Regional inspiration" : "Destination inspiration"} · {getEventPhoto(event).alt}</span>
               </div>)}
             </div>
-            <div className="flex justify-between items-center mb-7"><span className="text-xs font-semibold uppercase tracking-widest text-primary">Upcoming event</span><FlagImg code={ev.countryCode} name={ev.location} className="w-8 h-6 rounded" /></div>
+            <div className="flex justify-between items-center mb-7"><span className="text-xs font-semibold uppercase tracking-widest text-white">Upcoming event</span><span className="text-xs text-white/85">{ev.countryCode}</span></div>
             <h3 className="text-2xl sm:text-3xl font-bold mb-3" data-testid="text-event-title">{ev.name}</h3>
             <p className="text-white/85 text-sm leading-relaxed mb-6">{ev.subtitle}</p>
             <div className="flex flex-wrap gap-4 text-xs text-white/90 mb-7">
               <span className="flex items-center gap-2"><MapPin aria-hidden className="w-4 h-4 text-primary" />{ev.location}</span>
               <span className="flex items-center gap-2"><Timer aria-hidden className="w-4 h-4 text-primary" />{ev.dates}</span>
             </div>
-            <Button onClick={() => navigate(ev.href ?? `/destinations/${ev.countryCode}`)} className="font-bold" data-testid={`button-event-cta-${ev.id}`}>{ev.cta}<ArrowRight aria-hidden className="w-4 h-4 ml-2" /></Button>
+            <Button onClick={() => navigate(ev.href ?? `/destinations/${ev.countryCode}`)} className="font-bold bg-white/10 text-white border-white/50 border hover:bg-white/20" data-testid={`button-event-cta-${ev.id}`}>{ev.cta}<ArrowRight aria-hidden className="w-4 h-4 ml-2" /></Button>
             <p className="text-xs text-white/70 mt-4">QR by email · No physical SIM needed</p>
           </div>
         </div>
@@ -451,7 +453,7 @@ function HowItWorks() {
   return (
     <section id="how-it-works" className="border-t scroll-mt-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="max-w-xl mb-10"><p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">How it works</p><h2 className="text-4xl sm:text-5xl font-bold mb-4" data-testid="text-how-it-works-title">A few steps now.<br />An easier arrival.</h2><p className="text-sm text-muted-foreground">No store visit. No physical SIM. Just a little pre-trip preparation.</p></div>
+        <div className="grid md:grid-cols-2 gap-8 items-center mb-10"><div className="max-w-xl"><p className="text-xs font-bold uppercase tracking-widest text-primary mb-4">How it works</p><h2 className="text-4xl sm:text-5xl font-bold mb-4" data-testid="text-how-it-works-title">A few steps now.<br />An easier arrival.</h2><p className="text-sm text-muted-foreground">No store visit. No physical SIM. Just a little pre-trip preparation.</p></div><figure><TravelImage photo={getTravelPhoto("airport")} className="w-full h-64 object-cover rounded-2xl" /><figcaption className="text-xs text-muted-foreground mt-2">{getTravelPhoto("airport").alt}</figcaption></figure></div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {steps.map((step, i) => <article key={step.title} className="border rounded-2xl p-6 bg-card flex flex-col" data-testid={`card-step-${i + 1}`}>
             <div className="flex justify-between items-center mb-8"><step.icon aria-hidden className="w-7 h-7 text-primary" /><span className="font-mono text-sm text-muted-foreground">0{i + 1}</span></div>
@@ -530,7 +532,7 @@ function FAQSection() {
 function FinalCTA() {
   return (
     <section className="konex-inverse relative overflow-hidden border-t">
-      <img src={travelLandmarksImg} alt="" aria-hidden loading="lazy" className="absolute inset-0 w-full h-full object-cover opacity-20" />
+      <TravelImage photo={getTravelPhoto("airport")} className="absolute inset-0 w-full h-full object-cover opacity-40" sizes="100vw" />
       <div className="absolute inset-0 bg-[hsl(var(--inverse)/.65)]" />
       <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12 text-center">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary mb-5">One less thing on arrival</p>

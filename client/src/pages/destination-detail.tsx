@@ -1,4 +1,6 @@
 import { useRoute, Link, useLocation } from "wouter";
+import { TravelImage } from "@/components/travel-image";
+import { getDestinationPhoto } from "@/lib/travel-imagery";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,11 +26,6 @@ import { purchasableCatalogue } from "@shared/purchasable-catalogue";
 function isUUID(id: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
     || (!id.match(/^[A-Z]{2,3}$/i) && id.length > 5);
-}
-
-/** Flag emoji from CDN */
-function flagSrc(code: string) {
-  return `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
 }
 
 function parseDataGb(dataAmount: string): number | null {
@@ -2334,35 +2331,33 @@ function CountryHero({ countryCode, name, region, isRegion, planCount, fromPrice
   planCount: number;
   fromPrice?: number;
 }) {
+  const photo = getDestinationPhoto(countryCode, region);
   return (
-    <section aria-label={`${name} eSIM summary`} className="mb-8 rounded-xl border bg-card">
-      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+    <section aria-label={`${name} eSIM summary`} className="travel-photo-surface mb-8 rounded-3xl border border-white/20">
+      <TravelImage photo={photo} priority className="travel-photo" sizes="(max-width: 1024px) 100vw, 1024px" />
+      <div className="flex flex-col gap-7 px-6 pt-20 pb-8 sm:flex-row sm:items-end sm:justify-between sm:px-10 sm:pt-28 sm:pb-10">
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted">
-            {isRegion || !/^[A-Za-z]{2}$/.test(countryCode)
-              ? <Globe className="h-6 w-6 text-primary" aria-hidden="true" />
-              : <img src={flagSrc(countryCode)} alt={`${name} flag`} className="h-full w-full object-cover" onError={e => { e.currentTarget.style.visibility = "hidden"; }} />}
-          </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-1" data-testid="text-destination-region">{isRegion ? "Multi-country plan" : region}</p>
-            <h1 className="text-2xl sm:text-3xl font-bold leading-tight" data-testid="text-destination-title">{name}</h1>
+            <p className="text-xs text-white/90 uppercase tracking-[.18em] mb-4" data-testid="text-destination-region">{isRegion ? "Multi-country plan" : region}</p>
+            <h1 className="text-4xl sm:text-6xl font-bold leading-tight" data-testid="text-destination-title">{name}</h1>
             <p className="text-sm text-muted-foreground mt-1">{planCount} plan{planCount !== 1 ? "s" : ""} available</p>
             {countryCode.toUpperCase() === "CN" && (
               <Link href="/china-esim" className="inline-block mt-2 text-sm font-semibold text-primary underline underline-offset-4" data-testid="link-china-guide">
                 Before you fly: China eSIM guide
               </Link>
             )}
+            {photo.isRegional && <p className="travel-photo-caption mt-4">Regional inspiration · {photo.alt}</p>}
           </div>
         </div>
         {fromPrice !== undefined && (
-          <div className="border-t pt-4 sm:border-t-0 sm:border-l sm:pl-6 sm:pt-0">
+          <div className="rounded-2xl border border-white/30 bg-slate-950/35 backdrop-blur-sm p-5 self-start sm:self-auto">
             <p className="text-xs text-muted-foreground mb-1">From</p>
             <p className="text-2xl font-bold tabular-nums" data-testid="text-destination-from-price"><Price amount={fromPrice} /></p>
             <p className="text-xs text-muted-foreground mt-1">One-time payment</p>
           </div>
         )}
       </div>
-      <ul className="flex flex-wrap gap-x-5 gap-y-2 border-t bg-muted/30 px-5 py-3 sm:px-6">
+      <ul className="flex flex-wrap gap-x-5 gap-y-2 border-t border-white/20 bg-slate-950/35 px-6 py-4 sm:px-10">
         {["QR emailed after payment", "No contracts", "No roaming fees", "No physical SIM"].map(fact => (
           <li key={fact} className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />{fact}

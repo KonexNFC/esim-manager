@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Link, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -32,6 +32,7 @@ import EventDetail from "@/pages/event-detail";
 import NigeriaEsim from "@/pages/nigeria-esim";
 import ChinaEsim from "@/pages/china-esim";
 import NotFound from "@/pages/not-found";
+import ImageCredits from "@/pages/image-credits";
 
 function Router() {
   return (
@@ -60,21 +61,25 @@ function Router() {
       <Route path="/events/:slug" component={EventDetail} />
       <Route path="/nigeria-esim" component={NigeriaEsim} />
       <Route path="/china-esim" component={ChinaEsim} />
+      <Route path="/image-credits" component={ImageCredits} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
 function App() {
+  const [location] = useLocation();
+  const isCustomerRoute = !/^\/(admin|checkout)(\/|-|$)/.test(location);
   return (
     <ThemeProvider>
       <CurrencyProvider>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <TooltipProvider>
-              <div className="min-h-screen bg-background text-foreground">
+              <div className={`min-h-[100dvh] bg-background text-foreground ${isCustomerRoute ? "konex-customer" : ""}`}>
                 <Navbar />
                 <Router />
+                {isCustomerRoute && <footer className="border-t bg-secondary/30 px-5 py-7 pb-24 sm:pb-7"><div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-muted-foreground"><span>Konex · Travel data, arranged before arrival.</span><Link href="/image-credits" className="underline underline-offset-4 hover:text-foreground" data-testid="footer-link-image-credits">Photography &amp; image credits</Link></div></footer>}
               </div>
               <Toaster />
             </TooltipProvider>

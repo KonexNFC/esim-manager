@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -445,4 +446,42 @@
     pointer-events: none;
     z-index: 1;
   }
+}
+
+/* Departure lounge: editorial photography, crisp navy ink, generous sky space.
+   The customer shell is deliberately absent from admin and checkout routes. */
+.konex-customer { --font-display: 'Manrope', 'Space Grotesk', sans-serif; }
+.konex-customer :is(h1,h2,h3,h4,.font-display) { font-family: var(--font-display); }
+.konex-customer h1 { letter-spacing: -.055em; }
+.konex-customer h2 { letter-spacing: -.045em; line-height: 1.14; }
+.konex-customer { min-height: 100dvh; }
+.travel-photo-surface { position: relative; isolation: isolate; overflow: hidden; background: hsl(213 65% 16%); color: hsl(210 40% 98%); }
+.travel-photo-surface > .travel-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; }
+.travel-photo-surface::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(90deg,hsl(215 65% 10% / .9),hsl(215 65% 10% / .36)),linear-gradient(0deg,hsl(215 65% 10% / .6),transparent 85%); }
+.travel-photo-surface :is(.text-muted-foreground,.text-primary) { color: hsl(210 40% 96% / .88); }
+.travel-photo-surface h3,.travel-photo-surface h1,.travel-photo-surface h2 { color: hsl(210 40% 99%); }
+.travel-photo-surface .bg-card :is(h1,h2,h3) { color: hsl(var(--card-foreground)); }
+.travel-photo-surface .bg-card .text-muted-foreground { color: hsl(var(--muted-foreground)); }
+.travel-photo-surface .bg-card .text-primary { color: hsl(var(--primary-text)); }
+.travel-photo-caption { font-size: 10px; line-height: 1.5; color: hsl(210 40% 96% / .85); }
+.travel-card-photo { transition: transform .75s cubic-bezier(.22,1,.36,1); }
+.group:hover .travel-card-photo { transform: scale(1.045); }
+.travel-event-card { min-height: 410px; border-radius: 1.35rem; }
+.travel-event-card::before { background: linear-gradient(0deg,hsl(215 65% 8% / .98),hsl(215 65% 10% / .6) 60%,hsl(215 65% 10% / .22)); }
+.travel-event-card .text-primary { color: hsl(210 40% 99%); }
+.konex-customer .konex-home { --section-space: clamp(4rem,7vw,7rem); }
+.konex-customer [data-testid="section-travel-smarter"] { border-radius: 0 0 2.5rem 2.5rem; }
+.konex-customer [data-testid="section-travel-smarter"]::before { background: linear-gradient(90deg,hsl(215 65% 10% / .94),hsl(215 65% 10% / .35)),linear-gradient(0deg,hsl(215 65% 10% / .45),transparent); }
+.konex-customer [data-testid="hero-plan-selector"] { box-shadow: 0 24px 70px hsl(215 65% 5% / .22); }
+.konex-customer [data-testid^="card-destination-"] > .group { min-height: 230px; }
+.konex-customer [data-testid^="card-destination-"] h3 { font-size: 1.15rem; }
+.konex-customer [data-testid^="card-destination-"] .absolute.bottom-0 { padding: 1.25rem; }
+.konex-customer [data-testid="text-destinations-title"] { font-size: clamp(2.5rem,5vw,4.5rem); }
+@media (max-width: 639px) {
+  .konex-customer [data-testid^="card-destination-"] > .group { min-height: 240px; }
+  .konex-customer [data-testid="section-travel-smarter"] { border-radius: 0 0 1.5rem 1.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .travel-card-photo { transition: none; }
+  .group:hover .travel-card-photo { transform: none; }
 }

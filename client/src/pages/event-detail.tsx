@@ -1,11 +1,13 @@
 import { useEffect } from "react";
+import { TravelImage } from "@/components/travel-image";
+import { getEventPhoto } from "@/lib/travel-imagery";
 import { Link, useParams } from "wouter";
 import { ArrowRight, MapPin, Calendar, Plane, Wifi, Smartphone, Globe, ChevronRight, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { getEventBySlug, CATEGORY_LABELS, CATEGORY_EMOJI, type TravelEvent } from "@/data/events";
+import { getEventBySlug, CATEGORY_LABELS, type TravelEvent } from "@/data/events";
 
 // ─── Flag ─────────────────────────────────────────────────────────────────────
 function Flag({ code, size = "md" }: { code: string; size?: "sm" | "md" | "lg" }) {
@@ -40,7 +42,7 @@ function DurationCard({
     <Link href={destPath}>
       <div
         className={`group relative rounded-xl border p-4 cursor-pointer transition-all hover:shadow-md hover:border-primary/40 ${
-          recommended ? "border-primary bg-primary/5" : "border-border bg-white hover:bg-primary/3"
+           recommended ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-primary/3"
         }`}
         data-testid={`card-duration-${days}`}
       >
@@ -64,16 +66,6 @@ function DurationCard({
 }
 
 // ─── Category colour ──────────────────────────────────────────────────────────
-function categoryGradient(cat: string): string {
-  switch (cat) {
-    case "trade-fairs":    return "from-blue-700 via-blue-600 to-slate-800";
-    case "festivals":      return "from-orange-600 via-rose-600 to-purple-800";
-    case "sports":         return "from-green-700 via-emerald-600 to-teal-800";
-    case "fashion-culture":return "from-pink-600 via-rose-500 to-fuchsia-800";
-    case "luxury":         return "from-violet-700 via-purple-600 to-slate-800";
-    default:               return "from-slate-700 via-slate-600 to-slate-800";
-  }
-}
 
 // ─── Why You Need Data section ────────────────────────────────────────────────
 const WHY_BULLETS: Record<string, string[]> = {
@@ -124,9 +116,9 @@ const WHY_BULLETS: Record<string, string[]> = {
 // ─── Not Found ────────────────────────────────────────────────────────────────
 function NotFound() {
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center px-4">
+    <div className="min-h-[100dvh] bg-background flex items-center justify-center px-4">
       <div className="text-center max-w-md">
-        <p className="text-5xl mb-4">🌍</p>
+        <Globe aria-hidden className="w-12 h-12 text-primary mx-auto mb-4" />
         <h1 className="text-2xl font-bold mb-2">Event not found</h1>
         <p className="text-muted-foreground mb-6">
           We couldn't find that event. Browse all global events below.
@@ -176,7 +168,7 @@ export default function EventDetail() {
     event.recommendedDurations[Math.floor(event.recommendedDurations.length / 2)];
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-[100dvh] bg-background">
       {/* ── Breadcrumb ── */}
       <div className="bg-muted/40 border-b">
         <div className="max-w-5xl mx-auto px-4 py-2.5 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -189,21 +181,22 @@ export default function EventDetail() {
       </div>
 
       {/* ── Hero ── */}
-      <div className={`bg-gradient-to-br ${categoryGradient(event.category)} text-white`}>
+      <div className="travel-photo-surface">
+        <TravelImage photo={getEventPhoto(event)} priority className="travel-photo" sizes="100vw" />
         <div className="max-w-5xl mx-auto px-4 py-14 sm:py-20">
           <div className="flex items-center gap-2 mb-4">
             <Badge className="bg-white/15 text-white border-white/20 hover:bg-white/20">
-              {CATEGORY_EMOJI[event.category]} {CATEGORY_LABELS[event.category]}
+              {CATEGORY_LABELS[event.category]}
             </Badge>
           </div>
 
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4 leading-tight" data-testid="heading-event-name">
-            {event.emoji} {event.name}
+            {event.name}
           </h1>
 
           <div className="flex flex-wrap gap-4 text-white/80 text-sm mb-8">
             <div className="flex items-center gap-1.5">
-              <Flag code={event.countryCode} />
+              <MapPin aria-hidden className="w-4 h-4" />
               <span>{event.city}, {event.country}</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -226,13 +219,14 @@ export default function EventDetail() {
           <Link href={destPath}>
             <Button
               size="lg"
-              className="bg-white text-slate-900 hover:bg-white/90 font-bold rounded-xl px-6"
+              className="bg-slate-950/30 border border-white/60 text-white hover:bg-slate-950/50 font-bold rounded-xl px-6"
               data-testid="button-hero-get-esim"
             >
               Activate your eSIM before you arrive
               <ArrowRight className="ml-2 w-4 h-4" />
             </Button>
           </Link>
+          <p className="travel-photo-caption mt-7">{getEventPhoto(event).isRegional ? "Regional inspiration" : "Destination inspiration"} · {getEventPhoto(event).alt}</p>
         </div>
       </div>
 

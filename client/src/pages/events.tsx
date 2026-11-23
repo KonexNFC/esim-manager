@@ -1,40 +1,27 @@
 import { useState, useMemo, useEffect } from "react";
+import { TravelImage } from "@/components/travel-image";
+import { getEventPhoto, getTravelPhoto } from "@/lib/travel-imagery";
 import { Link, useLocation } from "wouter";
-import { Search, MapPin, Calendar, ArrowRight, Filter, X } from "lucide-react";
+import { Search, MapPin, Calendar, ArrowRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import events, {
   ALL_CATEGORIES,
   CATEGORY_LABELS,
-  CATEGORY_EMOJI,
   MONTHS,
   isEventUpcoming,
   type EventCategory,
   type TravellerType,
 } from "@/data/events";
 
-// ─── Flag image ───────────────────────────────────────────────────────────────
-function Flag({ code }: { code: string }) {
-  return (
-    <img
-      src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`}
-      alt={code}
-      className="w-5 h-3.5 rounded-[2px] object-cover flex-shrink-0 shadow-sm"
-      loading="lazy"
-    />
-  );
-}
-
 // ─── Category chip ────────────────────────────────────────────────────────────
 function CategoryChip({
   label,
-  emoji,
   active,
   onClick,
 }: {
   label: string;
-  emoji: string;
   active: boolean;
   onClick: () => void;
 }) {
@@ -48,7 +35,6 @@ function CategoryChip({
       }`}
       data-testid={`chip-category-${label.toLowerCase().replace(/\s+/g, "-")}`}
     >
-      <span>{emoji}</span>
       {label}
     </button>
   );
@@ -81,77 +67,20 @@ function FilterChip({
 // ─── Event Card ───────────────────────────────────────────────────────────────
 function EventCard({ event }: { event: (typeof events)[number] }) {
   const categoryLabel = CATEGORY_LABELS[event.category];
-  const categoryEmoji = CATEGORY_EMOJI[event.category];
+  const photo = getEventPhoto(event);
 
   return (
-    <Link href={`/events/${event.slug}`} data-testid={`card-event-${event.slug}`}>
-      <div className="group bg-white border border-border rounded-2xl overflow-hidden hover:shadow-lg hover:border-primary/30 transition-all duration-200 cursor-pointer h-full flex flex-col">
-        {/* Top colour bar by category */}
-        <div
-          className={`h-1.5 w-full ${
-            event.category === "trade-fairs"
-              ? "bg-blue-500"
-              : event.category === "festivals"
-              ? "bg-orange-500"
-              : event.category === "sports"
-              ? "bg-green-500"
-              : event.category === "fashion-culture"
-              ? "bg-pink-500"
-              : event.category === "luxury"
-              ? "bg-purple-500"
-              : "bg-gray-400"
-          }`}
-        />
-
-        <div className="p-5 flex flex-col flex-1 gap-3">
-          {/* Header */}
-          <div className="flex items-start justify-between gap-2">
-            <span className="text-2xl">{event.emoji}</span>
-            <Badge variant="outline" className="text-xs shrink-0 mt-0.5">
-              {categoryEmoji} {categoryLabel}
-            </Badge>
-          </div>
-
-          {/* Name */}
-          <div>
-            <h3 className="font-bold text-base leading-tight group-hover:text-primary transition-colors mb-1" data-testid={`text-event-name-${event.slug}`}>
-              {event.name}
-            </h3>
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Flag code={event.countryCode} />
-              <span>{event.city}, {event.country}</span>
-            </div>
-          </div>
-
-          {/* Date */}
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>{event.month}</span>
-          </div>
-
-          {/* Description */}
-          <p className="text-sm text-muted-foreground line-clamp-2 flex-1">
-            {event.description}
-          </p>
-
-          {/* Durations */}
-          <div className="flex flex-wrap gap-1.5">
-            {event.recommendedDurations.slice(0, 3).map(d => (
-              <span
-                key={d}
-                className="text-xs px-2 py-0.5 bg-muted rounded-full text-muted-foreground font-medium"
-              >
-                {d} day{d !== 1 ? "s" : ""}
-              </span>
-            ))}
-          </div>
-
-          {/* CTA */}
-          <div className="flex items-center text-sm font-semibold text-primary gap-1 mt-auto pt-1 group-hover:gap-2 transition-all">
-            Get eSIM for this trip
-            <ArrowRight className="w-4 h-4" />
-          </div>
-        </div>
+    <Link href={`/events/${event.slug}`} data-testid={`card-event-${event.slug}`} className="group travel-photo-surface travel-event-card flex flex-col p-6 sm:p-7">
+      <TravelImage photo={photo} className="travel-photo travel-card-photo" sizes="(max-width: 768px) 100vw, 33vw" />
+      <Badge variant="outline" className="self-start border-white/40 text-white bg-slate-950/30 mb-20">{categoryLabel}</Badge>
+      <div className="mt-auto">
+        <div className="flex items-center gap-2 text-xs text-white mb-3"><Calendar className="w-4 h-4" />{event.month}</div>
+        <h3 className="font-bold text-2xl leading-tight mb-3" data-testid={`text-event-name-${event.slug}`}>{event.name}</h3>
+        <p className="flex items-center gap-2 text-white/90 text-sm mb-3"><MapPin className="w-4 h-4 shrink-0" />{event.city}, {event.country}</p>
+        <p className="text-white/85 text-sm line-clamp-2 leading-relaxed mb-4">{event.description}</p>
+        <div className="flex flex-wrap gap-2 mb-5">{event.recommendedDurations.slice(0, 3).map(d => <span key={d} className="rounded-full border border-white/30 px-2 py-1 text-xs text-white">{d} day{d !== 1 ? "s" : ""}</span>)}</div>
+        <div className="flex items-center justify-between text-sm font-bold text-white border-t border-white/25 pt-4">Get eSIM for this trip<ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" /></div>
+        <p className="travel-photo-caption mt-4">{photo.isRegional ? "Regional inspiration" : "Destination inspiration"} · {photo.alt}</p>
       </div>
     </Link>
   );
@@ -226,20 +155,20 @@ export default function EventsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-[100dvh] bg-background">
       {/* ── Hero ── */}
-      <div className="bg-gradient-to-br from-slate-900 via-primary/90 to-slate-800 text-white">
+      <div className="travel-photo-surface">
+        <TravelImage photo={getTravelPhoto("shanghai")} priority className="travel-photo" sizes="100vw" />
         <div className="max-w-6xl mx-auto px-4 py-16 sm:py-20">
           <div className="max-w-2xl">
             <Badge className="mb-4 bg-white/15 text-white border-white/20 hover:bg-white/20">
-              🌍 Global Events Network
+               The travel calendar
             </Badge>
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold leading-tight mb-4">
-              Stay Connected at the World's Biggest Events
+              Make the trip.<br />Plan the connection.
             </h1>
             <p className="text-lg text-white/75 mb-8 leading-relaxed">
-              From Canton Fair to Rio Carnival, KONEX gives travellers instant data before they land.
-              Find your event, pick your plan, activate instantly.
+              From trade fairs to festival weekends. Find your event, explore destination plans, and arrange your data before departure.
             </p>
 
             {/* Search */}
@@ -249,7 +178,7 @@ export default function EventsPage() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search events, cities or countries…"
-                className="pl-10 h-12 bg-white text-foreground rounded-xl text-sm shadow-lg"
+                className="pl-10 h-12 bg-card text-card-foreground rounded-xl text-sm shadow-lg"
                 data-testid="input-events-search"
               />
               {search && (
@@ -267,14 +196,13 @@ export default function EventsPage() {
       </div>
 
       {/* ── Filters ── */}
-      <div className="border-b bg-white sticky top-0 z-20 shadow-sm">
+      <div className="border-b bg-background/95 backdrop-blur-md sticky top-0 z-20 shadow-sm">
         <div className="max-w-6xl mx-auto px-4">
           <button type="button" aria-pressed={chinaOnly} onClick={() => setChinaOnly(!chinaOnly)} data-testid="filter-china" className={`rounded-full border px-4 py-2 mt-3 text-sm font-semibold ${chinaOnly ? "bg-primary text-primary-foreground" : "bg-background text-foreground"}`}>China</button>
           {/* Category row */}
           <div className="flex gap-2 py-3 overflow-x-auto scrollbar-hide">
             <CategoryChip
               label="All Events"
-              emoji="🌍"
               active={activeCategory === null}
               onClick={() => setActiveCategory(null)}
             />
@@ -282,7 +210,6 @@ export default function EventsPage() {
               <CategoryChip
                 key={cat}
                 label={CATEGORY_LABELS[cat]}
-                emoji={CATEGORY_EMOJI[cat]}
                 active={activeCategory === cat}
                 onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
               />
@@ -335,13 +262,13 @@ export default function EventsPage() {
 
         {filtered.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-4xl mb-3">🔍</p>
+            <Search aria-hidden className="w-10 h-10 mx-auto mb-4 text-primary" />
             <p className="text-lg font-semibold mb-2">No events found</p>
             <p className="text-muted-foreground mb-6">Try a different search term or clear your filters.</p>
             <Button variant="outline" onClick={clearFilters}>Clear filters</Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filtered.map(event => (
               <EventCard key={event.id} event={event} />
             ))}

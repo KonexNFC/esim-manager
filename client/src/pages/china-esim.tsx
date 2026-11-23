@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { TravelImage } from "@/components/travel-image";
+import { getEventPhoto, getTravelPhoto } from "@/lib/travel-imagery";
 import { Link } from "wouter";
 import { ArrowRight, CalendarDays, CheckCircle2, Info, Mail, MapPin, Plane, QrCode, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -77,11 +79,13 @@ function ChinaEvents() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {upcoming.map(event => {
           const detail = events.find(item => item.id === event.id);
-          return <article key={event.id} className="rounded-2xl border bg-card p-6 sm:p-7 flex flex-col">
-            <div className="flex items-center gap-2 text-primary text-xs font-semibold mb-5"><CalendarDays aria-hidden className="w-4 h-4 shrink-0" /><span>{event.dates}</span></div>
+          return <article key={event.id} className="travel-photo-surface travel-event-card rounded-2xl border border-white/20 p-6 sm:p-7 flex flex-col">
+            <TravelImage photo={getEventPhoto(event)} className="travel-photo" />
+            <div className="flex items-center gap-2 text-white text-xs font-semibold mb-5"><CalendarDays aria-hidden className="w-4 h-4 shrink-0" /><span>{event.dates}</span></div>
             <h3 className="text-xl font-bold mb-3">{event.name}</h3><p className="text-sm text-muted-foreground leading-relaxed mb-5 flex-1">{event.subtitle}</p>
             <p className="text-sm text-muted-foreground flex items-center gap-2 mb-5"><MapPin aria-hidden className="w-4 h-4" />{event.location}</p>
-            <Link href={`/events/${detail?.slug ?? event.id}`} className="text-sm font-bold text-primary inline-flex gap-2 items-center self-start">View event guide<ArrowRight aria-hidden className="w-4 h-4" /></Link>
+            <Link href={`/events/${detail?.slug ?? event.id}`} className="text-sm font-bold text-white inline-flex gap-2 items-center self-start border border-white/50 rounded-lg px-4 py-2">View event guide<ArrowRight aria-hidden className="w-4 h-4" /></Link>
+            <p className="travel-photo-caption mt-4">{getEventPhoto(event).isRegional ? "Regional inspiration" : "Destination inspiration"} · {getEventPhoto(event).alt}</p>
           </article>;
         })}
       </div>
@@ -107,7 +111,8 @@ export default function ChinaEsim() {
   }, []);
 
   return <main className="min-h-[100dvh] bg-background text-foreground">
-    <section className="konex-inverse overflow-hidden" data-testid="section-china-hero">
+    <section className="konex-inverse travel-photo-surface overflow-hidden" data-testid="section-china-hero">
+      <TravelImage photo={getTravelPhoto("china")} priority className="travel-photo" sizes="100vw" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14 sm:py-20">
         <Link href="/destinations" className="text-xs text-white/75 hover:underline underline-offset-4">Destinations / Mainland China</Link>
         <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-10 lg:gap-20 items-center mt-9">
