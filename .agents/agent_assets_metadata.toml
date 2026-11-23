@@ -110,3 +110,31 @@ mtime_ms = 1795442114439
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:16a08a41-0645-4798-8443-874c9792e3ee/fc6cdfde-69cf-4402-bb10-ad07e7059a7f/17616a78-37a9-412e-84c7-7ad8adcb66a5"
 storage_version_token = "1795442237790754"
 content_type = "text/csv"
+
+[[outputs]]
+id = "D8T2VwhLVBLUS_4Vdqiqq"
+uri = "file://generated-artifacts/country-photo-flag-coverage.html"
+type = "html"
+title = "Photo and flag coverage for all 203 destinations"
+description = "108 dedicated photos and 95 own-country flags, ranked by catalogue plan count."
+logical_id = "3973c10e-af65-49af-a991-4001190fdc50"
+content_hash = "sha256:6b45b113487449ee804421f24ac749feacbcec5e2a38283bc58e6188fbde6392"
+size = 15824
+mtime_ms = 1795443369723
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:16a08a41-0645-4798-8443-874c9792e3ee/3973c10e-af65-49af-a991-4001190fdc50/7c331902-2af2-450d-a39b-e5ff0c8cfb88"
+storage_version_token = "1795443485389015"
+content_type = "text/html"
+
+[[outputs]]
+id = "eyZEJrgeOGQ5gKiYl26nG"
+uri = "file://generated-artifacts/country-photo-flag-coverage.csv"
+type = "table"
+title = "Complete country image inventory"
+description = "Spreadsheet listing every catalogue destination, its visual type and its local flag file."
+logical_id = "a4308d63-2909-4b77-86f5-56de93c63da5"
+content_hash = "sha256:13314ff69b47b73f3bef12627365ad07f88b51ae6393934f6b2d9123db53d184"
+size = 10647
+mtime_ms = 1795443369719
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:16a08a41-0645-4798-8443-874c9792e3ee/a4308d63-2909-4b77-86f5-56de93c63da5/2158cba8-8fb7-447a-b5c3-0b4f28075e89"
+storage_version_token = "1795443486595917"
+content_type = "text/csv"

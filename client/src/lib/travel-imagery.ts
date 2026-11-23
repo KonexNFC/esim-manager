@@ -1,5 +1,6 @@
 import sources from "@/data/travel-photos.json";
 import countrySources from "@/data/country-photos.json";
+import flags from "@/data/country-flags.json";
 
 export type TravelPhoto = (typeof sources)[number] & { isRegional?: boolean };
 export const travelPhotos: TravelPhoto[] = [...sources, ...countrySources];
@@ -22,18 +23,25 @@ export function getTravelPhoto(id: string): TravelPhoto {
   return byId[id] ?? byId.airport;
 }
 
+export type CountryFlag = (typeof flags)[number];
+const flagsByCode = Object.fromEntries(flags.map(flag => [flag.code, flag])) as Record<string, CountryFlag>;
 export type CountryVisual =
-  | { kind: "photo"; photo: TravelPhoto; background: string }
-  | { kind: "designed"; background: string };
+  | { kind: "photo"; photo: TravelPhoto; background: string; flag: CountryFlag | null }
+  | { kind: "flag"; background: string; flag: CountryFlag }
+  | { kind: "unavailable"; background: string; flag: null };
 
 /** Stable country artwork, independent of region labels and available regional photos. */
 export function getCountryVisual(code: string): CountryVisual {
-  const key = code.trim().toUpperCase();
+  const normalized = code.trim().toUpperCase();
+  const key = normalized === "UK" ? "GB" : normalized;
   const seed = Array.from(key).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7);
   const hue = 199 + seed % 17;
   const background = `linear-gradient(${125 + seed % 35}deg, hsl(215 65% 12%) 0%, hsl(${hue} 58% 23%) 57%, hsl(${hue} 64% 43%) 100%)`;
   const photo = byId[countryPhotos[key]];
-  return photo ? { kind: "photo", photo, background } : { kind: "designed", background };
+  const flag = flagsByCode[key] ?? null;
+  return photo ? { kind: "photo", photo, background, flag }
+    : flag ? { kind: "flag", background, flag }
+    : { kind: "unavailable", background, flag: null };
 }
 
 /** Regional/event photography resolver. Country surfaces must use getCountryVisual. */

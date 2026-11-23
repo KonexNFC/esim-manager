@@ -1,6 +1,30 @@
 // Read-only Commons research. Produces candidates for human visual/licence review.
 import fs from "node:fs/promises";
 const searches = {
+  SA: ["saudiarabia", "Al Ula Saudi Arabia landscape"],
+  CL: ["chile", "Torres del Paine Chile panorama"],
+  MD: ["moldova", "Orhei Vechi Moldova"],
+  PY: ["paraguay", "Palacio Lopez Asuncion Paraguay"],
+  PH: ["philippines", "Chocolate Hills Bohol Philippines"],
+  QA: ["qatar", "Doha skyline Qatar"],
+  RE: ["reunion", "Piton de la Fournaise Reunion"],
+  RS: ["serbia", "Belgrade fortress Serbia"],
+  VN: ["vietnam", "Ha Long Bay Vietnam panorama"],
+  AL: ["albania", "Berat Albania panorama"],
+  BO: ["bolivia", "Salar de Uyuni Bolivia"],
+  CO: ["colombia", "Cartagena Colombia skyline"],
+  HN: ["honduras", "Copan ruins Honduras"],
+  IL: ["israel", "Haifa Bahai gardens Israel"],
+  JO: ["jordan", "Wadi Rum Jordan panorama"],
+  KW: ["kuwait", "Kuwait Towers Kuwait"],
+  NI: ["nicaragua", "Granada Nicaragua cathedral"],
+  BH: ["bahrain", "Bahrain fort"],
+  BD: ["bangladesh", "Lalbagh Fort Bangladesh"],
+  KH: ["cambodia", "Angkor Wat Cambodia panorama"],
+  EC: ["ecuador", "Cotopaxi Ecuador"],
+  GP: ["guadeloupe", "Pointe des Chateaux Guadeloupe"],
+  GT: ["guatemala", "Lake Atitlan panorama Guatemala"],
+  PA: ["panama", "Panama City skyline"],
   KR: ["southkorea", "Seoul Gyeongbokgung palace panorama"],
   TW: ["taiwan", "Taipei skyline Taiwan"],
   MO: ["macau", "Macau skyline panorama"],
@@ -69,7 +93,7 @@ const searches = {
 const strip = s => String(s ?? "").replace(/<[^>]*>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
 const candidates = JSON.parse(await fs.readFile("/tmp/country-photo-candidates.json", "utf8").catch(() => "[]"));
 for (const [code, [id, query]] of Object.entries(searches)) {
-  if (candidates.some(entry => entry.code === code && entry.choices.length)) continue;
+  if (candidates.some(entry => entry.code === code && entry.choices.length && entry.query === query)) continue;
   const existing = candidates.findIndex(entry => entry.code === code);
   if (existing >= 0) candidates.splice(existing, 1);
   const params = new URLSearchParams({

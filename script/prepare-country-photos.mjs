@@ -2,9 +2,10 @@
 import fs from "node:fs/promises";
 import sharp from "sharp";
 const researched = JSON.parse(await fs.readFile("/tmp/country-photo-candidates.json", "utf8"));
-const choices = { LV: 2, LT: 1, DZ: 2, RW: 2, MU: 1, BJ: 2, UG: 1, TN: 1, FI: 1 };
+const choices = { LV: 2, LT: 1, DZ: 2, RW: 2, MU: 1, BJ: 2, UG: 1, TN: 1, FI: 1, GT: 0 };
 const output = JSON.parse(await fs.readFile("client/src/data/country-photos.json", "utf8"));
 for (const entry of researched) {
+  if (process.argv.includes(`--skip=${entry.code}`)) continue;
   const photo = entry.choices[choices[entry.code] ?? 0];
   if (!photo) continue;
   const existingIndex = output.findIndex(existing => existing.code === entry.code);
@@ -16,7 +17,11 @@ for (const entry of researched) {
   try {
     const paths = [640, 1280].map(w => `client/public/images/travel/${photo.id}-${w}.webp`);
     if (replace || !(await Promise.all(paths.map(p => fs.access(p).then(() => true, () => false)))).every(Boolean)) {
-      const response = await fetch(photo.downloadUrl, { signal: AbortSignal.timeout(60000) });
+      let response = await fetch(photo.downloadUrl, { signal: AbortSignal.timeout(60000) });
+      if (response.status === 429) {
+        await new Promise(resolve => setTimeout(resolve, 12000));
+        response = await fetch(photo.downloadUrl, { signal: AbortSignal.timeout(60000) });
+      }
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const buffer = Buffer.from(await response.arrayBuffer());
       for (const width of [640, 1280]) await sharp(buffer).rotate().resize({width, withoutEnlargement: true})
@@ -24,6 +29,7 @@ for (const entry of researched) {
     }
     output.push(record);
     console.log("Prepared", entry.code, photo.id);
+    await new Promise(resolve => setTimeout(resolve, 1500));
   } catch (e) { console.log("FAILED", entry.code, String(e)); }
 }
 await fs.writeFile("client/src/data/country-photos.json", JSON.stringify(output, null, 2) + "\n");

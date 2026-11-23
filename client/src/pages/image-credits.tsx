@@ -20,8 +20,17 @@ export default function ImageCredits() {
         <div className="mt-7 p-5 rounded-2xl border bg-secondary/40 text-sm leading-relaxed">
           Images are resized, converted to WebP and displayed with responsive cropping and colour overlays. Each image and its derivatives remain under its source licence, including applicable ShareAlike requirements. These licences apply to the photographs, not to the Konex website as a whole.
         </div>
-        <p className="text-sm text-muted-foreground mt-5 leading-relaxed">Individual country cards and heroes use photographs from that country, or navy-and-sky globe artwork when no dedicated photograph is available. Regional and global plans may use illustrative regional photography. Event photographs may show the host destination rather than the event itself. Refer to each photograph’s caption and source below.</p>
+        <p className="text-sm text-muted-foreground mt-5 leading-relaxed">Individual country cards and heroes use verified photographs from that country. When a dedicated photograph is unavailable or fails to load, we display that country’s flag on a navy background instead. We never substitute another country’s photograph. Regional and global plans may use illustrative regional photography. Event photographs may show the host destination rather than the event itself. Refer to each photograph’s caption and source below.</p>
       </header>
+      <section aria-labelledby="flag-sources-heading" className="mb-14 rounded-2xl border bg-secondary/40 p-6 sm:p-8">
+        <p className="text-primary text-xs font-bold uppercase tracking-[.18em] mb-3">Country flags</p>
+        <h2 id="flag-sources-heading" className="text-2xl sm:text-3xl font-bold mb-4">A country’s own colours.</h2>
+        <p className="text-muted-foreground text-sm leading-relaxed max-w-3xl">Country flags are locally hosted SVG files from flag-icons v7.5.0 by Panayiotis Lipiridis, displayed at their original aspect ratio. Copyright © 2013 Panayiotis Lipiridis. These assets are distributed under the MIT licence; the licence applies to the flag assets, not to the Konex website as a whole.</p>
+        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3 text-sm font-semibold text-primary">
+          <a href="https://github.com/lipis/flag-icons/tree/v7.5.0" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline underline-offset-4">flag-icons source · v7.5.0<ArrowUpRight className="w-3 h-3" /></a>
+          <a href="/images/flags/LICENSE.txt" className="underline underline-offset-4">Read the MIT licence</a>
+        </div>
+      </section>
       <section aria-label="Photography sources" className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-12">
         {travelPhotos.map(photo => (
           <article key={photo.id} id={photo.id} className="rounded-2xl overflow-hidden border bg-card">

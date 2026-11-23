@@ -1,19 +1,33 @@
 import { TravelImage } from "@/components/travel-image";
 import { getCountryVisual } from "@/lib/travel-imagery";
 
-/** Decorative artwork: the existing card/hero overlay supplies the country name. */
-function CountryArtwork({ background, className }: { background: string; className: string }) {
+/** The surrounding card/hero supplies the accessible destination name. */
+function CountryFlag({ background, flag, className, priority }: {
+  background: string;
+  flag: { code: string; name: string; src: string } | null;
+  className: string;
+  priority: boolean;
+}) {
   return (
-    <div aria-hidden="true" className={`overflow-hidden ${className}`} style={{ background }}>
-      <svg viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice" className="h-full w-full opacity-[.16]" fill="none">
-        <g stroke="hsl(199 93% 85%)" strokeWidth="1.2" transform="translate(405 160) rotate(-18)">
-          <circle r="145" />
-          <ellipse rx="95" ry="145" />
-          <ellipse rx="42" ry="145" />
-          <path d="M-145 0H145M0-145V145M-127-70H127M-127 70H127M-79-122H79M-79 122H79" />
-          <circle r="170" strokeDasharray="3 10" />
-        </g>
-      </svg>
+    <div
+      aria-hidden="true"
+      className={`destination-flag-surface ${className}`}
+      style={{ background }}
+      data-country-visual={flag ? "flag" : "unavailable"}
+      data-country-code={flag?.code}
+    >
+      {flag && (
+        <div className="destination-flag-stage">
+          <img
+            src={flag.src}
+            alt=""
+            className="destination-flag-image"
+            loading={priority ? "eager" : "lazy"}
+            decoding="async"
+            draggable={false}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -23,7 +37,7 @@ export function DestinationImage({ countryCode, className = "", priority = false
   countryCode: string; className?: string; priority?: boolean; sizes?: string;
 }) {
   const visual = getCountryVisual(countryCode);
-  const fallback = <CountryArtwork background={visual.background} className={className} />;
+  const fallback = <CountryFlag background={visual.background} flag={visual.flag} className={className} priority={priority} />;
   return visual.kind === "photo"
     ? <TravelImage photo={visual.photo} className={className} priority={priority} sizes={sizes} fallback={fallback} />
     : fallback;

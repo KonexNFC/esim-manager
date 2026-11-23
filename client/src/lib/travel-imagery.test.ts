@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getCountryVisual, getDestinationPhoto, getEventPhoto } from "./travel-imagery";
 
-test("unknown countries use deterministic designed artwork, never regional photography", () => {
+test("invalid country codes never borrow another country's photo or flag", () => {
   for (const code of ["UNKNOWN", "ZZ", ""]) {
     const visual = getCountryVisual(code);
-    assert.equal(visual.kind, "designed");
+    assert.equal(visual.kind, "unavailable");
+    assert.equal(visual.flag, null);
     assert.equal("photo" in visual, false);
     assert.match(visual.background, /^linear-gradient\(/);
     assert.deepEqual(visual, getCountryVisual(code));
@@ -36,5 +37,5 @@ test("regional and event photo resolution remains separate from country artwork"
   assert.equal(getDestinationPhoto("GLOBAL").id, "airport");
   assert.equal(getEventPhoto({ id: "art-basel-2026", countryCode: "US" }).id, "miami");
   assert.equal(getEventPhoto({ id: "unlisted-event", countryCode: "UNKNOWN" }).id, "airport");
-  assert.equal(getCountryVisual("UNKNOWN").kind, "designed");
+  assert.equal(getCountryVisual("UNKNOWN").kind, "unavailable");
 });
