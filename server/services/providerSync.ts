@@ -181,6 +181,7 @@ async function processProviderPlans(
       normalizedPlanId,
       providerKey,
       providerPlanCode: plan.providerRef!,
+      serviceTerms: plan.serviceTerms ?? null,
       wholesalePriceUsd: plan.wholesaleCost,
       coverageType: (plan.coverageType ?? "country") as "country" | "regional" | "global",
       currency: "USD",
@@ -218,6 +219,7 @@ async function processProviderPlans(
         set: {
           wholesalePriceUsd: sql`EXCLUDED.wholesale_price_usd`,
           coverageType: sql`EXCLUDED.coverage_type`,
+          serviceTerms: sql`EXCLUDED.service_terms`,
           isActive: true,
           lastSyncedAt: sql`EXCLUDED.last_synced_at`,
           updatedAt: new Date(),

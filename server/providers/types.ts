@@ -1,6 +1,8 @@
 export type CoverageType = "country" | "regional" | "global";
 
 export interface ProviderPlan {
+  /** Authoritative supplier terms only. Omit if any material term is unknown. */
+  serviceTerms?: import("../../shared/serviceEquivalence").ServiceTerms;
   provider: string;
   providerRef?: string;
   countryCode: string;

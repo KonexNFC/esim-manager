@@ -18,6 +18,7 @@ import {
 import { calculateSellPrice, GBP_RATE } from "../catalogue/pricing-engine";
 import { mapOfferType, normalizeValidityToBucket } from "../catalogue/normalizer";
 import { selectBestProviderForPlan } from "./routingEngine";
+import { findApprovedEquivalents, validateBoundEquivalent, type EquivalenceBinding } from "./supplierEquivalence";
 
 // Stripe Checkout requires sessions to remain open for at least 30 minutes.
 // Keep the signed quote just above that minimum, then expire the hosted session
@@ -25,7 +26,7 @@ import { selectBestProviderForPlan } from "./routingEngine";
 const QUOTE_TTL_MS = 35 * 60 * 1000;
 const QUOTE_VERSION = 1;
 
-export type QuoteFallback = {
+export type QuoteFallback = EquivalenceBinding & {
   r: number;
   k: string;
   c: string;
@@ -158,10 +159,12 @@ export async function createCheckoutQuoteForOffer(providerOfferId: string): Prom
   const amountUsd = Math.max(catalogueUsd, roundUpTo99(selectedFloor));
   const amountMinor = Math.round(amountUsd * 100);
 
-  // Provider offers are not interchangeable merely because normalization groups
-  // them together. Preserve the selected supplier SKU exactly; adding a
-  // fallback is only safe once an explicit immutable-equivalence mapping exists.
-  const safeFallbacks = [selected];
+  const approved = await findApprovedEquivalents(selected, eligible);
+  // Do not raise the advertised selected price to fund a fallback. Every bound
+  // alternative must independently fit the same worst-case wholesale floor.
+  const safeFallbacks = approved.offers.filter(offer =>
+    computeFloorUsd(offer.wholesalePriceUsd) <= amountUsd,
+  );
   if (computeFloorUsd(selected.wholesalePriceUsd) > amountUsd + 0.02) {
     throw new PriceFloorError("This selected offer cannot be safely priced.");
   }
@@ -179,6 +182,7 @@ export async function createCheckoutQuoteForOffer(providerOfferId: string): Prom
       k: offer.providerKey,
       c: offer.providerPlanCode,
       w: offer.wholesalePriceUsd,
+      ...(approved.equivalenceId ? { e: approved.equivalenceId, o: offer.id } : {}),
     })),
   };
 }
@@ -204,9 +208,7 @@ export async function createCheckoutQuoteForNormalizedPlan(normalizedPlanId: str
     throw new PriceFloorError("The routed supplier offer is no longer available.");
   }
 
-  // createCheckoutQuoteForOffer deliberately emits a singleton chain.  This is
-  // the audited pinned path for a legacy plan URL and keeps the signed supplier
-  // identity exact through payment and fulfillment.
+  // Only explicit, immutable equivalence approvals can extend this selection.
   return createCheckoutQuoteForOffer(selectedOffer.id);
 }
 
@@ -236,6 +238,11 @@ export async function validateCheckoutQuoteOfferSnapshot(
     throw new PriceFloorError("The checkout quote has no supplier cost evidence.");
   }
   const currentCosts: number[] = [];
+  const primary = quote.fallbackChain[0];
+  if (primary.k !== selected.providerKey || primary.c !== selected.providerPlanCode ||
+      (primary.o && primary.o !== selected.id)) {
+    throw new PriceFloorError("The selected supplier identity changed.");
+  }
   for (const item of quote.fallbackChain) {
     const current = [...byId.values()].find(offer =>
       offer.providerKey === item.k &&
@@ -246,6 +253,9 @@ export async function validateCheckoutQuoteOfferSnapshot(
     );
     if (!current) {
       throw new PriceFloorError("The supplier price changed. Please refresh the price.");
+    }
+    if (item !== primary || item.e) {
+      await validateBoundEquivalent(primary, item, current);
     }
     currentCosts.push(current.wholesalePriceUsd);
   }

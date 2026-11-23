@@ -16,10 +16,11 @@ import { db } from '../storage';
 import { randomUUID } from 'node:crypto';
 import { esimReadyNotifications } from '@shared/schema';
 import { orders, esims, users, topups, plans, destinations, normalizedPlans, providerSyncLogs, providerAttempts, providers, providerOffers } from '@shared/schema';
-import { eq, sql, and, inArray, lt, isNull } from 'drizzle-orm';
+import { eq, sql, and, or, inArray, lt, isNull } from 'drizzle-orm';
 import { getProviderAdapterByKey } from '../providers/adapters';
 import type { ProviderAdapter, ProviderPurchaseParams, CustomerContext, EsimProvisionResult } from '../providers/adapters';
 import { ZenditPurchasePendingError } from '../providers/adapters/zendit';
+import { PurchasePendingError, PurchaseRejectedError, purchaseWithOutcomeGuard } from '../providers/adapters/purchaseOutcome';
 import {
   sendPurchaseConfirmation, sendTopupConfirmation,
   sendFulfillmentFailedEmail,
@@ -27,6 +28,7 @@ import {
 import { recordFulfillmentOutcome } from './destinationStats';
 import { evaluateProviderForAutoPause } from './autoProviderPause';
 import type { FallbackEntry } from './stripeService';
+import { validateBoundEquivalent } from './supplierEquivalence';
 import {
   getAllProviders,
   getOffersForNormalizedPlan,
@@ -54,7 +56,7 @@ export type FulfillmentFailureClass =
 export function classifyFulfillmentFailure(err: unknown): FulfillmentFailureClass {
   const value = err as any;
   const message = String(value?.message ?? value ?? '').toLowerCase();
-  if (value instanceof ZenditPurchasePendingError || message.includes('pending')) {
+  if (value instanceof PurchasePendingError || message.includes('pending')) {
     return 'pending_reconciliation';
   }
   if (value?.status === 401 || value?.status === 403 || message.includes('not configured') ||
@@ -278,8 +280,12 @@ export function matchesStoredProviderOfferIdentity(
 async function assertExactOrderOffer(
   order: typeof orders.$inferSelect,
   entry: FallbackEntry,
+  primary: FallbackEntry,
 ): Promise<void> {
-  if (!order.normalizedPlanId) return;
+  if (!order.normalizedPlanId) {
+    if (entry.k !== primary.k || entry.c !== primary.c) throw new Error("Legacy orders have no approved equivalent fallback");
+    return;
+  }
   const [storedOffer] = await db
     .select({
       normalizedPlanId: providerOffers.normalizedPlanId,
@@ -300,13 +306,11 @@ async function assertExactOrderOffer(
     order.normalizedPlanId,
     storedOffer,
   );
+  const [activePlan] = await db.select({ active: normalizedPlans.isActive })
+    .from(normalizedPlans).where(eq(normalizedPlans.id, canonicalNormalizedPlanId));
+  if (!activePlan?.active) throw new Error("Normalized plan is no longer active");
   const offers = await db
-    .select({
-      id: providerOffers.id,
-      providerKey: providerOffers.providerKey,
-      providerPlanCode: providerOffers.providerPlanCode,
-      isActive: providerOffers.isActive,
-    })
+    .select()
     .from(providerOffers)
     .where(and(
       eq(providerOffers.normalizedPlanId, canonicalNormalizedPlanId),
@@ -321,6 +325,9 @@ async function assertExactOrderOffer(
     throw new Error(
       `Pinned supplier offer ${entry.k}/${entry.c} is not active for normalized plan ${canonicalNormalizedPlanId}`,
     );
+  }
+  if (entry.k !== primary.k || entry.c !== primary.c || entry.e) {
+    await validateBoundEquivalent(primary, entry, offer);
   }
 }
 
@@ -361,10 +368,20 @@ async function clearRejectedZenditTransaction(orderId: string, transactionId: st
 }
 
 // ─── Fallback chain executor ──────────────────────────────────────────────────
+export async function markPurchasePending(orderId: string, providerKey: string): Promise<void> {
+  if (canonicalProviderKey(providerKey) === 'zendit') return; // reserved transaction already protects it
+  const [claimed] = await db.update(orders).set({
+    status: 'fulfillment_pending', esimStatus: 'pending',
+    providerName: canonicalProviderKey(providerKey), updatedAt: new Date(),
+  }).where(and(eq(orders.id, orderId), eq(orders.status, 'fulfilling')))
+    .returning({ id: orders.id });
+  if (!claimed) throw new Error('Purchase claim is no longer held; no supplier request sent');
+}
+
 // Tries each provider in the fallback chain in order.
 // Logs every attempt. Returns on the first success.
 
-async function fulfillWithFallbackChain(
+export async function fulfillWithFallbackChain(
   orderId: string,
   order: typeof orders.$inferSelect,
   fallbackChain: FallbackEntry[],
@@ -372,6 +389,19 @@ async function fulfillWithFallbackChain(
   ctx: CustomerContext,
   destination: string,
   marginPercent?: number | null,
+  dependencies = {
+    assertOffer: assertExactOrderOffer,
+    eligibility: getProviderOfferEligibility,
+    adapter: getProviderAdapterByKey,
+    log: logProviderAttempt,
+    record: recordFulfillmentOutcome,
+    pause: evaluateProviderForAutoPause,
+    beforePurchase: markPurchasePending,
+    afterRejection: async (id: string) => {
+      await db.update(orders).set({ status: 'fulfilling', updatedAt: new Date() })
+        .where(eq(orders.id, id));
+    },
+  },
 ): Promise<{
   result: EsimProvisionResult;
   providerName: string;
@@ -390,11 +420,16 @@ async function fulfillWithFallbackChain(
     const isPrimary = i === 0;
 
     try {
-      await assertExactOrderOffer(order, entry);
+      const paidChain = order.fallbackProvidersJson as FallbackEntry[] | null;
+      if (paidChain?.length && !paidChain.some(paid =>
+        paid.k === entry.k && paid.c === entry.c && paid.e === entry.e && paid.o === entry.o)) {
+        throw new Error("Supplier SKU is outside the paid fallback chain");
+      }
+      await dependencies.assertOffer(order, entry, paidChain?.[0] ?? fallbackChain[0]);
     } catch (err: any) {
       const reason = `${classifyFulfillmentFailure(err)}: ${err.message}`;
-      await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'skipped', reason);
-      recordFulfillmentOutcome({ providerKey: entry.k, destination, outcome: 'skipped', isPrimary }).catch(() => {});
+      await dependencies.log(orderId, entry.k, entry.c, i + 1, 'skipped', reason);
+      dependencies.record({ providerKey: entry.k, destination, outcome: 'skipped', isPrimary }).catch(() => {});
       continue;
     }
 
@@ -406,21 +441,21 @@ async function fulfillWithFallbackChain(
     // adapter below, but must not be widened or rejected merely because an old
     // SKU is absent from today's normalized live-offer table.
     const eligibility = order.normalizedPlanId
-      ? await getProviderOfferEligibility(entry.k, entry.c)
+      ? await dependencies.eligibility(entry.k, entry.c)
       : { eligible: true, reason: 'legacy pinned supplier identity' };
     if (!eligibility.eligible) {
       console.warn(`[Fulfillment] Provider "${entry.k}" excluded — ${eligibility.reason}`);
-      await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'skipped', eligibility.reason);
-      recordFulfillmentOutcome({ providerKey: entry.k, destination, outcome: 'skipped', isPrimary }).catch(() => {});
+      await dependencies.log(orderId, entry.k, entry.c, i + 1, 'skipped', eligibility.reason);
+      dependencies.record({ providerKey: entry.k, destination, outcome: 'skipped', isPrimary }).catch(() => {});
       continue;
     }
 
-    const provider = getProviderAdapterByKey(entry.k);
+    const provider = dependencies.adapter(entry.k);
 
     if (!provider) {
       console.warn(`[Fulfillment] Provider key "${entry.k}" unavailable — skipping`);
-      await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'skipped', 'Provider adapter not available');
-      recordFulfillmentOutcome({
+      await dependencies.log(orderId, entry.k, entry.c, i + 1, 'skipped', 'Provider adapter not available');
+      dependencies.record({
         providerKey: entry.k, destination, outcome: 'skipped', isPrimary,
       }).catch(() => {});
       continue;
@@ -434,14 +469,15 @@ async function fulfillWithFallbackChain(
         providerTransactionId: await reserveZenditTransaction(orderId),
       };
     }
+    let acceptedResult: EsimProvisionResult | undefined;
     try {
       console.log(`[Fulfillment] Attempt ${i + 1}/${fallbackChain.length}: ${entry.k} / ${entry.c}`);
-      const result = await provider.purchaseEsim(
-        purchaseParams,
-        ctx,
-      );
+      await dependencies.beforePurchase(orderId, entry.k);
+      const result = await purchaseWithOutcomeGuard(entry.k,
+        () => provider.purchaseEsim(purchaseParams, ctx));
+      acceptedResult = result;
       const durationMs = Date.now() - startMs;
-      await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'ok', undefined, durationMs);
+      await dependencies.log(orderId, entry.k, entry.c, i + 1, 'ok', undefined, durationMs);
       console.log(`[Fulfillment] ✓ ${entry.k} succeeded in ${durationMs}ms`);
       return {
         result,
@@ -452,24 +488,27 @@ async function fulfillWithFallbackChain(
       };
     } catch (err: any) {
       const durationMs = Date.now() - startMs;
-      if (err instanceof ZenditPurchasePendingError) {
-        await logProviderAttempt(
+      if (!(err instanceof PurchaseRejectedError)) {
+        const pending = err instanceof PurchasePendingError ? err :
+          new PurchasePendingError(entry.k, `Purchase outcome requires reconciliation: ${err.message}`,
+            acceptedResult?.providerEsimId ?? purchaseParams.providerTransactionId);
+        await dependencies.log(
           orderId, entry.k, entry.c, i + 1, 'pending', err.message, durationMs,
-        );
-        console.warn(`[Fulfillment] ${entry.k} purchase is pending reconciliation: ${err.providerEsimId}`);
-        throw err;
+        ).catch(() => {});
+        throw pending;
       }
       if (purchaseParams.providerTransactionId) {
         await clearRejectedZenditTransaction(orderId, purchaseParams.providerTransactionId);
       }
-      await logProviderAttempt(orderId, entry.k, entry.c, i + 1, 'error', err.message, durationMs);
-      recordFulfillmentOutcome({
+      await dependencies.afterRejection(orderId);
+      await dependencies.log(orderId, entry.k, entry.c, i + 1, 'error', err.message, durationMs);
+      dependencies.record({
         providerKey: entry.k, destination, outcome: 'failure', isPrimary,
         latencyMs: durationMs,
       }).catch(() => {});
       // After recording a failure, evaluate whether this provider should be auto-paused.
       // Fire-and-forget: must never block the fulfillment retry loop.
-      evaluateProviderForAutoPause(entry.k).catch(() => {});
+      dependencies.pause(entry.k).catch(() => {});
       console.warn(`[Fulfillment] ✗ ${entry.k} failed in ${durationMs}ms: ${err.message}`);
       lastError = err;
     }
@@ -636,7 +675,13 @@ export async function completeInitialFulfillment(
       ...(result.apn ? { apn: result.apn } : {}),
     }).where(and(
       eq(orders.id, order.id),
-      inArray(orders.status, ['fulfilling', 'reconciling']),
+      or(
+        inArray(orders.status, ['fulfilling', 'reconciling']),
+        and(
+          eq(orders.status, 'fulfillment_pending'),
+          eq(orders.providerName, canonicalProviderKey(resolvedProviderKey)),
+        ),
+      ),
     )).returning({ id: orders.id });
 
     // Another worker completed this claim first. Do not insert a duplicate
@@ -930,6 +975,7 @@ export async function fulfillInitialPurchase(
   let auditDurationMs = 0;
   let auditUsedPrimary = true;
   const fulfillmentStartedAt = Date.now();
+  let acceptedPurchase: { providerKey: string; providerOrderId: string } | undefined;
   try {
     let result: EsimProvisionResult;
     let resolvedProviderName: string;
@@ -957,6 +1003,7 @@ export async function fulfillInitialPurchase(
         orderId, order, chain, baseParams, ctx, countryCode, order.marginPercent,
       );
       result = fulfilled.result;
+      acceptedPurchase = { providerKey: fulfilled.providerKey, providerOrderId: result.providerEsimId };
       resolvedProviderName = fulfilled.providerName;
       resolvedProviderKey = fulfilled.providerKey;
       auditProviderKey = canonicalProviderKey(fulfilled.providerKey);
@@ -988,7 +1035,9 @@ export async function fulfillInitialPurchase(
               providerTransactionId: await reserveZenditTransaction(orderId),
             }
           : legacyParams;
-        result = await provider.purchaseEsim(providerParams, ctx);
+        await markPurchasePending(orderId, providerKey);
+        result = await purchaseWithOutcomeGuard(providerKey, () => provider.purchaseEsim(providerParams, ctx));
+        acceptedPurchase = { providerKey, providerOrderId: result.providerEsimId };
         const durationMs = Date.now() - startMs;
         auditDurationMs = durationMs;
         auditPlanCode = legacyParams.providerRef ?? null;
@@ -1032,6 +1081,28 @@ export async function fulfillInitialPurchase(
       marginPercent: order.marginPercent ?? undefined,
     }).catch(() => {});
   } catch (err: any) {
+    if (acceptedPurchase) {
+      // Persistence/notification failures after issuance are not purchase failures.
+      // Never reset a successfully issued order to paid or buy from a fallback.
+      await db.update(orders).set({
+        status: 'fulfillment_pending', esimStatus: 'pending',
+        providerName: acceptedPurchase.providerKey,
+        providerEsimId: acceptedPurchase.providerOrderId, updatedAt: new Date(),
+      }).where(and(eq(orders.id, orderId), sql`${orders.status} <> 'fulfilled'`));
+      console.error(`[Fulfillment] Issued purchase for ${orderId} needs persistence reconciliation`);
+      return;
+    }
+    if (err instanceof PurchasePendingError && !(err instanceof ZenditPurchasePendingError)) {
+      await db.update(orders).set({
+        status: 'fulfillment_pending', esimStatus: 'pending',
+        providerName: canonicalProviderKey(err.providerKey),
+        ...(err.providerOrderId ? { providerEsimId: err.providerOrderId } : {}),
+        updatedAt: new Date(),
+      }).where(eq(orders.id, orderId));
+      await logSync(orderId, null, 'initial_purchase_pending', err.providerKey,
+        'Manual reconciliation required; do not purchase again', err.message, 'error');
+      return;
+    }
     if (err instanceof ZenditPurchasePendingError) {
       console.warn(
         `[Fulfillment] Zendit purchase ${err.providerEsimId} for ${orderId} is pending allocation`,
@@ -1107,6 +1178,7 @@ export async function reconcilePendingZenditOrder(orderId: string): Promise<bool
     .where(and(
       eq(orders.id, orderId),
       eq(orders.status, 'fulfillment_pending'),
+      eq(orders.providerName, 'zendit'),
     ))
     .returning();
 

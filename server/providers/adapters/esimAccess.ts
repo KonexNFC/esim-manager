@@ -4,6 +4,7 @@
 // Docs: https://www.esimaccess.com/open-api
 
 import crypto from 'crypto';
+import { PurchasePendingError, PurchaseRejectedError } from './purchaseOutcome';
 import type {
   ProviderAdapter, ProviderPurchaseParams, CustomerContext,
   EsimProvisionResult, EsimStatusResult, EsimUsageResult,
@@ -132,7 +133,7 @@ export class EsimAccessAdapter implements ProviderAdapter {
         p.dataMb >= params.dataAmountGb * 1024 &&
         p.durationDays >= params.validityDays
       );
-      if (!match) throw new Error(`No eSIM Access package for ${params.countryCode} ${params.dataAmountGb}GB/${params.validityDays}d`);
+      if (!match) throw new PurchaseRejectedError(`No eSIM Access package for ${params.countryCode} ${params.dataAmountGb}GB/${params.validityDays}d`);
       packageCode = match.providerPlanCode;
     }
 
@@ -145,7 +146,7 @@ export class EsimAccessAdapter implements ProviderAdapter {
     });
 
     const orderNo = orderResp.obj?.orderNo;
-    if (!orderNo) throw new Error('eSIM Access order returned no orderNo');
+    if (!orderNo) throw new PurchasePendingError('esimaccess', 'eSIM Access order returned no orderNo', transactionId);
 
     // Poll up to 20×5 s = 100 s for profile allocation.
     // eSIM Access can take 60–90 s to allocate a profile on some routes —
@@ -161,7 +162,7 @@ export class EsimAccessAdapter implements ProviderAdapter {
       } catch { /* keep polling */ }
     }
 
-    if (!esimData) throw new Error(`eSIM Access order ${orderNo} placed but no profile allocated within 100 s`);
+    if (!esimData) throw new PurchasePendingError('esimaccess', `eSIM Access order ${orderNo} placed but no profile allocated within 100 s`, orderNo);
 
     const activationUrl = `LPA:1$${esimData.smdpAddress}$${esimData.matchingId}`;
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(activationUrl)}`;

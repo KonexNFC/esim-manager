@@ -138,6 +138,8 @@ export interface ProviderScores {
 }
 
 export interface RankedProvider {
+  equivalenceId?: string;
+  offerId?: string;
   rank: number;
   providerKey: string;
   providerPlanCode: string;
@@ -174,7 +176,7 @@ export interface RoutingResult {
   selectedProviderKey: string;
   selectedProviderPlanCode: string;
   fallbackChain: RankedProvider[];
-  /** Ranked audit candidates; only fallbackChain[0] is approved for issuance. */
+  /** Ranked audit candidates; only explicitly approved entries may fail over. */
   rankedCandidates: RankedProvider[];
   fallbackQuality: FallbackQuality;
   scores: Record<string, ProviderScores>;
@@ -669,7 +671,25 @@ export async function selectBestProviderForPlan(
     isLastResort: c.belowMarginThreshold,
     approvedForFulfillment: i === 0,
   }));
-  const fallbackChain = rankedCandidates.slice(0, 1);
+  const { findApprovedEquivalents } = await import("./supplierEquivalence");
+  const liveOffers = await getOffersForNormalizedPlan(normalizedPlanId);
+  const selectedOffer = liveOffers.find(o =>
+    o.providerKey === rankedCandidates[0].providerKey &&
+    o.providerPlanCode === rankedCandidates[0].providerPlanCode,
+  );
+  if (!selectedOffer) throw new Error("Selected routing offer is no longer eligible");
+  const approved = await findApprovedEquivalents(selectedOffer, liveOffers);
+  const fallbackChain = rankedCandidates.filter((candidate, index) => {
+    const member = approved.offers.find(o =>
+      o.providerKey === candidate.providerKey && o.providerPlanCode === candidate.providerPlanCode,
+    );
+    candidate.approvedForFulfillment = index === 0 || Boolean(member && approved.equivalenceId);
+    if (candidate.approvedForFulfillment && approved.equivalenceId && member) {
+      candidate.equivalenceId = approved.equivalenceId;
+      candidate.offerId = member.id;
+    }
+    return candidate.approvedForFulfillment;
+  });
 
   // 7. Winner is rank-1 (unchanged from before — fallback chain extension never affects this)
   const winner = ranked[0];
@@ -690,7 +710,7 @@ export async function selectBestProviderForPlan(
   const decisionReason = buildReason(strategy, winner, ranked, plan.regionCode) +
     (exclusionSummary ? exclusionSummary : "") +
     (policyExclusions ? ` Policy exclusions: ${policyExclusions}.` : "") +
-    ` Ranked audit (not approved fallbacks): ${rankedAudit}.`;
+    ` Ranked audit (only explicit equivalents approved): ${rankedAudit}.`;
 
   // 8. Build scores map (all candidates incl. below-threshold, for full audit trail)
   const scoresMap: Record<string, ProviderScores> = {};

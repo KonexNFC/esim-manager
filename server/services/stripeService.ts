@@ -94,6 +94,8 @@ export async function getOrCreateStripeCustomer(
 
 /** Compact fallback entry stored in Stripe metadata + orders table */
 export interface FallbackEntry {
+  e?: string;           // immutable equivalence approval digest
+  o?: string;           // exact provider-offer ID within that approval
   r: number;            // rank
   k: string;            // providerKey
   c: string;            // providerPlanCode

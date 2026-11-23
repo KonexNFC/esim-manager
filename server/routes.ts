@@ -2043,6 +2043,12 @@ export async function registerRoutes(
         return res.status(409).json({ message: "Order is already fulfilled" });
       }
 
+      if (order.status === "fulfillment_pending" && order.providerName !== "zendit") {
+        return res.status(409).json({
+          message: "Supplier purchase is accepted or uncertain. Reconcile it manually before any new purchase.",
+        });
+      }
+
       if (
         order.status === "fulfillment_pending" ||
         order.status === "reconciling" ||

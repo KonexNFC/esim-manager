@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, integer, boolean, timestamp, doublePrecision, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import type { ServiceTerms, EquivalenceApproval } from "./serviceEquivalence";
 
 // ─── USERS ────────────────────────────────────────────
 export const users = pgTable("users", {
@@ -337,6 +338,7 @@ export const providerOffers = pgTable("provider_offers", {
   wholesalePriceUsd: doublePrecision("wholesale_price_usd").notNull(),
   currency: text("currency").notNull().default("USD"),
   coverageType: text("coverage_type").notNull().default("country"), // country | regional | global
+  serviceTerms: jsonb("service_terms").$type<ServiceTerms>(),
   isActive: boolean("is_active").notNull().default(true),
   lastSyncedAt: timestamp("last_synced_at"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -346,6 +348,18 @@ export const providerOffers = pgTable("provider_offers", {
 }));
 
 // ─── DESTINATION PROVIDER STATS ──────────────────────
+// Append-only approval versions. The ID is a SHA-256 digest of the complete
+// approval; readers verify it so even out-of-band mutations fail closed.
+export const supplierEquivalenceVersions = pgTable("supplier_equivalence_versions", {
+  id: text("id").primaryKey(),
+  groupKey: text("group_key").notNull(),
+  version: integer("version").notNull(),
+  approval: jsonb("approval").$type<EquivalenceApproval>().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  uniqueVersion: uniqueIndex("supplier_equivalence_version_uniq").on(t.groupKey, t.version),
+}));
+
 // Rolling performance memory per (provider, destination) pair.
 // Updated after every fulfilment attempt — success, failure, or fallback.
 // Uses exponential moving averages to prioritise recent outcomes.

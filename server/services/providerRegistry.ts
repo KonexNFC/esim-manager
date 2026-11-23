@@ -339,6 +339,8 @@ export async function getOffersByProvider(providerKey: string): Promise<Provider
 
 /** Upsert a provider offer (by normalizedPlanId + providerKey + providerPlanCode). */
 export async function upsertProviderOffer(data: InsertProviderOffer): Promise<ProviderOffer> {
+  const { canonicalServiceTerms } = await import("../../shared/serviceEquivalence");
+  const values = { ...data, serviceTerms: data.serviceTerms == null ? null : canonicalServiceTerms(data.serviceTerms) };
   const [existing] = await db
     .select()
     .from(providerOffers)
@@ -351,7 +353,7 @@ export async function upsertProviderOffer(data: InsertProviderOffer): Promise<Pr
   if (existing) {
     const [updated] = await db
       .update(providerOffers)
-      .set({ ...data, lastSyncedAt: new Date(), updatedAt: new Date() })
+      .set({ ...values, lastSyncedAt: new Date(), updatedAt: new Date() })
       .where(eq(providerOffers.id, existing.id))
       .returning();
     return updated;
@@ -359,7 +361,7 @@ export async function upsertProviderOffer(data: InsertProviderOffer): Promise<Pr
 
   const [created] = await db
     .insert(providerOffers)
-    .values({ ...data, lastSyncedAt: new Date() })
+    .values({ ...values, lastSyncedAt: new Date() })
     .returning();
   return created;
 }

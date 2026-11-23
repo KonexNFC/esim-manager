@@ -9,6 +9,7 @@
 // The actual ICCID from confirmation is stored separately as the customer-
 // facing identifier.
 
+import { PurchasePendingError, PurchaseRejectedError } from './purchaseOutcome';
 import type {
   ProviderAdapter, ProviderPurchaseParams, CustomerContext,
   EsimProvisionResult, EsimStatusResult, EsimUsageResult,
@@ -49,11 +50,11 @@ interface ZenditQrCodeResponse {
 }
 
 /** Zendit may have accepted this transaction; it must only be reconciled. */
-export class ZenditPurchasePendingError extends Error {
+export class ZenditPurchasePendingError extends PurchasePendingError {
   readonly providerEsimId: string;
 
   constructor(providerEsimId: string, message: string) {
-    super(message);
+    super('zendit', message, providerEsimId);
     this.name = 'ZenditPurchasePendingError';
     this.providerEsimId = providerEsimId;
   }
@@ -153,8 +154,8 @@ export class ZenditAdapter implements ProviderAdapter {
       // A 4xx response definitively rejects the request. A timeout/network/5xx
       // response is ambiguous: Zendit may have committed the purchase before
       // the response was lost, so only reconciliation is safe.
-      if (err instanceof ZenditHttpError && err.status >= 400 && err.status < 500) {
-        throw err;
+      if (err instanceof ZenditHttpError && [400, 401, 403, 404, 422].includes(err.status)) {
+        throw new PurchaseRejectedError(err.message);
       }
       throw new ZenditPurchasePendingError(
         transactionId,

@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db } from '../storage';
 import { orders, esims, esimReadyNotifications } from '@shared/schema';
-import { completeInitialFulfillment } from './fulfillment';
+import { completeInitialFulfillment, markPurchasePending, fulfillWithFallbackChain } from './fulfillment';
 import { deliverNextEsimNotification, notificationRetryDelay, runEsimNotificationJob } from './esimNotificationOutbox';
 import { sendEsimReadyEmail } from './notifications';
 
@@ -74,9 +74,15 @@ test('transactional fulfillment and restart-safe notification delivery', {
     await admin.query(`DROP SCHEMA "${schema}" CASCADE`);
     await admin.end();
   });
-  for (const name of ['orders', 'esims', 'esim_ready_notifications']) {
+  for (const name of ['orders', 'esims']) {
     await admin.query(`CREATE TABLE "${schema}"."${name}" (LIKE public."${name}" INCLUDING ALL)`);
   }
+  // This isolated fixture also works before the separate email-outbox migration.
+  await pool.query(`CREATE TABLE esim_ready_notifications (
+    order_id varchar PRIMARY KEY REFERENCES orders(id), payload jsonb NOT NULL,
+    attempts integer NOT NULL DEFAULT 0, next_attempt_at timestamp NOT NULL DEFAULT now(),
+    sent_at timestamp, created_at timestamp NOT NULL DEFAULT now()
+  )`);
   const [order] = await isolated.insert(orders).values({
     id: payload.orderId, email: payload.email, totalPrice: 10, status: 'fulfilling',
   }).returning();
@@ -89,6 +95,46 @@ test('transactional fulfillment and restart-safe notification delivery', {
     activationStatus: 'issued' as const, dataTotalMb: 1024, dataUsedMb: 0, dataRemainingMb: 1024,
   };
   const complete = () => completeInitialFulfillment(order, null, plan, result, 'Test', 'test');
+
+  t.mock.method(db, 'update', (table: any) => isolated.update(table));
+  // Exercise the real executor's pre-call transition before completing the
+  // returned purchase result. No supplier or email network calls are made.
+  let purchases = 0;
+  const issued = await fulfillWithFallbackChain(
+    order.id, order, [{ r: 1, k: 'test', c: 'test', w: 5 }],
+    { countryCode: 'GB', dataAmountGb: 1, validityDays: 7, customerEmail: payload.email },
+    { email: payload.email }, 'GB', null, {
+      assertOffer: async () => {},
+      eligibility: async () => ({ eligible: true }) as any,
+      adapter: () => ({
+        name: 'test',
+        purchaseEsim: async () => {
+          assert.equal((await isolated.select().from(orders))[0].status, 'fulfillment_pending');
+          purchases++;
+          return result;
+        },
+      }) as any,
+      log: async () => {},
+      record: async () => {},
+      pause: async () => {},
+      beforePurchase: markPurchasePending,
+      afterRejection: async () => assert.fail('successful purchase must not be rejected'),
+    },
+  );
+  assert.deepEqual(issued.result, result);
+  assert.equal(purchases, 1);
+  assert.equal((await isolated.select().from(orders))[0].status, 'fulfillment_pending');
+  // Model a restart after the supplier accepts but before credentials are saved:
+  // neither startup's "fulfilling" scan nor the paid-order claim can repurchase.
+  const restartPool = new pg.Pool({
+    connectionString: process.env.DATABASE_URL, options: `-c search_path=${schema}`,
+  });
+  const restartDb = drizzle(restartPool);
+  assert.equal((await restartDb.select().from(orders).where(eq(orders.status, 'fulfilling'))).length, 0);
+  assert.equal((await restartDb.update(orders).set({ status: 'fulfilling' })
+    .where(inArray(orders.status, ['paid', 'fulfillment_failed'])).returning()).length, 0);
+  await restartPool.end();
+  await assert.rejects(markPurchasePending(order.id, 'test'), /claim is no longer held/);
 
   // Kill the caller immediately after COMMIT: no post-commit code or mail runs.
   t.mock.method(db, 'transaction', async (callback: any) => {
